@@ -1,31 +1,21 @@
 # RunPod Terraform Provider Repository Setup
 
-## Repository Location
-`/Users/books/repos/terraform-provider-runpod`
-
 ## What's Included
 - Complete Terraform provider code for RunPod API
-- Darwin ARM64 binary (`terraform-provider-runpod`)
 - All resource and data source implementations
 - Example configurations
 - Provider specification (OpenAPI-based)
 
-## Next Steps to Publish
+## Publishing to Terraform Registry
 
-### 1. Push to GitHub (requires SAML SSO setup)
-```bash
-cd /Users/books/repos/terraform-provider-runpod
-git push -u origin main
-```
+To publish this provider to the Terraform Registry:
 
-**Note:** The `runpod` GitHub organization requires SAML SSO. You'll need to:
-- Use HTTPS with a personal access token, OR
-- Use SSH with an SSH key authorized for the organization
+### 1. Prepare Your Repository
+- Push your code to GitHub (see GitHub documentation for setup)
+- Ensure your repository has proper tags and release structure
 
-See: https://docs.github.com/articles/authenticating-to-a-github-organization-with-saml-single-sign-on/
-
-### 2. Publish to Terraform Registry
-Once the repo is on GitHub, follow the [Terraform Provider Publishing Guide](https://developer.hashicorp.com/terraform/registry/publishing):
+### 2. Publish via Terraform Registry
+Follow the [Terraform Provider Publishing Guide](https://developer.hashicorp.com/terraform/registry/publishing):
 
 ```bash
 # Tag a release
@@ -35,11 +25,11 @@ git push --tags
 # Then publish via Terraform CLI or registry web UI
 ```
 
-### 3. Build binaries for all platforms
+### 3. Build Binaries for All Platforms
 To create releases with binaries for Windows, Linux, and macOS:
 
 ```bash
-# Darwin (already done)
+# Darwin ARM64
 CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o terraform-provider-runpod_darwin_arm64
 
 # Linux AMD64

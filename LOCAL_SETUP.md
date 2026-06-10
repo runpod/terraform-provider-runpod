@@ -1,6 +1,6 @@
-# RunPod Terraform Provider - Local Development Setup
+# RunPod Terraform Provider - Development Setup
 
-This provider uses the Terraform Plugin Framework and can be used locally without building a binary.
+This provider uses the Terraform Plugin Framework and supports local development without building a binary.
 
 ## Quick Start (No Binary Needed)
 
@@ -11,7 +11,7 @@ Create a Terraform CLI config file at `~/.terraform.d/config.tfrc`:
 ```hcl
 provider_installation {
   dev_overrides {
-    "runpod/runpod" = "/Users/books/repos/terraform-provider"
+    "runpod/runpod" = "./"
   }
   direct {}
 }

@@ -2,23 +2,54 @@
 
 A Terraform provider for managing RunPod infrastructure using the Terraform Plugin Framework.
 
-## Setup
+## Quick Start
 
 ### Prerequisites
 
-- Go 1.21 or higher
+- Go 1.21 or higher (for development)
 - Terraform 1.0 or higher
 - RunPod API token
 
-### Build the Provider
+### Development Setup (Recommended)
+
+This provider uses Terraform's `dev_overrides` feature for local development. **No binary building required!**
+
+Create a Terraform CLI config file at `~/.terraform.d/config.tfrc`:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "runpod/runpod" = "./"
+  }
+  direct {}
+}
+```
+
+Then use the provider in your Terraform configuration:
+
+```hcl
+terraform {
+  required_providers {
+    runpod = {
+      source = "runpod/runpod"
+    }
+  }
+}
+
+provider "runpod" {
+  api_key = var.runpod_api_key
+}
+```
+
+### For Production Use
+
+If you need to build and use a binary:
 
 ```bash
 go build -o terraform-provider-runpod
 ```
 
-### Configure Terraform
-
-Create `~/.terraform.rc`:
+Then configure Terraform to use the local provider binary:
 
 ```hcl
 provider_installation {
@@ -26,12 +57,6 @@ provider_installation {
     paths = ["."]
   }
 }
-```
-
-Or use environment variable:
-
-```bash
-export TF_CLI_CONFIG_FILE=~/.terraform.rc
 ```
 
 ## Usage
@@ -78,7 +103,9 @@ Get your API key from [RunPod Console](https://runpod.io/console/user/settings)
 
 ## Development
 
-### Generate Provider Code
+### Provider Specification
+
+The provider schema is defined in `terraform-provider-spec.json`. To regenerate provider code after modifying the spec:
 
 ```bash
 tfplugingen-framework generate all \
@@ -89,7 +116,7 @@ tfplugingen-framework generate all \
 ### Directory Structure
 
 ```
-terraform-provider/
+terraform-provider-runpod/
 ├── internal/provider/          # Generated code
 │   ├── provider_runpod/
 │   ├── resource_pod/
@@ -102,7 +129,7 @@ terraform-provider/
 ├── main.go                     # Provider entry point
 ├── plugin.go                   # Plugin interface
 ├── go.mod                      # Go dependencies
-└── terraform-provider-spec.json # Provider specification
+└── terraform-provider-spec.json # Provider schema definition
 ```
 
 ## API Documentation

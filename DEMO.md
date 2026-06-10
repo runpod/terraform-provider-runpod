@@ -4,33 +4,41 @@ This demo shows how to use the RunPod Terraform provider to manage RunPod resour
 
 ## Prerequisites
 
-- Go 1.21 or higher
 - Terraform 1.0 or higher
 - RunPod API token (get from https://runpod.io/console/user/settings)
 
-## Build the Provider
+## Development Setup
+
+### Option 1: Using dev_overrides (Recommended)
+
+```bash
+mkdir -p ~/.terraform.d
+cat > ~/.terraform.d/config.tfrc << 'EOF'
+provider_installation {
+  dev_overrides {
+    "runpod/runpod" = "./"
+  }
+  direct {}
+}
+EOF
+```
+
+### Option 2: Using Built Binary
 
 ```bash
 go build -o terraform-provider-runpod
-```
 
-## Configure Terraform to Use Local Provider
-
-Create a `terraform.rc` file in your home directory:
-
-```hcl
+# Configure Terraform to use local binary
+cat > ~/.terraform.rc << 'EOF'
 provider_installation {
   filesystem_paths {
     paths = ["."]
   }
 }
+EOF
 ```
 
-Or set the environment variable:
-
-```bash
-export TF_CLI_CONFIG_FILE=~/.terraform.rc
-```
+See `LOCAL_SETUP.md` for more details.
 
 ## Example Usage
 
@@ -155,6 +163,5 @@ export RUNPOD_API_KEY="your-api-key"
 
 ## Running the Demo
 
-1. Build the provider: `go build -o terraform-provider-runpod`
-2. Set up Terraform configuration with your API key
-3. Run: `terraform init && terraform plan && terraform apply`
+1. Set up your Terraform configuration with your API key
+2. Run: `terraform init && terraform plan && terraform apply`

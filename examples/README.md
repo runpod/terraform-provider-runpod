@@ -6,7 +6,7 @@ This directory contains demo configurations for the RunPod Terraform provider.
 
 1. Get your RunPod API key from https://runpod.io/console/user/settings
 2. Update `variables.tf` files with your API key and machine IDs
-3. Build the provider: `go build -o terraform-provider-runpod`
+3. Set up development environment: see `LOCAL_SETUP.md` for recommended approach
 
 ## Available Demos
 
@@ -63,28 +63,32 @@ terraform plan
 ## Example Workflow
 
 1. **List available GPU types:**
-   ```bash
-   cd examples/datasources
-   terraform apply -var="runpod_api_key=your-key"
-   ```
+    ```bash
+    cd examples/datasources
+    terraform init
+    terraform apply -var="runpod_api_key=your-key"
+    ```
 
 2. **Create a pod:**
-   ```bash
-   cd examples/basic
-   terraform apply -var="runpod_api_key=your-key" -var="machine_id=your-machine-id"
-   ```
+    ```bash
+    cd examples/basic
+    terraform init
+    terraform apply -var="runpod_api_key=your-key" -var="machine_id=your-machine-id"
+    ```
 
 3. **Monitor the pod:**
-   ```bash
-   cd examples/monitoring
-   terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id"
-   ```
+    ```bash
+    cd examples/monitoring
+    terraform init
+    terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id"
+    ```
 
 4. **Stop the pod when done:**
-   ```bash
-   cd examples/actions
-   terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id" -var="action=stop"
-   ```
+    ```bash
+    cd examples/actions
+    terraform init
+    terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id" -var="action=stop"
+    ```
 
 ## Notes
 
@@ -92,3 +96,4 @@ terraform plan
 - Pod creation may take several minutes
 - Machines need to be listed before you can deploy pods to them
 - Use data sources to discover available machines and GPU types
+- For development, use `dev_overrides` (see `LOCAL_SETUP.md`) instead of building a binary

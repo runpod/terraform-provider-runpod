@@ -1,4 +1,4 @@
-# RunPod Terraform Provider v0.1.0
+# RunPod Terraform Provider
 
 An official Terraform provider for managing RunPod GPU cloud resources.
 
@@ -17,25 +17,28 @@ terraform {
 }
 ```
 
-### From Local Files
+### For Development (Local Source)
+
+For local development, use the provider directly from source:
 
 ```hcl
 terraform {
   required_providers {
     runpod = {
-      source  = "hashicorp/runpod"
-      version = "0.1.0"
+      source  = "./"
     }
   }
 }
 ```
+
+See `LOCAL_SETUP.md` for detailed development setup instructions.
 
 ## Configuration
 
 ```hcl
 provider "runpod" {
   api_key   = var.runpod_api_key
-  endpoint  = "https://api.runpod.io/graphql"  # Optional, defaults to prod
+  endpoint  = "https://api.runpod.io/graphql"  # Optional, defaults to production
 }
 ```
 
@@ -155,6 +158,30 @@ The provider uses API key authentication. Get your API key from the RunPod conso
 
 ## Development
 
+### Quick Start (dev_overrides)
+
+For local development without building a binary:
+
+```bash
+# Create Terraform CLI config
+mkdir -p ~/.terraform.d
+cat > ~/.terraform.d/config.tfrc << 'EOF'
+provider_installation {
+  dev_overrides {
+    "runpod/runpod" = "./"
+  }
+  direct {}
+}
+EOF
+
+# Initialize and run
+terraform init
+terraform plan
+terraform apply
+```
+
+### Building from Source
+
 ```bash
 # Build the provider
 go build -o terraform-provider-runpod
@@ -166,6 +193,8 @@ go test ./...
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+See `LOCAL_SETUP.md` for development setup instructions.
 
 ## License
 

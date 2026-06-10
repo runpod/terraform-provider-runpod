@@ -27,6 +27,10 @@ provider "runpod" {
 }
 ```
 
+## Development Setup
+
+For local development without building a binary, see `LOCAL_SETUP.md`.
+
 ## Resources
 
 ### runpod_pod
@@ -143,4 +147,4 @@ See the `examples/` directory for complete examples:
 
 ## Development
 
-See `README.md` for development instructions.
+See `LOCAL_SETUP.md` for development setup instructions.

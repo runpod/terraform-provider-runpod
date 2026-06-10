@@ -6,7 +6,7 @@ This repository now contains a complete demo setup for the RunPod Terraform prov
 
 ### Generated Provider Code
 - `internal/provider/` - Generated Go code for all resources and data sources
-- 10 provider files (provider, 6 data sources, 3 resources)
+- Provider files for all resources and data sources
 
 ### Example Configurations
 - `examples/basic/` - Basic pod creation
@@ -17,36 +17,59 @@ This repository now contains a complete demo setup for the RunPod Terraform prov
 
 ### Documentation
 - `README.md` - Provider overview and usage guide
-- `SETUP.md` - Step-by-step setup instructions
-- `DEMO.md` - Demo examples and usage patterns
+- `LOCAL_SETUP.md` - Development setup (recommended)
+- `QUICK_START.md` - Quick development setup guide
+- `SETUP.md` - Setup instructions
+- `VERIFICATION.md` - Provider capabilities verification
 - `PROVIDER.md` - Provider resource and data source documentation
 - `examples/README.md` - Example directory guide
 
 ## To Get Started
 
-1. **Build the provider:**
-   ```bash
-   go build -o terraform-provider-runpod
-   ```
+### For Development (Recommended)
 
-2. **Configure Terraform:**
-   ```bash
-   echo 'provider_installation {
-     filesystem_paths {
-       paths = ["."]
-     }
-   }' > ~/.terraform.rc
-   ```
+Use `dev_overrides` to avoid building a binary:
 
-3. **Update example configuration:**
-   Edit `examples/basic/variables.tf` with your RunPod API key and machine ID
+```bash
+# Create Terraform CLI config
+mkdir -p ~/.terraform.d
+cat > ~/.terraform.d/config.tfrc << 'EOF'
+provider_installation {
+  dev_overrides {
+    "runpod/runpod" = "./"
+  }
+  direct {}
+}
+EOF
 
-4. **Run the demo:**
-   ```bash
-   cd examples/basic
-   terraform init
-   terraform apply
-   ```
+# Run the demo
+cd examples/basic
+terraform init
+terraform apply
+```
+
+### For Production
+
+Build and use a provider binary:
+
+```bash
+# Build the provider
+go build -o terraform-provider-runpod
+
+# Configure Terraform
+cat > ~/.terraform.rc << 'EOF'
+provider_installation {
+  filesystem_paths {
+    paths = ["."]
+  }
+}
+EOF
+
+# Run the demo
+cd examples/basic
+terraform init
+terraform apply
+```
 
 ## What You Can Do
 
@@ -59,6 +82,6 @@ This repository now contains a complete demo setup for the RunPod Terraform prov
 ## Next Steps
 
 1. Get your RunPod API key from https://runpod.io/console/user/settings
-2. Follow `SETUP.md` for detailed instructions
+2. Follow `LOCAL_SETUP.md` for development setup (recommended) or `SETUP.md` for production
 3. Try the basic example to create your first pod
 4. Explore other examples for advanced features

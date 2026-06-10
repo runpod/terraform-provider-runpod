@@ -1,33 +1,59 @@
 # RunPod Terraform Provider Setup
 
-This document provides a step-by-step guide to get the RunPod Terraform provider demo up and running.
+This document provides setup instructions for using the RunPod Terraform provider.
 
-## Quick Start
+## Quick Start (Recommended for Development)
 
-### 1. Build the Provider
+This provider supports Terraform's `dev_overrides` feature, which allows you to use the provider directly from source without building a binary.
 
-```bash
-cd /Users/books/repos/terraform-provider
-go build -o terraform-provider-runpod
-```
+### 1. Configure Terraform CLI
 
-### 2. Configure Terraform
+Create `~/.terraform.d/config.tfrc`:
 
-```bash
-echo 'provider_installation {
-  filesystem_paths {
-    paths = ["."]
+```hcl
+provider_installation {
+  dev_overrides {
+    "runpod/runpod" = "./"
   }
-}' > ~/.terraform.rc
+  direct {}
+}
 ```
 
-### 3. Update Example Configuration
+### 2. Update Example Configuration
 
 Edit `examples/basic/variables.tf` and replace:
 - `YOUR_API_KEY_HERE` with your RunPod API key
 - `YOUR_MACHINE_ID_HERE` with a machine ID from your RunPod account
 
-### 4. Run the Demo
+### 3. Run the Demo
+
+```bash
+cd examples/basic
+terraform init
+terraform apply
+```
+
+## Alternative: Using a Built Binary
+
+If you prefer to build and use a provider binary:
+
+### 1. Build the Provider
+
+```bash
+go build -o terraform-provider-runpod
+```
+
+### 2. Configure Terraform
+
+```hcl
+provider_installation {
+  filesystem_paths {
+    paths = ["."]
+  }
+}
+```
+
+### 3. Run the Demo
 
 ```bash
 cd examples/basic
@@ -88,7 +114,8 @@ terraform apply \
 
 ### Provider Not Found
 
-Ensure the provider binary is in your current directory and `~/.terraform.rc` is configured correctly.
+- For `dev_overrides`: Ensure you're in the provider directory or adjust the path in `config.tfrc`
+- For binary approach: Ensure the provider binary is in your current directory and Terraform config is correct
 
 ### No Machines Available
 

@@ -1,8 +1,8 @@
-# RunPod Terraform Provider - Plug-and-Play Setup
-
-## Quick Start (No Binary Needed!)
+# RunPod Terraform Provider - Development Setup
 
 This provider uses Terraform's `dev_overrides` feature for local development - **no binary building required**!
+
+## Quick Start
 
 ### 1. Create Terraform CLI Config
 
@@ -11,7 +11,7 @@ mkdir -p ~/.terraform.d
 cat > ~/.terraform.d/config.tfrc << 'EOF'
 provider_installation {
   dev_overrides {
-    "runpod/runpod" = "/Users/books/repos/terraform-provider"
+    "runpod/runpod" = "./"
   }
   direct {}
 }
@@ -51,7 +51,7 @@ terraform apply
 
 ## How It Works
 
-The provider code is in `/Users/books/repos/terraform-provider/internal/provider/`:
+The provider code is in `internal/provider/`:
 - All resources and data sources are generated from `terraform-provider-spec.json`
 - The `main.go` implements the provider interface
 - Terraform loads the code directly via `dev_overrides` - **no binary needed!**

@@ -62,7 +62,19 @@ func (c *RunPodClient) Query(ctx context.Context, query string, variables map[st
 	}
 
 	if errors, ok := result["errors"].([]interface{}); ok {
-		return nil, fmt.Errorf("GraphQL errors: %v", errors)
+		errorMessages := make([]string, len(errors))
+		for i, err := range errors {
+			if errMap, ok := err.(map[string]interface{}); ok {
+				if msg, ok := errMap["message"].(string); ok {
+					errorMessages[i] = msg
+				} else {
+					errorMessages[i] = fmt.Sprintf("%v", err)
+				}
+			} else {
+				errorMessages[i] = fmt.Sprintf("%v", err)
+			}
+		}
+		return nil, fmt.Errorf("GraphQL errors: %v", errorMessages)
 	}
 
 	if data, ok := result["data"].(map[string]interface{}); ok {

@@ -107,6 +107,74 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 }
 
 func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var state PodModel
+	diags := req.State.Get(ctx, &state)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	apiKey := os.Getenv("RUNPOD_API_KEY")
+	if apiKey == "" {
+		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
+		return
+	}
+
+	url := fmt.Sprintf("https://rest.runpod.io/v1/pods/%s", state.Id.ValueString())
+
+	reqHTTP, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create request: %v", err))
+		return
+	}
+
+	reqHTTP.Header.Set("Content-Type", "application/json")
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+
+	client := &http.Client{}
+	respHTTP, err := client.Do(reqHTTP)
+	if err != nil {
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to make API call: %v", err))
+		return
+	}
+	defer respHTTP.Body.Close()
+
+	respBody, err := io.ReadAll(respHTTP.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
+		return
+	}
+
+	if respHTTP.StatusCode == 404 {
+		resp.Diagnostics.AddWarning("Resource Not Found", "Pod not found - it may have been deleted outside of Terraform")
+		return
+	}
+
+	if result == nil {
+		resp.Diagnostics.AddError("API Error", "Empty response from API")
+		return
+	}
+
+	state.Status = types.StringValue(result["status"].(string))
+	state.GpuTypeId = types.StringValue(result["gpuTypeId"].(string))
+	state.MachineId = types.StringValue(result["machineId"].(string))
+	state.CostPerHr = types.Float64Value(result["costPerHr"].(float64))
+	state.CreatedAt = types.StringValue(result["created_at"].(string))
+	state.MemoryInGb = types.Float64Value(result["memoryInGb"].(float64))
+	state.VolumeInGb = types.Float64Value(result["volumeInGb"].(float64))
+	state.ContainerDiskInGb = types.Int64Value(int64(result["containerDiskInGb"].(float64)))
+
+	diags = resp.State.Set(ctx, &state)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 }
 
 func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {

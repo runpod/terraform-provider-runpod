@@ -28,6 +28,10 @@ import (
 	datasource_user "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_user"
 	datasource_template "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_template"
 	datasource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_container_registry_auth"
+
+	datasource_billing_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_pod"
+	datasource_billing_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_network_volume"
+	datasource_billing_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_endpoint"
 )
 
 func main() {
@@ -133,6 +137,9 @@ func (p *runpodProvider) DataSources(ctx context.Context) []func() datasource.Da
 		datasource_user.NewUserDataSource,
 		datasource_template.NewTemplateDataSource,
 		datasource_container_registry_auth.NewContainerRegistryAuthDataSource,
+		datasource_billing_pod.NewBillingPodDataSource,
+		datasource_billing_network_volume.NewBillingNetworkVolumeDataSource,
+		datasource_billing_endpoint.NewBillingEndpointDataSource,
 	}
 }
 

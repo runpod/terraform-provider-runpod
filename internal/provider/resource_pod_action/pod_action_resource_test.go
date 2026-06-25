@@ -109,6 +109,29 @@ func TestPodActionCreate_SendsCorrectMutation(t *testing.T) {
 	}
 }
 
+// TestPodActionReadUpdateDelete_NoOp covers the empty Read/Update/Delete stubs:
+// pod_action is create-only, so they are intentional no-ops and must not error.
+func TestPodActionReadUpdateDelete_NoOp(t *testing.T) {
+	ctx := context.Background()
+	r := &PodActionResource{}
+
+	rr := &resource.ReadResponse{}
+	r.Read(ctx, resource.ReadRequest{}, rr)
+	if rr.Diagnostics.HasError() {
+		t.Errorf("Read no-op should not error: %v", rr.Diagnostics)
+	}
+	ur := &resource.UpdateResponse{}
+	r.Update(ctx, resource.UpdateRequest{}, ur)
+	if ur.Diagnostics.HasError() {
+		t.Errorf("Update no-op should not error: %v", ur.Diagnostics)
+	}
+	dr := &resource.DeleteResponse{}
+	r.Delete(ctx, resource.DeleteRequest{}, dr)
+	if dr.Diagnostics.HasError() {
+		t.Errorf("Delete no-op should not error: %v", dr.Diagnostics)
+	}
+}
+
 func TestPodActionCreate_InvalidAction_Errors(t *testing.T) {
 	m := PodActionModel{
 		Action: types.StringValue("explode"),

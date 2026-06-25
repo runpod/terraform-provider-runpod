@@ -333,6 +333,92 @@ func TestPodRead_FieldMapping(t *testing.T) {
 	}
 }
 
+// TestPodCreate_DropsMostConfigAttributes characterizes a gap: Create only sends
+// gpuCount/name/template|image/cloudType/volumeInGb. Other input attributes a user
+// sets (gpu_type_id, docker_args, container_disk_in_gb, start_ssh, start_jupyter,
+// machine_id, stop_after, …) are silently dropped — never put in the request body,
+// so the API never receives them. Green now (documents the drop); when Create is
+// fixed to forward these, the absence assertions flip.
+func TestPodCreate_DropsMostConfigAttributes(t *testing.T) {
+	var body map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(b, &body)
+		_, _ = w.Write([]byte(`{"id":"pod-x"}`))
+	}))
+	defer srv.Close()
+	t.Setenv("RUNPOD_API_KEY", "testkey123")
+	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+
+	m := baseModel()
+	m.Name = types.StringValue("p")
+	m.ImageName = types.StringValue("img")
+	m.GpuCount = types.Int64Value(1)
+	// User-set attributes that Create currently ignores:
+	m.GpuTypeId = types.StringValue("NVIDIA GeForce RTX 4090")
+	m.DockerArgs = types.StringValue("--foo")
+	m.ContainerDiskInGb = types.Int64Value(20)
+	m.StartSsh = types.BoolValue(true)
+	m.StartJupyter = types.BoolValue(true)
+	m.MachineId = types.StringValue("m1")
+	m.StopAfter = types.StringValue("1h")
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	// The fields Create does send:
+	if body["imageName"] != "img" || body["gpuCount"] != float64(1) || body["name"] != "p" {
+		t.Errorf("expected imageName/gpuCount/name in body; got %v", body)
+	}
+	// Dropped today — present means Create now forwards them (gap may be fixed):
+	for _, k := range []string{"gpuTypeId", "dockerArgs", "containerDiskInGb", "startSsh", "startJupyter", "machineId", "stopAfter"} {
+		if _, ok := body[k]; ok {
+			t.Errorf("%q is now sent — Create no longer drops config attributes (update this test)", k)
+		}
+	}
+}
+
+// TestPodRead_MapsCorrectlyNamedFields is green coverage of the Read mappings that
+// DO work (correctly-named top-level fields), complementing the field-mapping bug
+// (CE-1658) which covers the mis-named ones.
+func TestPodRead_MapsCorrectlyNamedFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"costPerHr":0.5,"memoryInGb":32,"volumeInGb":40,"containerDiskInGb":50,"machineId":"m9"}`))
+	}))
+	defer srv.Close()
+	t.Setenv("RUNPOD_API_KEY", "testkey123")
+	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+
+	m := baseModel()
+	m.Id = types.StringValue("pod-1")
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	(&PodResource{}).Read(context.Background(), resource.ReadRequest{State: podState(t, m)}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	var out PodModel
+	resp.State.Get(context.Background(), &out)
+	if out.CostPerHr.ValueFloat64() != 0.5 {
+		t.Errorf("cost_per_hr = %v, want 0.5", out.CostPerHr.ValueFloat64())
+	}
+	if out.MemoryInGb.ValueFloat64() != 32 {
+		t.Errorf("memory_in_gb = %v, want 32", out.MemoryInGb.ValueFloat64())
+	}
+	if out.VolumeInGb.ValueFloat64() != 40 {
+		t.Errorf("volume_in_gb = %v, want 40", out.VolumeInGb.ValueFloat64())
+	}
+	if out.ContainerDiskInGb.ValueInt64() != 50 {
+		t.Errorf("container_disk_in_gb = %v, want 50", out.ContainerDiskInGb.ValueInt64())
+	}
+	if out.MachineId.ValueString() != "m9" {
+		t.Errorf("machine_id = %q, want m9", out.MachineId.ValueString())
+	}
+}
+
 func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 	capture := func(t *testing.T, m PodModel) map[string]interface{} {
 		var body map[string]interface{}

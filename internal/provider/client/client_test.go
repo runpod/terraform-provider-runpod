@@ -8,7 +8,29 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestNewRunPodClient_SetsTimeout(t *testing.T) {
+	c := NewRunPodClient("k", "http://example")
+	if c.Client.Timeout != 60*time.Second {
+		t.Errorf("client timeout = %v, want 60s", c.Client.Timeout)
+	}
+}
+
+func TestQueryRaw_ReturnsInnerData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"ok":true}}`))
+	}))
+	defer srv.Close()
+	got, err := newTestClient(srv.URL).QueryRaw(context.Background(), "query{}")
+	if err != nil {
+		t.Fatalf("QueryRaw error: %v", err)
+	}
+	if got["ok"] != true {
+		t.Errorf("QueryRaw returned %v, want inner data with ok=true", got)
+	}
+}
 
 // newTestClient returns a client pointed at the given test server URL.
 func newTestClient(url string) *RunPodClient {

@@ -123,6 +123,72 @@ func TestAccPodDemo_framework(t *testing.T) {
 //
 // Needs TF_ACC=1, RUNPOD_API_KEY=$TEST_USER_JWT, and
 // RUNPOD_GRAPHQL_URL=http://localhost:4000/graphql (+ terraform binary).
+// TestAccProviderConfig_apiKeyFromBlock asserts the DESIRED behavior: an api_key
+// set in the provider block authenticates. RED today (CE-1649) — Configure can't
+// decode its config (map reflect error, swallowed), so the block is ignored and,
+// with the env var cleared, configuration fails with "Missing API Key". Green ==
+// CE-1649 fixed. Fails at Configure (no pod created), so no CheckDestroy needed.
+func TestAccProviderConfig_apiKeyFromBlock(t *testing.T) {
+	if os.Getenv("RIAB_ACC") != "1" {
+		t.Skip("set RIAB_ACC=1 + RUNPOD_API_KEY + RUNPOD_BASE_URL to run live riab tests")
+	}
+	key := os.Getenv("RUNPOD_API_KEY")
+	if key == "" || os.Getenv("RUNPOD_BASE_URL") == "" {
+		t.Fatal("RUNPOD_API_KEY and RUNPOD_BASE_URL must be set")
+	}
+	t.Setenv("RUNPOD_API_KEY", "") // force the provider to rely on the HCL block
+
+	cfg := fmt.Sprintf(`
+provider "runpod" {
+  api_key = %q
+}
+
+resource "runpod_pod" "demo" {
+  name          = "tf-cfgkey"
+  template_id   = "test-template"
+  gpu_count     = 1
+  cloud_type    = "SECURE"
+  start_ssh     = true
+  start_jupyter = true
+}
+`, key)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:             cfg,
+				ExpectNonEmptyPlan: true, // CE-1658 drift, if it ever gets past configure
+				Check:              resource.TestCheckResourceAttrSet("runpod_pod.demo", "id"),
+			},
+		},
+	})
+}
+
+// TestAccPodCreate_InvalidTemplate_framework is negative API-level coverage: a bad
+// template_id must surface the API error through terraform (not panic, not
+// silently succeed). Green — verifies error propagation. Deterministic and
+// capacity-independent (fails at template lookup, before provisioning).
+func TestAccPodCreate_InvalidTemplate_framework(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+provider "runpod" {}
+
+resource "runpod_pod" "bad" {
+  name        = "tf-bad-template"
+  template_id = "does-not-exist-xyz"
+  gpu_count   = 1
+}
+`,
+				ExpectError: regexp.MustCompile("template not found|API Error"),
+			},
+		},
+	})
+}
+
 // TestAccPodValidation_framework checks the provider's config validation surfaces
 // through real HCL: specifying both template_id and image_name, or neither, must
 // fail the apply with a clear error. Capacity-independent (validation fires in

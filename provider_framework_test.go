@@ -1,0 +1,188 @@
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
+)
+
+// testAccProtoV6ProviderFactories serves the real provider over the plugin
+// protocol so resource.Test exercises actual HCL the way a user would.
+var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+	"runpod": providerserver.NewProtocol6WithError(newProvider()),
+}
+
+func testAccPreCheck(t *testing.T) {
+	for _, k := range []string{"RUNPOD_API_KEY", "RUNPOD_BASE_URL"} {
+		if os.Getenv(k) == "" {
+			t.Fatalf("%s must be set for acceptance tests", k)
+		}
+	}
+}
+
+func testAccPodConfig(name, image string) string {
+	return fmt.Sprintf(`
+provider "runpod" {}
+
+resource "runpod_pod" "test" {
+  name          = %q
+  image_name    = %q
+  gpu_count     = 1
+  cloud_type    = "SECURE"
+  start_ssh     = true
+  start_jupyter = true
+}
+`, name, image)
+}
+
+// testAccPodDemoConfig mirrors the team demo's main.tf: a pod from a template_id
+// with start_ssh/start_jupyter set, plus a pod_id output.
+func testAccPodDemoConfig(name, templateID string) string {
+	return fmt.Sprintf(`
+provider "runpod" {}
+
+resource "runpod_pod" "demo" {
+  name          = %q
+  template_id   = %q
+  gpu_count     = 1
+  cloud_type    = "SECURE"
+  start_ssh     = true
+  start_jupyter = true
+}
+
+output "pod_id" {
+  value = runpod_pod.demo.id
+}
+`, name, templateID)
+}
+
+// testAccCheckPodDestroy verifies — via the real API — that pods in state are
+// gone after destroy.
+func testAccCheckPodDestroy(s *terraform.State) error {
+	base := os.Getenv("RUNPOD_BASE_URL")
+	key := os.Getenv("RUNPOD_API_KEY")
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "runpod_pod" {
+			continue
+		}
+		req, _ := http.NewRequest("GET", base+"/pods/"+rs.Primary.ID, nil)
+		req.Header.Set("Authorization", "Bearer "+key)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("checking pod %s: %w", rs.Primary.ID, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("pod %s still exists after destroy (status %d)", rs.Primary.ID, resp.StatusCode)
+		}
+	}
+	return nil
+}
+
+// TestAccPodDemo_framework mimics the working team demo: create a pod from a
+// template_id (with start_ssh/start_jupyter set) and destroy it — the exact
+// path the demo exercised. ExpectNonEmptyPlan tolerates the known post-apply
+// drift from CE-1658 (R11), which the demo never surfaced because it did
+// apply→destroy without a second plan. Remove ExpectNonEmptyPlan once CE-1658
+// is fixed. Green == the MVP pod create/destroy works end-to-end (capacity
+// permitting). Uses riab's local "test-template".
+//
+//	TF_ACC=1 RUNPOD_API_KEY=$TEST_USER_JWT RUNPOD_BASE_URL=http://localhost:8081/v1 \
+//	  go test . -run TestAccPodDemo_framework -v
+func TestAccPodDemo_framework(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckPodDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:             testAccPodDemoConfig("tf-demo", "test-template"),
+				ExpectNonEmptyPlan: true, // tolerate CE-1658 post-apply drift (demo did apply→destroy only)
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("runpod_pod.demo", "id"),
+					resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-demo"),
+					resource.TestCheckResourceAttr("runpod_pod.demo", "template_id", "test-template"),
+				),
+			},
+		},
+	})
+}
+
+// TestAccDataSources_framework reads each no-input data source through real HCL
+// via the plugin protocol and asserts it returns data (an "id"). All are RED
+// today — CE-1652 (R1 double-unwrap) plus query/schema mismatches against the
+// live schema (e.g. provider sends `user`/`gpus`; schema exposes `myself` and
+// has no `gpus`) — see CE-1661. Green per case == that data source works.
+//
+// Needs TF_ACC=1, RUNPOD_API_KEY=$TEST_USER_JWT, and
+// RUNPOD_GRAPHQL_URL=http://localhost:4000/graphql (+ terraform binary).
+func TestAccDataSources_framework(t *testing.T) {
+	cases := []struct {
+		name string
+		hcl  string
+		addr string
+	}{
+		{"gpu_types", `data "runpod_gpu_types" "test" {}`, "data.runpod_gpu_types.test"},
+		{"user", `data "runpod_user" "test" {}`, "data.runpod_user.test"},
+		{"data_centers", `data "runpod_data_centers" "test" {}`, "data.runpod_data_centers.test"},
+		{"machines", `data "runpod_machines" "test" {}`, "data.runpod_machines.test"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				PreCheck:                 func() { testAccPreCheck(t) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config: "provider \"runpod\" {}\n" + tc.hcl,
+						Check:  resource.TestCheckResourceAttrSet(tc.addr, "id"),
+					},
+				},
+			})
+		})
+	}
+}
+
+// TestAccPodResource_framework drives the pod resource through real HCL via the
+// terraform-plugin-testing framework: apply → assert state → (framework refresh
+// + post-apply plan idempotency check) → destroy → CheckDestroy. Config mirrors
+// the demo (sets start_ssh/start_jupyter).
+//
+// Verified behavior (2026-06-25, riab):
+//   - apply SUCCEEDS (create works — the demo path).
+//   - RED on the framework's post-apply idempotency check: "refresh plan was not
+//     empty" — CE-1658 (R11): Read maps status/created_at/gpuTypeId/cloudType to
+//     fields the v1 API doesn't return, so applied state doesn't round-trip and a
+//     follow-up plan shows perpetual drift.
+//   - Separately, OMITTING start_ssh/start_jupyter triggers CE-1660 (R12),
+//     "inconsistent result after apply" (those bools come back null vs planned).
+//
+// Green here == CE-1658 fixed (clean apply + empty follow-up plan).
+//
+// Auto-skips unless TF_ACC set. Needs the terraform binary + a live endpoint:
+//
+//	TF_ACC=1 RUNPOD_API_KEY=$TEST_USER_JWT RUNPOD_BASE_URL=http://localhost:8081/v1 \
+//	  go test . -run TestAccPodResource_framework -v
+func TestAccPodResource_framework(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckPodDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccPodConfig("tf-fw-acc", "runpod/test:latest"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("runpod_pod.test", "id"),
+					resource.TestCheckResourceAttr("runpod_pod.test", "name", "tf-fw-acc"),
+					resource.TestCheckResourceAttr("runpod_pod.test", "image_name", "runpod/test:latest"),
+				),
+			},
+		},
+	})
+}

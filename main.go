@@ -16,6 +16,7 @@ import (
 	resource_pod_action "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod_action"
 	resource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/resource_machine"
 	resource_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/resource_network_volume"
+	resource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint"
 
 	datasource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_pod"
 	datasource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_machine"
@@ -136,5 +137,6 @@ func (p *runpodProvider) Resources(ctx context.Context) []func() resource.Resour
 		resource_pod_action.NewPodActionResource,
 		resource_machine.NewMachineResource,
 		resource_network_volume.NewNetworkVolumeResource,
+		resource_endpoint.NewEndpointResource,
 	}
 }

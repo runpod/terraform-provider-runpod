@@ -151,7 +151,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	url := fmt.Sprintf("https://rest.runpod.io/v1/pods/%s", state.Id.ValueString())
+	url := client.GetRestBaseURL() + "/pods/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequest("GET", url, nil)
 	if err != nil {

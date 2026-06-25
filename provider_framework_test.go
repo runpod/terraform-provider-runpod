@@ -122,6 +122,54 @@ func TestAccPodDemo_framework(t *testing.T) {
 //
 // Needs TF_ACC=1, RUNPOD_API_KEY=$TEST_USER_JWT, and
 // RUNPOD_GRAPHQL_URL=http://localhost:4000/graphql (+ terraform binary).
+// TestAccPodImport_framework asserts `terraform import` works: create a pod,
+// then import it and verify state. RED today — no resource implements
+// ImportState, so the import step fails ("resource does not support import").
+// Green == import implemented for runpod_pod.
+func TestAccPodImport_framework(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckPodDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:             testAccPodDemoConfig("tf-import", "test-template"),
+				ExpectNonEmptyPlan: true, // CE-1658 drift
+			},
+			{
+				ResourceName:      "runpod_pod.demo",
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccPodUpdate_framework is the canonical create→update sequence: change a
+// mutable attribute (name; Optional+Computed, no RequiresReplace, so it's an
+// in-place Update) and expect the new value. RED today — pod Update is an empty
+// no-op (CE-1655/R5), so the in-place update returns null state and the apply
+// fails. Green == Update applies the change.
+func TestAccPodUpdate_framework(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckPodDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config:             testAccPodDemoConfig("tf-upd-a", "test-template"),
+				ExpectNonEmptyPlan: true, // CE-1658 drift
+				Check:              resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-upd-a"),
+			},
+			{
+				Config:             testAccPodDemoConfig("tf-upd-b", "test-template"),
+				ExpectNonEmptyPlan: true,
+				Check:              resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-upd-b"),
+			},
+		},
+	})
+}
+
 func TestAccDataSources_framework(t *testing.T) {
 	cases := []struct {
 		name string

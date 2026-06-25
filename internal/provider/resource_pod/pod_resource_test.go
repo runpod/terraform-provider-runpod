@@ -292,6 +292,47 @@ func TestPodUpdate_IsNoOp_R5(t *testing.T) {
 	}
 }
 
+// TestPodRead_FieldMapping_R11 is a unit characterization of CE-1658 (R11) using
+// a realistic v1 API response: the API returns desiredStatus/createdAt and nests
+// gpuType/secureCloud under "machine", but Read maps top-level
+// status/created_at/gpuTypeId/cloudType — so those come back empty while
+// costPerHr (correctly named) populates. Catches R11 without riab. Green now;
+// flips to failing when R11 is fixed (then assert the populated values).
+func TestPodRead_FieldMapping_R11(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"desiredStatus":"RUNNING","createdAt":"2026-06-25T00:00:00Z","costPerHr":0.5,"machine":{"gpuTypeId":"NVIDIA GeForce RTX 4090","secureCloud":true}}`))
+	}))
+	defer srv.Close()
+	t.Setenv("RUNPOD_API_KEY", "testkey123")
+	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+
+	m := baseModel()
+	m.Id = types.StringValue("pod-1")
+	sch := PodResourceSchema(context.Background())
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: sch}}
+	(&PodResource{}).Read(context.Background(), resource.ReadRequest{State: podState(t, m)}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	var out PodModel
+	resp.State.Get(context.Background(), &out)
+	// Correctly-named field populates — proves Read parsed the response.
+	if out.CostPerHr.ValueFloat64() != 0.5 {
+		t.Errorf("costPerHr = %v, want 0.5", out.CostPerHr.ValueFloat64())
+	}
+	// R11: these stay empty because Read maps field names the v1 API doesn't use.
+	if out.Status.ValueString() != "" {
+		t.Errorf("status = %q; expected empty (R11: Read maps 'status', API returns 'desiredStatus') — R11 may be FIXED", out.Status.ValueString())
+	}
+	if out.CreatedAt.ValueString() != "" {
+		t.Errorf("created_at = %q; expected empty (R11: Read maps 'created_at', API returns 'createdAt') — R11 may be FIXED", out.CreatedAt.ValueString())
+	}
+	if out.GpuTypeId.ValueString() != "" {
+		t.Errorf("gpu_type_id = %q; expected empty (R11: not read from nested machine.gpuTypeId) — R11 may be FIXED", out.GpuTypeId.ValueString())
+	}
+}
+
 func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 	capture := func(t *testing.T, m PodModel) map[string]interface{} {
 		var body map[string]interface{}

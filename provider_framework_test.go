@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -122,6 +123,49 @@ func TestAccPodDemo_framework(t *testing.T) {
 //
 // Needs TF_ACC=1, RUNPOD_API_KEY=$TEST_USER_JWT, and
 // RUNPOD_GRAPHQL_URL=http://localhost:4000/graphql (+ terraform binary).
+// TestAccPodValidation_framework checks the provider's config validation surfaces
+// through real HCL: specifying both template_id and image_name, or neither, must
+// fail the apply with a clear error. Capacity-independent (validation fires in
+// Create before any API call), so these are reliable greens.
+func TestAccPodValidation_framework(t *testing.T) {
+	cases := []struct {
+		name  string
+		body  string
+		errRe string
+	}{
+		{
+			"both_template_and_image",
+			`
+  name        = "tf-neg"
+  gpu_count   = 1
+  template_id = "test-template"
+  image_name  = "runpod/test:latest"`,
+			"Cannot specify both",
+		},
+		{
+			"neither_template_nor_image",
+			`
+  name      = "tf-neg"
+  gpu_count = 1`,
+			"Must specify either",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resource.Test(t, resource.TestCase{
+				PreCheck:                 func() { testAccPreCheck(t) },
+				ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+				Steps: []resource.TestStep{
+					{
+						Config:      fmt.Sprintf("provider \"runpod\" {}\nresource \"runpod_pod\" \"x\" {%s\n}\n", tc.body),
+						ExpectError: regexp.MustCompile(tc.errRe),
+					},
+				},
+			})
+		})
+	}
+}
+
 // TestAccPodImport_framework asserts `terraform import` works: create a pod,
 // then import it and verify state. RED today — no resource implements
 // ImportState, so the import step fails ("resource does not support import").

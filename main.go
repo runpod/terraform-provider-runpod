@@ -17,6 +17,7 @@ import (
 	resource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/resource_machine"
 	resource_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/resource_network_volume"
 	resource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint"
+	resource_template "github.com/runpod/terraform-provider-runpod/internal/provider/resource_template"
 
 	datasource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_pod"
 	datasource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_machine"
@@ -24,6 +25,7 @@ import (
 	datasource_gpu_types "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_gpu_types"
 	datasource_data_centers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_data_centers"
 	datasource_user "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_user"
+	datasource_template "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_template"
 )
 
 func main() {
@@ -127,6 +129,7 @@ func (p *runpodProvider) DataSources(ctx context.Context) []func() datasource.Da
 		datasource_gpu_types.NewGpuTypesDataSource,
 		datasource_data_centers.NewDataCentersDataSource,
 		datasource_user.NewUserDataSource,
+		datasource_template.NewTemplateDataSource,
 	}
 }
 
@@ -138,5 +141,6 @@ func (p *runpodProvider) Resources(ctx context.Context) []func() resource.Resour
 		resource_machine.NewMachineResource,
 		resource_network_volume.NewNetworkVolumeResource,
 		resource_endpoint.NewEndpointResource,
+		resource_template.NewTemplateResource,
 	}
 }

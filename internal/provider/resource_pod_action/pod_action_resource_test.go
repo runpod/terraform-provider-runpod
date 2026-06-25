@@ -25,15 +25,15 @@ func actionConfig(t *testing.T, m PodActionModel) tfsdk.Config {
 	return tfsdk.Config{Schema: sch, Raw: st.Raw}
 }
 
-// TestPodActionCreate_DoubleUnwrap_R1 is a characterization test for bug R1.
+// TestPodActionCreate_DoubleUnwrap is a characterization test for bug CE-1652.
 // client.Query() already returns the *inner* GraphQL `data` object, but
 // PodActionResource.Create does result["data"].(map) again — a second unwrap
 // that is always nil. So even a perfectly valid GraphQL response makes Create
 // fail with "Failed to get data from response".
 //
-// This asserts the current (buggy) failure. When R1 is fixed (drop the second
+// This asserts the current (buggy) failure. When CE-1652 is fixed (drop the second
 // unwrap), Create will succeed and set Status — flip this test to assert that.
-func TestPodActionCreate_DoubleUnwrap_R1(t *testing.T) {
+func TestPodActionCreate_DoubleUnwrap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"podStop":{"id":"p1","status":"STOPPED"}}}`))
 	}))
@@ -49,7 +49,7 @@ func TestPodActionCreate_DoubleUnwrap_R1(t *testing.T) {
 	(&PodActionResource{}).Create(context.Background(), resource.CreateRequest{Config: actionConfig(t, m)}, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected R1 double-unwrap failure; if Create now succeeds, R1 is FIXED — flip to assert Status == STOPPED")
+		t.Fatal("expected CE-1652 double-unwrap failure; if Create now succeeds, CE-1652 is FIXED — flip to assert Status == STOPPED")
 	}
 	found := false
 	for _, d := range resp.Diagnostics.Errors() {
@@ -58,16 +58,16 @@ func TestPodActionCreate_DoubleUnwrap_R1(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected 'Failed to get data from response' (R1), got: %v", resp.Diagnostics)
+		t.Errorf("expected 'Failed to get data from response', got: %v", resp.Diagnostics)
 	}
 }
 
 // TestPodActionCreate_SendsCorrectMutation covers the action→mutation routing
 // (the switch in Create) for all four actions, including resume/restart/
-// terminate. The request is built and sent before R1's double-unwrap errors, so
+// terminate. The request is built and sent before CE-1652's double-unwrap errors, so
 // we capture the request body and assert the right GraphQL mutation + podId went
 // on the wire. This is real, passing coverage of the routing (independent of the
-// R1/CE-1652 response-handling bug, which still fails the Create afterward).
+// CE-1652 response-handling bug, which still fails the Create afterward).
 func TestPodActionCreate_SendsCorrectMutation(t *testing.T) {
 	cases := []struct {
 		action   string

@@ -144,7 +144,7 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	}
 }
 
-// TestPodRead_UsesConfiguredBaseURL exercises the R3 fix: Read must honor
+// TestPodRead_UsesConfiguredBaseURL exercises the CE-1650 fix: Read must honor
 // RUNPOD_BASE_URL, not the hardcoded prod URL. Without the fix this request
 // would never reach the test server.
 func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
@@ -168,7 +168,7 @@ func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 	if gotPath != "/pods/pod-1" {
-		t.Errorf("Read hit path %q, want /pods/pod-1 (R3: must honor RUNPOD_BASE_URL)", gotPath)
+		t.Errorf("Read hit path %q, want /pods/pod-1 (CE-1650: must honor RUNPOD_BASE_URL)", gotPath)
 	}
 	var out PodModel
 	resp.State.Get(context.Background(), &out)
@@ -177,14 +177,14 @@ func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
 	}
 }
 
-// TestPodRead_404_DoesNotRemoveState_R4 is a characterization test for bug R4.
+// TestPodRead_404_DoesNotRemoveState is a characterization test for bug CE-1654.
 // When a pod is gone (404), Read only emits a warning and returns — it never
 // calls resp.State.RemoveResource, so the deleted pod stays in Terraform state
 // (plan stays dirty; it's never recreated).
 //
-// This asserts current behavior: no error, and state NOT removed. When R4 is
+// This asserts current behavior: no error, and state NOT removed. When CE-1654 is
 // fixed (RemoveResource on 404), resp.State.Raw becomes null — flip this test.
-func TestPodRead_404_DoesNotRemoveState_R4(t *testing.T) {
+func TestPodRead_404_DoesNotRemoveState(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte(`{"error":"pod not found"}`))
@@ -203,7 +203,7 @@ func TestPodRead_404_DoesNotRemoveState_R4(t *testing.T) {
 		t.Fatalf("404 should be a warning, not an error: %v", resp.Diagnostics)
 	}
 	if resp.State.Raw.IsNull() {
-		t.Error("state was removed on 404 — R4 appears FIXED; flip this test to assert removal")
+		t.Error("state was removed on 404 — CE-1654 appears FIXED; flip this test to assert removal")
 	}
 }
 
@@ -227,11 +227,11 @@ func TestPodCreate_NoIDInResponse_Errors(t *testing.T) {
 	}
 }
 
-// TestPodCreate_RequiresEnvApiKey_R2 characterizes R2: resources read the API
+// TestPodCreate_RequiresEnvApiKey characterizes CE-1653: resources read the API
 // key straight from os.Getenv("RUNPOD_API_KEY") and have no Configure wiring,
 // so provider-block credentials never reach them. With the env var empty,
 // Create fails regardless of any provider config.
-func TestPodCreate_RequiresEnvApiKey_R2(t *testing.T) {
+func TestPodCreate_RequiresEnvApiKey(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "") // empty = unset
 
 	m := baseModel()
@@ -242,7 +242,7 @@ func TestPodCreate_RequiresEnvApiKey_R2(t *testing.T) {
 	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected an error when RUNPOD_API_KEY is unset (R2: env-only auth)")
+		t.Fatal("expected an error when RUNPOD_API_KEY is unset (CE-1653: env-only auth)")
 	}
 	found := false
 	for _, d := range resp.Diagnostics.Errors() {
@@ -251,15 +251,15 @@ func TestPodCreate_RequiresEnvApiKey_R2(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected the RUNPOD_API_KEY env error (R2), got: %v", resp.Diagnostics)
+		t.Errorf("expected the RUNPOD_API_KEY env error, got: %v", resp.Diagnostics)
 	}
 }
 
-// TestPodUpdate_IsNoOp_R5 characterizes R5: PodResource.Update has an empty
+// TestPodUpdate_IsNoOp characterizes CE-1655: PodResource.Update has an empty
 // body, so an in-place change is silently dropped — no API call is made and no
-// new state is written. When R5 is fixed (Update actually applies changes),
+// new state is written. When CE-1655 is fixed (Update actually applies changes),
 // this test will need updating.
-func TestPodUpdate_IsNoOp_R5(t *testing.T) {
+func TestPodUpdate_IsNoOp(t *testing.T) {
 	var hit bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit = true
@@ -285,20 +285,20 @@ func TestPodUpdate_IsNoOp_R5(t *testing.T) {
 		t.Fatalf("empty Update should not error: %v", resp.Diagnostics)
 	}
 	if hit {
-		t.Error("Update made an API call — it is no longer a no-op (R5 may be fixed)")
+		t.Error("Update made an API call — it is no longer a no-op (CE-1655 may be fixed)")
 	}
 	if !resp.State.Raw.IsNull() {
-		t.Error("Update wrote state — it is no longer a pure no-op (R5 may be fixed)")
+		t.Error("Update wrote state — it is no longer a pure no-op (CE-1655 may be fixed)")
 	}
 }
 
-// TestPodRead_FieldMapping_R11 is a unit characterization of CE-1658 (R11) using
+// TestPodRead_FieldMapping is a unit characterization of CE-1658 using
 // a realistic v1 API response: the API returns desiredStatus/createdAt and nests
 // gpuType/secureCloud under "machine", but Read maps top-level
 // status/created_at/gpuTypeId/cloudType — so those come back empty while
-// costPerHr (correctly named) populates. Catches R11 without riab. Green now;
-// flips to failing when R11 is fixed (then assert the populated values).
-func TestPodRead_FieldMapping_R11(t *testing.T) {
+// costPerHr (correctly named) populates. Catches CE-1658 without riab. Green now;
+// flips to failing when CE-1658 is fixed (then assert the populated values).
+func TestPodRead_FieldMapping(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"desiredStatus":"RUNNING","createdAt":"2026-06-25T00:00:00Z","costPerHr":0.5,"machine":{"gpuTypeId":"NVIDIA GeForce RTX 4090","secureCloud":true}}`))
 	}))
@@ -321,15 +321,15 @@ func TestPodRead_FieldMapping_R11(t *testing.T) {
 	if out.CostPerHr.ValueFloat64() != 0.5 {
 		t.Errorf("costPerHr = %v, want 0.5", out.CostPerHr.ValueFloat64())
 	}
-	// R11: these stay empty because Read maps field names the v1 API doesn't use.
+	// CE-1658: these stay empty because Read maps field names the v1 API doesn't use.
 	if out.Status.ValueString() != "" {
-		t.Errorf("status = %q; expected empty (R11: Read maps 'status', API returns 'desiredStatus') — R11 may be FIXED", out.Status.ValueString())
+		t.Errorf("status = %q; expected empty (CE-1658: Read maps 'status', API returns 'desiredStatus') — CE-1658 may be FIXED", out.Status.ValueString())
 	}
 	if out.CreatedAt.ValueString() != "" {
-		t.Errorf("created_at = %q; expected empty (R11: Read maps 'created_at', API returns 'createdAt') — R11 may be FIXED", out.CreatedAt.ValueString())
+		t.Errorf("created_at = %q; expected empty (CE-1658: Read maps 'created_at', API returns 'createdAt') — CE-1658 may be FIXED", out.CreatedAt.ValueString())
 	}
 	if out.GpuTypeId.ValueString() != "" {
-		t.Errorf("gpu_type_id = %q; expected empty (R11: not read from nested machine.gpuTypeId) — R11 may be FIXED", out.GpuTypeId.ValueString())
+		t.Errorf("gpu_type_id = %q; expected empty (CE-1658: not read from nested machine.gpuTypeId) — CE-1658 may be FIXED", out.GpuTypeId.ValueString())
 	}
 }
 

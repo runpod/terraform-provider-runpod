@@ -46,7 +46,7 @@ func configure(t *testing.T, apiKey, baseURL *string) (*runpodProvider, *provide
 	return p, resp
 }
 
-// TestConfigure_ConfigApiKeyIgnored_R9 is a characterization test for bug R9:
+// TestConfigure_ConfigApiKeyIgnored is a characterization test for bug CE-1649:
 // main.go Configure reads provider config via
 // `req.Config.Get(ctx, &map[string]types.String{})`, which the framework cannot
 // do — it returns "cannot reflect tftypes.Object ... into a map". That error is
@@ -54,18 +54,18 @@ func configure(t *testing.T, apiKey, baseURL *string) (*runpodProvider, *provide
 // api_key/base_url provider attributes are silently ignored; only the
 // RUNPOD_API_KEY / RUNPOD_BASE_URL env vars take effect.
 //
-// This asserts the CURRENT (buggy) behavior so the suite stays green. When R9
+// This asserts the CURRENT (buggy) behavior so the suite stays green. When CE-1649
 // is fixed (config should win), this test will start failing — that's the
 // signal to flip it to assert p.apiKey == "cfgkey123".
-func TestConfigure_ConfigApiKeyIgnored_R9(t *testing.T) {
+func TestConfigure_ConfigApiKeyIgnored(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "envkey123")
 	p, resp := configure(t, strPtr("cfgkey123"), nil)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 	if p.apiKey != "envkey123" {
-		t.Errorf("apiKey = %q; expected the env value because config is ignored (R9). "+
-			"If this now equals \"cfgkey123\", R9 is FIXED — update this test to assert config wins over env.", p.apiKey)
+		t.Errorf("apiKey = %q; expected the env value because config is ignored. "+
+			"If this now equals \"cfgkey123\", CE-1649 is FIXED — update this test to assert config wins over env.", p.apiKey)
 	}
 }
 

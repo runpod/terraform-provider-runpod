@@ -17,7 +17,7 @@ func newTestClient(url string) *RunPodClient {
 
 // TestQuery_Success_ReturnsInnerData documents that Query unwraps the GraphQL
 // envelope once and returns the *inner* `data` object — not the full response.
-// This is the basis of risk R1: callers (machine, pod_action) that do
+// This is the basis of risk CE-1652: callers (machine, pod_action) that do
 // result["data"] again are double-unwrapping.
 func TestQuery_Success_ReturnsInnerData(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func TestQuery_SendsCorrectRequest(t *testing.T) {
 	}
 }
 
-// TestQuery_IgnoresContextCancellation characterizes R10: Query builds its
+// TestQuery_IgnoresContextCancellation characterizes CE-1659: Query builds its
 // request with http.NewRequest (not NewRequestWithContext), so the ctx is never
 // attached. A pre-cancelled context does NOT abort the call — the request still
 // succeeds. When fixed (context-aware request), a cancelled ctx should error;
@@ -101,7 +101,7 @@ func TestQuery_IgnoresContextCancellation(t *testing.T) {
 
 	_, err := newTestClient(srv.URL).Query(ctx, "query{}", nil)
 	if err != nil {
-		t.Fatalf("expected the cancelled ctx to be IGNORED (R10), but Query errored: %v — ctx may now be wired; flip this test", err)
+		t.Fatalf("expected the cancelled ctx to be IGNORED, but Query errored: %v — ctx may now be wired; flip this test", err)
 	}
 }
 

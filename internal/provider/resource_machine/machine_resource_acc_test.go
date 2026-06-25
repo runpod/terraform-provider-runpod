@@ -12,7 +12,7 @@ import (
 
 // TestAccMachineCreate_riab asserts the DESIRED behavior: creating a machine
 // against the live GraphQL endpoint returns an id. It FAILS today due to
-// CE-1652 (R1 double-unwrap, "data not in response"). Green here == CE-1652
+// CE-1652 (double-unwrap, "data not in response"). Green here == CE-1652
 // fixed and the machine create path works end-to-end.
 //
 // Gated on RIAB_ACC=1 with RUNPOD_API_KEY=$TEST_USER_JWT and
@@ -35,7 +35,7 @@ func TestAccMachineCreate_riab(t *testing.T) {
 	(&MachineResource{}).Create(ctx, resource.CreateRequest{Config: machineConfig(t, m)}, resp)
 
 	if resp.Diagnostics.HasError() {
-		t.Fatalf("machine Create failed (RED until CE-1652/R1 is fixed): %v", resp.Diagnostics)
+		t.Fatalf("machine Create failed (RED until CE-1652 is fixed): %v", resp.Diagnostics)
 	}
 	var created MachineModel
 	resp.State.Get(ctx, &created)

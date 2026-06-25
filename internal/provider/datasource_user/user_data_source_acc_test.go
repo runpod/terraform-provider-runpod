@@ -12,7 +12,7 @@ import (
 // TestAccUserDataSource_riab asserts the DESIRED behavior: the user data source
 // returns a non-empty user id from the live GraphQL endpoint. It FAILS today —
 // the provider queries `user { id pubKey }` but the schema exposes `myself`
-// ("Cannot query field user"), and CE-1652 (R1) would break the unwrap anyway.
+// ("Cannot query field user"), and CE-1652 would break the unwrap anyway.
 // Green here == both the query/schema and CE-1652 are fixed.
 //
 // Gated on RIAB_ACC=1 with RUNPOD_API_KEY=$TEST_USER_JWT and

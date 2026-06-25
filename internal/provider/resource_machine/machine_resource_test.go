@@ -23,14 +23,14 @@ func machineConfig(t *testing.T, m MachineModel) tfsdk.Config {
 	return tfsdk.Config{Schema: sch, Raw: st.Raw}
 }
 
-// TestMachineCreate_DoubleUnwrap_R1 is a characterization test for bug R1.
+// TestMachineCreate_DoubleUnwrap is a characterization test for bug CE-1652.
 // Same root cause as pod_action: client.Query() returns the inner `data`, but
 // MachineResource.Create does result["data"].(map) again (always nil), so even
 // a valid GraphQL response fails with "data not in response".
 //
-// When R1 is fixed, Create will read machineCreate.id and set Id — flip this
+// When CE-1652 is fixed, Create will read machineCreate.id and set Id — flip this
 // test to assert that.
-func TestMachineCreate_DoubleUnwrap_R1(t *testing.T) {
+func TestMachineCreate_DoubleUnwrap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"machineCreate":{"id":"m1","name":"n"}}}`))
 	}))
@@ -47,7 +47,7 @@ func TestMachineCreate_DoubleUnwrap_R1(t *testing.T) {
 	(&MachineResource{}).Create(context.Background(), resource.CreateRequest{Config: machineConfig(t, m)}, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected R1 double-unwrap failure; if Create now succeeds, R1 is FIXED — flip to assert Id == m1")
+		t.Fatal("expected CE-1652 double-unwrap failure; if Create now succeeds, CE-1652 is FIXED — flip to assert Id == m1")
 	}
 	found := false
 	for _, d := range resp.Diagnostics.Errors() {
@@ -56,16 +56,16 @@ func TestMachineCreate_DoubleUnwrap_R1(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected 'data not in response' (R1), got: %v", resp.Diagnostics)
+		t.Errorf("expected 'data not in response', got: %v", resp.Diagnostics)
 	}
 }
 
-// TestMachineRead_DoubleUnwrap_R1 confirms R1 in Read, and documents that R6
-// (unchecked type assertions like machine["name"].(string)) is currently
-// MASKED by R1: the result["data"] double-unwrap errors out before any
-// assertion runs. Fixing R1 without also hardening these assertions will turn
-// this error into a panic on a null/missing field.
-func TestMachineRead_DoubleUnwrap_R1(t *testing.T) {
+// TestMachineRead_DoubleUnwrap confirms CE-1652 in Read, and documents that the
+// unchecked type assertions (like machine["name"].(string)) are currently
+// MASKED by CE-1652: the result["data"] double-unwrap errors out before any
+// assertion runs. Fixing CE-1652 without also hardening these assertions will
+// turn this error into a panic on a null/missing field.
+func TestMachineRead_DoubleUnwrap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"machine":{"name":"n","gpuCount":1,"gpuType":"A100","cpuCount":8,"memoryInGb":64,"diskSizeInGb":100,"region":"EU","listed":true,"secureCloud":true,"maintenanceMode":false,"verified":true,"hostPricePerGpu":1.5}}}`))
 	}))
@@ -83,7 +83,7 @@ func TestMachineRead_DoubleUnwrap_R1(t *testing.T) {
 	(&MachineResource{}).Read(context.Background(), resource.ReadRequest{State: state}, resp)
 
 	if !resp.Diagnostics.HasError() {
-		t.Fatal("expected R1 double-unwrap failure in Read; if it now succeeds, R1 is FIXED (watch for R6 panics)")
+		t.Fatal("expected CE-1652 double-unwrap failure in Read; if it now succeeds, CE-1652 is FIXED (watch for unchecked-assertion panics)")
 	}
 	found := false
 	for _, d := range resp.Diagnostics.Errors() {
@@ -92,15 +92,15 @@ func TestMachineRead_DoubleUnwrap_R1(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("expected 'Failed to get data from response' (R1), got: %v", resp.Diagnostics)
+		t.Errorf("expected 'Failed to get data from response', got: %v", resp.Diagnostics)
 	}
 }
 
-// TestMachineUpdate_UsesConfiguredEndpoint_R7 verifies the R7 fix: Update must
+// TestMachineUpdate_UsesConfiguredEndpoint verifies the CE-1651 fix: Update must
 // POST to RUNPOD_GRAPHQL_URL, not the hardcoded prod URL. Update ignores the
 // response body (it only checks for an error), so a valid GraphQL 200 succeeds.
 // If the endpoint were still hardcoded, the test server would never be hit.
-func TestMachineUpdate_UsesConfiguredEndpoint_R7(t *testing.T) {
+func TestMachineUpdate_UsesConfiguredEndpoint(t *testing.T) {
 	var hit bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit = true
@@ -128,11 +128,11 @@ func TestMachineUpdate_UsesConfiguredEndpoint_R7(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 	if !hit {
-		t.Error("Update did not hit RUNPOD_GRAPHQL_URL — R7 regression (endpoint hardcoded)")
+		t.Error("Update did not hit RUNPOD_GRAPHQL_URL — CE-1651 regression (endpoint hardcoded)")
 	}
 }
 
-func TestMachineDelete_UsesConfiguredEndpoint_R7(t *testing.T) {
+func TestMachineDelete_UsesConfiguredEndpoint(t *testing.T) {
 	var hit bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hit = true
@@ -155,6 +155,6 @@ func TestMachineDelete_UsesConfiguredEndpoint_R7(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 	if !hit {
-		t.Error("Delete did not hit RUNPOD_GRAPHQL_URL — R7 regression (endpoint hardcoded)")
+		t.Error("Delete did not hit RUNPOD_GRAPHQL_URL — CE-1651 regression (endpoint hardcoded)")
 	}
 }

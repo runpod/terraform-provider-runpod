@@ -19,7 +19,7 @@ import (
 //
 // Unlike the httptest unit tests, this exercises the actual HTTP path, JWT auth,
 // and real API response shapes. Only the REST pod resource is exercised — the
-// GraphQL resources/data sources are non-functional until CE-1652 (R1) is fixed.
+// GraphQL resources/data sources are non-functional until CE-1652 is fixed.
 func TestAccPodLifecycle_riab(t *testing.T) {
 	if os.Getenv("RIAB_ACC") != "1" {
 		t.Skip("set RIAB_ACC=1 + RUNPOD_BASE_URL + RUNPOD_API_KEY to run the live riab pod lifecycle")
@@ -62,7 +62,7 @@ func TestAccPodLifecycle_riab(t *testing.T) {
 		}
 	}()
 
-	// --- Read (exercises the R3 fix against a real server) ---
+	// --- Read (exercises the CE-1650 fix against a real server) ---
 	rResp := &resource.ReadResponse{State: tfsdk.State{Schema: sch}}
 	(&PodResource{}).Read(ctx, resource.ReadRequest{State: podState(t, created)}, rResp)
 	if rResp.Diagnostics.HasError() {
@@ -76,11 +76,11 @@ func TestAccPodLifecycle_riab(t *testing.T) {
 		t.Error("Read returned costPerHr=0; expected a populated cost from the live API")
 	}
 
-	// DESIRED behavior. FAILS today due to CE-1658 (R11): the v1 API returns
+	// DESIRED behavior. FAILS today due to CE-1658: the v1 API returns
 	// "desiredStatus" but Read maps the non-existent top-level "status", so it
 	// comes back empty. Green here == CE-1658 fixed.
 	if got := readBack.Status.ValueString(); got != "RUNNING" {
-		t.Errorf("Status = %q, want \"RUNNING\" — FAILS until CE-1658 (R11) is fixed: Read maps 'status' but the v1 API returns 'desiredStatus'", got)
+		t.Errorf("Status = %q, want \"RUNNING\" — FAILS until CE-1658 is fixed: Read maps 'status' but the v1 API returns 'desiredStatus'", got)
 	}
 	t.Logf("read pod id=%s status=%q costPerHr=%v", id, readBack.Status.ValueString(), readBack.CostPerHr.ValueFloat64())
 }
@@ -171,7 +171,7 @@ func TestAccPodCreateVariations_riab(t *testing.T) {
 	}
 }
 
-// TestAccPodRead_NotFound_riab exercises R4 against a real 404: Read emits a
+// TestAccPodRead_NotFound_riab exercises CE-1654 against a real 404: Read emits a
 // warning and keeps the resource in state (instead of RemoveResource).
 func TestAccPodRead_NotFound_riab(t *testing.T) {
 	skipUnlessRiab(t)
@@ -186,10 +186,10 @@ func TestAccPodRead_NotFound_riab(t *testing.T) {
 		t.Fatalf("404 should be a warning, not an error: %v", rResp.Diagnostics)
 	}
 	// DESIRED behavior: a 404 should remove the resource from state so it gets
-	// recreated. FAILS today due to CE-1654 (R4): Read only warns and leaves
+	// recreated. FAILS today due to CE-1654: Read only warns and leaves
 	// stale state. Green here == CE-1654 fixed.
 	if !rResp.State.Raw.IsNull() {
-		t.Error("state was NOT removed on 404 — FAILS until CE-1654 (R4) is fixed (Read should call resp.State.RemoveResource)")
+		t.Error("state was NOT removed on 404 — FAILS until CE-1654 is fixed (Read should call resp.State.RemoveResource)")
 	}
 }
 

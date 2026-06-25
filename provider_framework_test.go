@@ -89,7 +89,7 @@ func testAccCheckPodDestroy(s *terraform.State) error {
 // TestAccPodDemo_framework mimics the working team demo: create a pod from a
 // template_id (with start_ssh/start_jupyter set) and destroy it — the exact
 // path the demo exercised. ExpectNonEmptyPlan tolerates the known post-apply
-// drift from CE-1658 (R11), which the demo never surfaced because it did
+// drift from CE-1658, which the demo never surfaced because it did
 // apply→destroy without a second plan. Remove ExpectNonEmptyPlan once CE-1658
 // is fixed. Green == the MVP pod create/destroy works end-to-end (capacity
 // permitting). Uses riab's local "test-template".
@@ -117,7 +117,7 @@ func TestAccPodDemo_framework(t *testing.T) {
 
 // TestAccDataSources_framework reads each no-input data source through real HCL
 // via the plugin protocol and asserts it returns data (an "id"). All are RED
-// today — CE-1652 (R1 double-unwrap) plus query/schema mismatches against the
+// today — CE-1652 (double-unwrap) plus query/schema mismatches against the
 // live schema (e.g. provider sends `user`/`gpus`; schema exposes `myself` and
 // has no `gpus`) — see CE-1661. Green per case == that data source works.
 //
@@ -192,7 +192,7 @@ func TestAccPodImport_framework(t *testing.T) {
 // TestAccPodUpdate_framework is the canonical create→update sequence: change a
 // mutable attribute (name; Optional+Computed, no RequiresReplace, so it's an
 // in-place Update) and expect the new value. RED today — pod Update is an empty
-// no-op (CE-1655/R5), so the in-place update returns null state and the apply
+// no-op (CE-1655), so the in-place update returns null state and the apply
 // fails. Green == Update applies the change.
 func TestAccPodUpdate_framework(t *testing.T) {
 	resource.Test(t, resource.TestCase{
@@ -249,10 +249,10 @@ func TestAccDataSources_framework(t *testing.T) {
 // Verified behavior (2026-06-25, riab):
 //   - apply SUCCEEDS (create works — the demo path).
 //   - RED on the framework's post-apply idempotency check: "refresh plan was not
-//     empty" — CE-1658 (R11): Read maps status/created_at/gpuTypeId/cloudType to
+//     empty" — CE-1658: Read maps status/created_at/gpuTypeId/cloudType to
 //     fields the v1 API doesn't return, so applied state doesn't round-trip and a
 //     follow-up plan shows perpetual drift.
-//   - Separately, OMITTING start_ssh/start_jupyter triggers CE-1660 (R12),
+//   - Separately, OMITTING start_ssh/start_jupyter triggers CE-1660,
 //     "inconsistent result after apply" (those bools come back null vs planned).
 //
 // Green here == CE-1658 fixed (clean apply + empty follow-up plan).

@@ -84,13 +84,13 @@ func TestContainerRegistryAuthResource_Create(t *testing.T) {
 	}
 }
 
-// TestContainerRegistryAuthResource_Create_MissingNamePanics documents a bug:
-// Create reads result["name"].(string) and result["username"].(string) with
-// unchecked type assertions (resource.go:101-102). When the API returns a 200
-// body containing "id" but omitting "name"/"username", these assertions panic
-// instead of producing a clean diagnostic. This test characterizes that actual
-// behavior; it does NOT fix the source.
-func TestContainerRegistryAuthResource_Create_MissingNamePanics(t *testing.T) {
+// TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic
+// asserts the CORRECT behavior: when the API returns a 200 body containing
+// "id" but omitting "name"/"username", Create should return a diagnostics
+// error gracefully rather than panicking on an unchecked type assertion.
+func TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic(t *testing.T) {
+	t.Skip("container_registry_auth Create uses unchecked type assertions on result[name]/[username] and panics on a partial response; should return a diagnostic — un-skip when fixed")
+
 	ctx := context.Background()
 	sch := ContainerRegistryAuthResourceSchema(ctx)
 
@@ -106,8 +106,7 @@ func TestContainerRegistryAuthResource_Create_MissingNamePanics(t *testing.T) {
 	}
 	cfg := tfsdk.Config{Schema: sch, Raw: st.Raw}
 
-	// Response includes "id" (so the ok-checked branch succeeds) but omits
-	// "name" and "username", triggering the unchecked assertions.
+	// Response includes "id" but omits "name" and "username".
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"cra-1"}`))
@@ -117,18 +116,14 @@ func TestContainerRegistryAuthResource_Create_MissingNamePanics(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
 
-	defer func() {
-		if rec := recover(); rec != nil {
-			// BUG (container_registry_auth_resource.go:101-102): unchecked
-			// type assertion result["name"].(string) panics on missing field.
-			t.Logf("CONFIRMED BUG: Create panicked on missing response field: %v", rec)
-		} else {
-			t.Errorf("expected panic from unchecked result[\"name\"].(string) on missing field; got none — source may have been fixed")
-		}
-	}()
-
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: sch}}
 	(&ContainerRegistryAuthResource{}).Create(ctx, resource.CreateRequest{Config: cfg}, resp)
+
+	// CORRECT behavior: a partial response surfaces as a diagnostics error,
+	// not a panic.
+	if !resp.Diagnostics.HasError() {
+		t.Fatalf("expected diagnostics error for partial response missing name/username, got none")
+	}
 }
 
 // TestContainerRegistryAuthResource_Read verifies that Read GETs

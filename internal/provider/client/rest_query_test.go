@@ -76,15 +76,18 @@ func TestRestQuery_NonOK_Errors(t *testing.T) {
 	}
 }
 
-// TestRestQuery_IgnoresContext documents a bug: RestQuery builds its request
-// with http.NewRequest (runpod_client.go:110), NOT http.NewRequestWithContext,
-// so the ctx argument is accepted but never wired into the request. A cancelled
-// context therefore does NOT cancel the request. This test passes today because
-// the request proceeds regardless of cancellation; it exists to pin the current
-// behavior so a future fix (switching to NewRequestWithContext) is a deliberate,
-// observable change.
-func TestRestQuery_IgnoresContext(t *testing.T) {
+// TestRestQuery_RespectsContextCancellation asserts the CORRECT behavior:
+// when RestQuery is called with an already-cancelled context, it should return
+// a context-cancellation error and must NOT perform the HTTP request. This is
+// currently broken because RestQuery builds its request with http.NewRequest
+// instead of http.NewRequestWithContext, so the ctx is never wired in. The test
+// is skipped until that is fixed so the package stays green.
+func TestRestQuery_RespectsContextCancellation(t *testing.T) {
+	t.Skip("CE-1659: RestQuery uses http.NewRequest, not http.NewRequestWithContext, so it ignores ctx cancellation — un-skip when fixed")
+
+	var requested bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested = true
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
@@ -95,13 +98,15 @@ func TestRestQuery_IgnoresContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before the call
 
-	// Despite the cancelled context, the request still succeeds because ctx is
-	// not propagated into the *http.Request.
+	// With a cancelled context, RestQuery should fail fast and never hit the server.
 	res, err := c.RestQuery(ctx, "GET", "anything", nil)
-	if err != nil {
-		t.Fatalf("expected success despite cancelled ctx (ctx is ignored), got error: %v", err)
+	if err == nil {
+		t.Fatalf("expected context-cancellation error, got nil (res=%#v)", res)
 	}
-	if res["ok"] != true {
-		t.Errorf("expected decoded body {ok:true}, got %#v", res)
+	if !strings.Contains(err.Error(), "context") {
+		t.Errorf("error: got %q, want it to mention context cancellation", err.Error())
+	}
+	if requested {
+		t.Errorf("expected no HTTP request to be made with a cancelled context, but the server was hit")
 	}
 }

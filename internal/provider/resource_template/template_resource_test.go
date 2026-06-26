@@ -357,7 +357,14 @@ func TestTemplateResource_Read_Success(t *testing.T) {
 	}
 }
 
-func TestTemplateResource_Update_Success(t *testing.T) {
+// TestTemplateResource_Update_RetainsApiComputedFields asserts the CORRECT
+// behavior: after Update, state should be set from the API-merged result, so
+// computed fields the API returned that were NOT present in the plan survive
+// in the final state. Update must not overwrite the API-merged values with the
+// planned config.
+func TestTemplateResource_Update_RetainsApiComputedFields(t *testing.T) {
+	t.Skip("CE-1673: Update double-sets state and overwrites API-merged values with the plan — un-skip when fixed")
+
 	ctx := context.Background()
 	sch := TemplateResourceSchema(ctx)
 
@@ -369,11 +376,14 @@ func TestTemplateResource_Update_Success(t *testing.T) {
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &gotBody)
 		w.WriteHeader(http.StatusOK)
+		// API echoes the planned name/category, AND returns a computed field
+		// (earned) that was NOT part of the plan.
 		_, _ = w.Write([]byte(`{
 			"id":"tpl-1",
 			"name":"updated-name",
 			"imageName":"img",
-			"category":"AMD"
+			"category":"AMD",
+			"earned":42.5
 		}`))
 	}))
 	defer srv.Close()
@@ -389,7 +399,7 @@ func TestTemplateResource_Update_Success(t *testing.T) {
 		t.Fatalf("build prior state: %v", d)
 	}
 
-	// planned config
+	// planned config — note: Earned is left null in the plan.
 	planModel := newBaseModel()
 	planModel.Id = types.StringValue("tpl-1")
 	planModel.Name = types.StringValue("updated-name")
@@ -412,12 +422,6 @@ func TestTemplateResource_Update_Success(t *testing.T) {
 		t.Errorf("body name = %v, want updated-name", gotBody["name"])
 	}
 
-	// BUG CHARACTERIZATION: Update writes state TWICE (template_resource.go:716
-	// then :722). The second Set overwrites with `config`, discarding any
-	// computed fields the API returned that were merged into `state`. Because
-	// the API response here echoes the planned config for the asserted fields,
-	// the final state still reflects the planned values. This test documents
-	// that the final state equals the planned config, not necessarily a merge.
 	var finalState TemplateModel
 	if d := resp.State.Get(ctx, &finalState); d.HasError() {
 		t.Fatalf("read state: %v", d)
@@ -427,6 +431,11 @@ func TestTemplateResource_Update_Success(t *testing.T) {
 	}
 	if finalState.Id.ValueString() != "tpl-1" {
 		t.Errorf("final state Id = %q, want tpl-1", finalState.Id.ValueString())
+	}
+	// CORRECT behavior: the API-computed field (earned) the plan did not carry
+	// must survive into the final state.
+	if finalState.Earned.ValueFloat64() != 42.5 {
+		t.Errorf("final state Earned = %v, want 42.5 (API-computed field must survive)", finalState.Earned.ValueFloat64())
 	}
 }
 

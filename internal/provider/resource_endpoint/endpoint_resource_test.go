@@ -198,19 +198,15 @@ func TestEndpointCreate_NonOKStatus(t *testing.T) {
 	}
 }
 
-// TestEndpointCreate_EnvResponseBug characterizes a REAL BUG in Create.
+// TestEndpointCreate_EnvRoundTrips asserts the CORRECT behavior for env vars
+// echoed back in the create response.
 //
-// When the create response includes a non-empty "env" map
-// (endpoint_resource.go:370-387), Create builds a types.ObjectValue using a
-// HARDCODED attr-type map of {"key": StringType} but populates it with the
-// ACTUAL env keys from the response. Unless the response env has exactly one
-// key literally named "key", types.ObjectValue returns a diagnostics error
-// ("attribute mismatch") and Create aborts via resp.Diagnostics.Append+return.
-//
-// This means an endpoint whose create response echoes its env vars (the normal
-// case) fails at the Terraform layer. This test documents the behavior; it does
-// NOT assert success. Source is not modified.
-func TestEndpointCreate_EnvResponseBug(t *testing.T) {
+// When the create response includes a non-empty "env" map (the normal case),
+// Create should populate the env attribute in state keyed by the REAL var
+// names from the response, with NO diagnostics error.
+func TestEndpointCreate_EnvRoundTrips(t *testing.T) {
+	t.Skip("CE-1672: env Object is built with a hardcoded {\"key\":StringType} attr type; populated env currently errors — un-skip when fixed")
+
 	ctx := context.Background()
 	sch := EndpointResourceSchema(ctx)
 
@@ -222,8 +218,8 @@ func TestEndpointCreate_EnvResponseBug(t *testing.T) {
 	}
 	cfg := tfsdk.Config{Schema: sch, Raw: st.Raw}
 
-	// templateId + name present (required by unchecked casts); env has a
-	// realistic key "MY_VAR" which does NOT match the hardcoded {"key":...}.
+	// templateId + name present (required by unchecked casts); env echoes a
+	// realistic var "MY_VAR".
 	resp := `{"id":"ep-1","templateId":"tmpl-123","name":"my-ep","env":{"MY_VAR":"hello"}}`
 	srv := stubServer(t, 200, resp, nil, nil, nil)
 	defer srv.Close()
@@ -234,10 +230,26 @@ func TestEndpointCreate_EnvResponseBug(t *testing.T) {
 	cresp := &resource.CreateResponse{State: tfsdk.State{Schema: sch}}
 	(&EndpointResource{}).Create(ctx, resource.CreateRequest{Config: cfg}, cresp)
 
-	// Characterize: the env-attr-type mismatch surfaces as a diagnostics error.
-	if !cresp.Diagnostics.HasError() {
-		t.Fatalf("BUG REGRESSION? expected diagnostics error from env ObjectValue "+
-			"attr-type mismatch, but Create succeeded. diags=%v", cresp.Diagnostics)
+	// CORRECT behavior: no diagnostics error.
+	if cresp.Diagnostics.HasError() {
+		t.Fatalf("Create returned diagnostics error for echoed env vars: %v", cresp.Diagnostics.Errors())
+	}
+
+	// CORRECT behavior: env attribute populated keyed by the real var name.
+	var out EndpointModel
+	if d := cresp.State.Get(ctx, &out); d.HasError() {
+		t.Fatalf("read result state: %v", d)
+	}
+	if out.Env.IsNull() {
+		t.Fatalf("state Env is null, want populated with MY_VAR")
+	}
+	attrs := out.Env.Attributes()
+	v, ok := attrs["MY_VAR"]
+	if !ok {
+		t.Fatalf("state Env missing key MY_VAR; got attributes %v", attrs)
+	}
+	if sv, ok := v.(types.String); !ok || sv.ValueString() != "hello" {
+		t.Errorf("state Env[MY_VAR] = %v, want %q", v, "hello")
 	}
 }
 

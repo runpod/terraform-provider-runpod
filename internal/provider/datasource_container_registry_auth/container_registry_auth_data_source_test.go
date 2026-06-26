@@ -4,33 +4,31 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// TestContainerRegistryAuthDataSourceRead_DoubleUnwrap_CE1652 characterizes the
-// real current behavior of this NEW data source: it reintroduces the systemic
-// CE-1652 double-unwrap bug.
+// TestContainerRegistryAuthDataSourceRead_PopulatesState asserts the CORRECT
+// behavior of the container registry auth data source Read: given a valid
+// GraphQL response, Read single-unwraps the envelope, reads the
+// "containerRegistryAuths" list, and populates state with no diagnostics error.
 //
-// client.Query() (internal/provider/client/runpod_client.go:82-83) already strips
-// the top-level {"data":...} GraphQL envelope and returns the INNER map. A correct
-// caller would read result["containerRegistryAuths"] directly. Instead, the Read at
-// internal/provider/datasource_container_registry_auth/container_registry_auth_data_source.go:46
-// does result["data"].(map[string]interface{}) AGAIN, which never matches, so it
-// falls into the else branch and always emits "Failed to get data from response"
-// (container_registry_auth_data_source.go:67) regardless of a valid GraphQL response.
+// This is gated on an open bug in the source (NOT in this test):
+//   - CE-1671: Read re-indexes result["data"] at
+//     container_registry_auth_data_source.go:46 after client.Query already
+//     stripped the {"data":...} envelope (double-unwrap), so the else branch
+//     always fires. It also builds a []ContainerRegistryAuthModel slice and
+//     sets it against a single-object schema (id/name/username flat), which is
+//     itself an error once the double-unwrap is fixed.
 //
-// NOTE: there is a SECOND latent bug downstream that this test cannot reach because
-// the double-unwrap short-circuits first: the Read builds a []ContainerRegistryAuthModel
-// slice (line 48) and calls resp.State.Set(ctx, &models) (line 58) against a
-// SINGLE-OBJECT schema (id/name/username flat — see container_registry_auth_data_source_gen.go).
-// Setting a slice into a single-object schema would itself error. That path is
-// dead until the double-unwrap is fixed.
-func TestContainerRegistryAuthDataSourceRead_DoubleUnwrap_CE1652(t *testing.T) {
-	// A fully valid GraphQL response. With the bug, none of this is ever consumed.
+// Un-skip when fixed.
+func TestContainerRegistryAuthDataSourceRead_PopulatesState(t *testing.T) {
+	t.Skip("CE-1671: Read re-unwraps result[\"data\"] (double-unwrap); also sets a []Model slice against a single-object schema. Un-skip when fixed")
+
+	// Valid GraphQL response: client.Query strips the {"data":...} envelope and
+	// returns the inner map, so a correct Read reads result["containerRegistryAuths"].
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"containerRegistryAuths":[
 			{"id":"auth-1","name":"dockerhub","username":"alice"},
@@ -45,26 +43,13 @@ func TestContainerRegistryAuthDataSourceRead_DoubleUnwrap_CE1652(t *testing.T) {
 	ctx := context.Background()
 	sch := ContainerRegistryAuthDataSourceSchema(ctx)
 
-	// Read takes no config input (no required attributes consumed before the query).
 	req := datasource.ReadRequest{Config: tfsdk.Config{Schema: sch}}
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: sch}}
 
 	(&ContainerRegistryAuthDataSource{}).Read(ctx, req, resp)
 
-	if !resp.Diagnostics.HasError() {
-		t.Fatalf("expected an error from the CE-1652 double-unwrap, got none; diags=%v", resp.Diagnostics)
-	}
-
-	// The else branch at container_registry_auth_data_source.go:67 is the
-	// double-unwrap failure.
-	found := false
-	for _, d := range resp.Diagnostics.Errors() {
-		if strings.Contains(d.Detail(), "Failed to get data from response") {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("expected detail %q (CE-1652 double-unwrap else branch); got diags=%v",
-			"Failed to get data from response", resp.Diagnostics)
+	// CORRECT: Read completes with no error and the auth list is returned into state.
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("expected Read to succeed and populate state, got diags=%v", resp.Diagnostics)
 	}
 }

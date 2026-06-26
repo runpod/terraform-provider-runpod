@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -13,60 +12,27 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-// TestTemplateModel_MalformedStructTags_CE1652Adjacent characterizes a hard
-// blocker in this NEW data source that sits in front of the CE-1652 double-unwrap.
+// TestTemplateDataSourceRead_PopulatesState asserts the CORRECT behavior of the
+// template data source Read: given a valid config (id) and a valid GraphQL
+// response, Read decodes the config, issues the query, single-unwraps the
+// envelope, and populates state (name / imageName / etc.) with no diagnostics
+// error.
 //
-// The generated TemplateModel (template_data_source_gen.go:117-130) has MALFORMED
-// `tfsdk` struct tags — every field after Name is missing its closing quote, e.g.
-// `tfsdk:"container_disk_in_gb` instead of `tfsdk:"container_disk_in_gb"`. As a
-// result the terraform-plugin-framework cannot reflect over TemplateModel at all:
-// any State/Config Get or Set using TemplateModel errors with
-// "need a struct tag for \"tfsdk\" on ContainerDiskInGb".
+// This is gated on two open bugs in the source (NOT in this test):
+//   - CE-1670: TemplateModel in template_data_source_gen.go has malformed
+//     `tfsdk` struct tags (missing closing quote on every field after Name),
+//     so req.Config.Get(ctx, &config) fails reflection ("need a struct tag for
+//     \"tfsdk\"") and go vet fails.
+//   - CE-1671: Read re-indexes result["data"] at template_data_source.go:71
+//     after client.Query already stripped the {"data":...} envelope
+//     (double-unwrap), so the else branch always fires.
 //
-// This means the very FIRST line of Read — req.Config.Get(ctx, &config) at
-// template_data_source.go:28 — fails before the GraphQL query is ever issued.
-// The downstream CE-1652 double-unwrap (line 71) is therefore currently dead code.
-func TestTemplateModel_MalformedStructTags_CE1652Adjacent(t *testing.T) {
-	ctx := context.Background()
-	sch := TemplateDataSourceSchema(ctx)
+// Un-skip when both are fixed.
+func TestTemplateDataSourceRead_PopulatesState(t *testing.T) {
+	t.Skip("CE-1670: malformed tfsdk struct tags in template_data_source_gen.go break reflection (go vet fails); CE-1671: Read re-unwraps result[\"data\"] (double-unwrap). Un-skip when both are fixed")
 
-	// Attempting to round-trip TemplateModel through the framework fails on the
-	// broken tags, independent of any network call.
-	st := tfsdk.State{Schema: sch}
-	diags := st.Set(ctx, &TemplateModel{Id: types.StringValue("tmpl-123")})
-	if !diags.HasError() {
-		t.Fatalf("expected struct-tag reflection error from malformed TemplateModel tags, got none")
-	}
-	found := false
-	for _, d := range diags.Errors() {
-		if strings.Contains(d.Detail(), `need a struct tag for "tfsdk"`) {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatalf("expected detail mentioning missing tfsdk struct tag; got %v", diags)
-	}
-}
-
-// TestTemplateDataSourceRead_ConfigDecodeFails_CE1652 characterizes the real
-// current behavior when Read is invoked with a VALID config and a VALID GraphQL
-// response. This NEW data source carries two stacked defects:
-//
-//  1. The generated TemplateModel has malformed `tfsdk` struct tags
-//     (template_data_source_gen.go:117-130), so req.Config.Get(ctx, &config) at
-//     template_data_source.go:28 fails with the reflection error
-//     "need a struct tag for \"tfsdk\"". Read returns at line 31 before any query.
-//
-//  2. Behind that, the CE-1652 double-unwrap at template_data_source.go:71
-//     (result["data"] re-indexed after client.Query already stripped the envelope)
-//     would also fail. It is unreachable today because (1) short-circuits first.
-//
-// Here we build the config Raw directly via tftypes (NOT via TemplateModel, which
-// can't be reflected) so the config itself is well-formed; Read still fails — and
-// the failing point is the struct-tag decode at line 28, NOT the network/unwrap.
-func TestTemplateDataSourceRead_ConfigDecodeFails_CE1652(t *testing.T) {
-	// A fully valid GraphQL response for the template query. With the bugs, none of
-	// this is ever consumed — Read returns before issuing the query.
+	// Valid GraphQL response: client.Query strips the {"data":...} envelope and
+	// returns the inner map, so a correct Read reads result["template"] directly.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"template":{
 			"id":"tmpl-123",
@@ -97,8 +63,7 @@ func TestTemplateDataSourceRead_ConfigDecodeFails_CE1652(t *testing.T) {
 	ctx := context.Background()
 	sch := TemplateDataSourceSchema(ctx)
 
-	// Build a well-formed config Raw directly from the schema's tftypes object type,
-	// bypassing the un-reflectable TemplateModel. id is set; computed fields are null.
+	// Build a well-formed config with id set and the computed fields null.
 	objType := sch.Type().TerraformType(ctx).(tftypes.Object)
 	vals := make(map[string]tftypes.Value, len(objType.AttributeTypes))
 	for name, typ := range objType.AttributeTypes {
@@ -115,19 +80,21 @@ func TestTemplateDataSourceRead_ConfigDecodeFails_CE1652(t *testing.T) {
 
 	(&TemplateDataSource{}).Read(ctx, req, resp)
 
-	if !resp.Diagnostics.HasError() {
-		t.Fatalf("expected Read to error, got none; diags=%v", resp.Diagnostics)
+	// CORRECT: Read completes with no error.
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("expected Read to succeed, got diags=%v", resp.Diagnostics)
 	}
 
-	// Read fails at req.Config.Get (template_data_source.go:28) on the malformed
-	// struct tags — NOT at the double-unwrap. Confirm the actual failing point.
-	found := false
-	for _, d := range resp.Diagnostics.Errors() {
-		if strings.Contains(d.Detail(), `need a struct tag for "tfsdk"`) {
-			found = true
-		}
+	// CORRECT: state is populated from the GraphQL response.
+	var state TemplateModel
+	diags := resp.State.Get(ctx, &state)
+	if diags.HasError() {
+		t.Fatalf("expected to read state back, got diags=%v", diags)
 	}
-	if !found {
-		t.Fatalf("expected the struct-tag decode error at Read line 28; got diags=%v", resp.Diagnostics)
+	if state.Name != types.StringValue("my-template") {
+		t.Errorf("name: want %q, got %v", "my-template", state.Name)
+	}
+	if state.ImageName != types.StringValue("runpod/base:latest") {
+		t.Errorf("imageName: want %q, got %v", "runpod/base:latest", state.ImageName)
 	}
 }

@@ -42,15 +42,16 @@ resource "runpod_pod" "test" {
 `, name, image)
 }
 
-// testAccPodDemoConfig mirrors the team demo's main.tf: a pod from a template_id
-// with start_ssh/start_jupyter set, plus a pod_id output.
-func testAccPodDemoConfig(name, templateID string) string {
+// testAccPodDemoConfig mirrors the team demo's main.tf (start_ssh/start_jupyter set,
+// pod_id output) but deploys from image_name rather than a template_id, so it does
+// not depend on a template being seeded in the local stack (riab seeds none).
+func testAccPodDemoConfig(name, image string) string {
 	return fmt.Sprintf(`
 provider "runpod" {}
 
 resource "runpod_pod" "demo" {
   name          = %q
-  template_id   = %q
+  image_name    = %q
   gpu_count     = 1
   cloud_type    = "SECURE"
   start_ssh     = true
@@ -60,7 +61,7 @@ resource "runpod_pod" "demo" {
 output "pod_id" {
   value = runpod_pod.demo.id
 }
-`, name, templateID)
+`, name, image)
 }
 
 // testAccCheckPodDestroy verifies — via the real API — that pods in state are
@@ -86,13 +87,13 @@ func testAccCheckPodDestroy(s *terraform.State) error {
 	return nil
 }
 
-// TestAccPodDemo_framework mimics the working team demo: create a pod from a
-// template_id (with start_ssh/start_jupyter set) and destroy it — the exact
-// path the demo exercised. ExpectNonEmptyPlan tolerates the known post-apply
-// drift from CE-1658, which the demo never surfaced because it did
-// apply→destroy without a second plan. Remove ExpectNonEmptyPlan once CE-1658
-// is fixed. Green == the MVP pod create/destroy works end-to-end (capacity
-// permitting). Uses riab's local "test-template".
+// TestAccPodDemo_framework mimics the working team demo: create a pod (start_ssh/
+// start_jupyter set) and destroy it — the path the demo exercised. Deploys from
+// image_name (not template_id) so it doesn't depend on a seeded template (riab
+// seeds none). ExpectNonEmptyPlan tolerates the known post-apply drift from
+// CE-1658, which the demo never surfaced because it did apply→destroy without a
+// second plan. Remove ExpectNonEmptyPlan once CE-1658 is fixed. Green == the MVP
+// pod create/destroy works end-to-end (capacity permitting).
 //
 //	TF_ACC=1 RUNPOD_API_KEY=$TEST_USER_JWT RUNPOD_BASE_URL=http://localhost:8081/v1 \
 //	  go test . -run TestAccPodDemo_framework -v
@@ -103,12 +104,12 @@ func TestAccPodDemo_framework(t *testing.T) {
 		CheckDestroy:             testAccCheckPodDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:             testAccPodDemoConfig("tf-demo", "test-template"),
+				Config:             testAccPodDemoConfig("tf-demo", "runpod/test:latest"),
 				ExpectNonEmptyPlan: true, // tolerate CE-1658 post-apply drift (demo did apply→destroy only)
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("runpod_pod.demo", "id"),
 					resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-demo"),
-					resource.TestCheckResourceAttr("runpod_pod.demo", "template_id", "test-template"),
+					resource.TestCheckResourceAttr("runpod_pod.demo", "image_name", "runpod/test:latest"),
 				),
 			},
 		},
@@ -145,7 +146,7 @@ provider "runpod" {
 
 resource "runpod_pod" "demo" {
   name          = "tf-cfgkey"
-  template_id   = "test-template"
+  image_name    = "runpod/test:latest"
   gpu_count     = 1
   cloud_type    = "SECURE"
   start_ssh     = true
@@ -243,7 +244,7 @@ func TestAccPodImport_framework(t *testing.T) {
 		CheckDestroy:             testAccCheckPodDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:             testAccPodDemoConfig("tf-import", "test-template"),
+				Config:             testAccPodDemoConfig("tf-import", "runpod/test:latest"),
 				ExpectNonEmptyPlan: true, // CE-1658 drift
 			},
 			{
@@ -267,12 +268,12 @@ func TestAccPodUpdate_framework(t *testing.T) {
 		CheckDestroy:             testAccCheckPodDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config:             testAccPodDemoConfig("tf-upd-a", "test-template"),
+				Config:             testAccPodDemoConfig("tf-upd-a", "runpod/test:latest"),
 				ExpectNonEmptyPlan: true, // CE-1658 drift
 				Check:              resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-upd-a"),
 			},
 			{
-				Config:             testAccPodDemoConfig("tf-upd-b", "test-template"),
+				Config:             testAccPodDemoConfig("tf-upd-b", "runpod/test:latest"),
 				ExpectNonEmptyPlan: true,
 				Check:              resource.TestCheckResourceAttr("runpod_pod.demo", "name", "tf-upd-b"),
 			},

@@ -119,7 +119,9 @@ func createPod(t *testing.T, m PodModel) (PodModel, func()) {
 }
 
 // TestAccPodCreateVariations_riab covers the pod-creation variations the REST
-// API supports: image_name, template_id, and an explicit volume.
+// API supports: image_name, an explicit volume, and (when a template is
+// available) template_id. The template_id case is skipped unless
+// RUNPOD_TEST_TEMPLATE_ID is set, since riab seeds no templates.
 func TestAccPodCreateVariations_riab(t *testing.T) {
 	skipUnlessRiab(t)
 	ctx := context.Background()
@@ -131,7 +133,7 @@ func TestAccPodCreateVariations_riab(t *testing.T) {
 		check  func(*testing.T, PodModel)
 	}{
 		{"image_name", func(m *PodModel) { m.ImageName = types.StringValue("runpod/test:latest") }, nil},
-		{"template_id", func(m *PodModel) { m.TemplateId = types.StringValue("test-template") }, nil},
+		{"template_id", func(m *PodModel) { m.TemplateId = types.StringValue(os.Getenv("RUNPOD_TEST_TEMPLATE_ID")) }, nil},
 		{"with_volume", func(m *PodModel) {
 			m.ImageName = types.StringValue("runpod/test:latest")
 			m.VolumeInGb = types.Float64Value(40)
@@ -144,6 +146,9 @@ func TestAccPodCreateVariations_riab(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.name == "template_id" && os.Getenv("RUNPOD_TEST_TEMPLATE_ID") == "" {
+				t.Skip("set RUNPOD_TEST_TEMPLATE_ID to a seeded template id to exercise the template_id path (riab seeds none)")
+			}
 			m := baseModel()
 			m.Name = types.StringValue("tf-acc-" + tc.name)
 			m.GpuCount = types.Int64Value(1)

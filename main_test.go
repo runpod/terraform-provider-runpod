@@ -13,9 +13,9 @@ import (
 
 func strPtr(s string) *string { return &s }
 
-// providerConfig builds a tfsdk.Config matching the provider schema. Pass nil
+// makeProviderConfig builds a tfsdk.Config matching the provider schema. Pass nil
 // for an attribute to make it null (exercising the env-fallback path).
-func providerConfig(t *testing.T, p *runpodProvider, apiKey, baseURL *string) tfsdk.Config {
+func makeProviderConfig(t *testing.T, p *runpodProvider, apiKey, baseURL *string) tfsdk.Config {
 	t.Helper()
 	ctx := context.Background()
 	sr := &provider.SchemaResponse{}
@@ -38,40 +38,28 @@ func providerConfig(t *testing.T, p *runpodProvider, apiKey, baseURL *string) tf
 	return tfsdk.Config{Schema: sr.Schema, Raw: raw}
 }
 
-func configure(t *testing.T, apiKey, baseURL *string) (*runpodProvider, *provider.ConfigureResponse) {
+func configureProvider(t *testing.T, apiKey, baseURL *string) (*runpodProvider, *provider.ConfigureResponse) {
 	t.Helper()
 	p := &runpodProvider{}
 	resp := &provider.ConfigureResponse{}
-	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerConfig(t, p, apiKey, baseURL)}, resp)
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: makeProviderConfig(t, p, apiKey, baseURL)}, resp)
 	return p, resp
 }
 
-// TestConfigure_ConfigApiKeyIgnored is a characterization test for bug CE-1649:
-// main.go Configure reads provider config via
-// `req.Config.Get(ctx, &map[string]types.String{})`, which the framework cannot
-// do — it returns "cannot reflect tftypes.Object ... into a map". That error is
-// swallowed by `if !diags.HasError()`, so the config block never runs and the
-// api_key/base_url provider attributes are silently ignored; only the
-// RUNPOD_API_KEY / RUNPOD_BASE_URL env vars take effect.
-//
-// This asserts the CURRENT (buggy) behavior so the suite stays green. When CE-1649
-// is fixed (config should win), this test will start failing — that's the
-// signal to flip it to assert p.apiKey == "cfgkey123".
-func TestConfigure_ConfigApiKeyIgnored(t *testing.T) {
+func TestConfigure_ConfigApiKeyWins(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "envkey123")
-	p, resp := configure(t, strPtr("cfgkey123"), nil)
+	p, resp := configureProvider(t, strPtr("cfgkey123"), nil)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if p.apiKey != "envkey123" {
-		t.Errorf("apiKey = %q; expected the env value because config is ignored. "+
-			"If this now equals \"cfgkey123\", CE-1649 is FIXED — update this test to assert config wins over env.", p.apiKey)
+	if p.apiKey != "cfgkey123" {
+		t.Errorf("apiKey = %q, want config value to override env", p.apiKey)
 	}
 }
 
 func TestConfigure_EnvApiKeyFallback(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "envkey123")
-	p, resp := configure(t, nil, nil)
+	p, resp := configureProvider(t, nil, nil)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
@@ -80,10 +68,22 @@ func TestConfigure_EnvApiKeyFallback(t *testing.T) {
 	}
 }
 
+func TestConfigure_ConfigBaseURLWins(t *testing.T) {
+	t.Setenv("RUNPOD_API_KEY", "testkey123")
+	t.Setenv("RUNPOD_BASE_URL", "https://env.runpod.io/v1")
+	p, resp := configureProvider(t, nil, strPtr("https://cfg.runpod.io/v1"))
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+	if p.baseUrl != "https://cfg.runpod.io/v1" {
+		t.Errorf("baseUrl = %q, want config value to override env", p.baseUrl)
+	}
+}
+
 func TestConfigure_BaseURLDefault(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "envkey123")
 	t.Setenv("RUNPOD_BASE_URL", "")
-	p, resp := configure(t, nil, nil)
+	p, resp := configureProvider(t, nil, nil)
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
@@ -94,7 +94,7 @@ func TestConfigure_BaseURLDefault(t *testing.T) {
 
 func TestConfigure_MissingApiKeyErrors(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "")
-	_, resp := configure(t, nil, nil)
+	_, resp := configureProvider(t, nil, nil)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected a 'Missing API Key' error diagnostic, got none")
 	}
@@ -113,7 +113,7 @@ func TestConfigure_ShortApiKey_Panics(t *testing.T) {
 	}()
 	p := &runpodProvider{}
 	resp := &provider.ConfigureResponse{}
-	p.Configure(context.Background(), provider.ConfigureRequest{Config: providerConfig(t, p, nil, nil)}, resp)
+	p.Configure(context.Background(), provider.ConfigureRequest{Config: makeProviderConfig(t, p, nil, nil)}, resp)
 }
 
 // TestResourceSchemas is a smoke check: every registered resource builds its

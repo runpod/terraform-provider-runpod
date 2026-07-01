@@ -60,6 +60,11 @@ type runpodProvider struct {
 	graphqlUrl string
 }
 
+type providerConfig struct {
+	ApiKey  types.String `tfsdk:"api_key"`
+	BaseUrl types.String `tfsdk:"base_url"`
+}
+
 func (p *runpodProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
 	log.Println("Metadata() called")
 	resp.TypeName = "runpod"
@@ -87,19 +92,20 @@ func (p *runpodProvider) Schema(ctx context.Context, req provider.SchemaRequest,
 func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	log.Println("Configure() called")
 
-	// Use API key from provider config if provided
-	var config map[string]types.String
-	diags := req.Config.Get(ctx, &config)
-	if !diags.HasError() {
-		if val, ok := config["api_key"]; ok && !val.IsNull() && !val.IsUnknown() {
-			p.apiKey = val.ValueString()
-		}
-		if val, ok := config["base_url"]; ok && !val.IsNull() && !val.IsUnknown() {
-			p.baseUrl = val.ValueString()
-		}
+	var cfg providerConfig
+	diags := req.Config.Get(ctx, &cfg)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
-	// Fall back to environment variable
+	if !cfg.ApiKey.IsNull() && !cfg.ApiKey.IsUnknown() {
+		p.apiKey = cfg.ApiKey.ValueString()
+	}
+	if !cfg.BaseUrl.IsNull() && !cfg.BaseUrl.IsUnknown() {
+		p.baseUrl = cfg.BaseUrl.ValueString()
+	}
+
 	if p.apiKey == "" {
 		p.apiKey = os.Getenv("RUNPOD_API_KEY")
 	}
@@ -107,7 +113,6 @@ func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRe
 		p.baseUrl = os.Getenv("RUNPOD_BASE_URL")
 	}
 
-	// Set defaults if still empty
 	if p.baseUrl == "" {
 		p.baseUrl = "https://rest.runpod.io/v1"
 	}

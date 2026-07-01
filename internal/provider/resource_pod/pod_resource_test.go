@@ -12,6 +12,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+
+	client "github.com/runpod/terraform-provider-runpod/internal/provider/client"
 )
 
 // baseModel returns a PodModel with all attributes null except the list-typed
@@ -44,6 +46,18 @@ func podState(t *testing.T, m PodModel) tfsdk.State {
 		t.Fatalf("building state: %v", diags)
 	}
 	return st
+}
+
+func configureResourceWithTestClient(t *testing.T, r interface{ Configure(context.Context, resource.ConfigureRequest, *resource.ConfigureResponse) }, srv *httptest.Server) {
+	t.Helper()
+	req := resource.ConfigureRequest{
+		ProviderData: client.NewRunPodClient("test-key", srv.URL),
+	}
+	resp := &resource.ConfigureResponse{}
+	r.Configure(context.Background(), req, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("failed to configure resource: %v", resp.Diagnostics)
+	}
 }
 
 func TestPodCreate_BothTemplateAndImage_Errors(t *testing.T) {

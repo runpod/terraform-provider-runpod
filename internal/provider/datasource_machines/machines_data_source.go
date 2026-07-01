@@ -1,7 +1,6 @@
 package datasource_machines
 
 import (
-	"os"
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -12,7 +11,15 @@ func NewMachinesDataSource() datasource.DataSource {
 	return &MachinesDataSource{}
 }
 
-type MachinesDataSource struct{}
+type MachinesDataSource struct {
+	client *client.RunPodClient
+}
+
+func (d *MachinesDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData != nil {
+		d.client = req.ProviderData.(*client.RunPodClient)
+	}
+}
 
 func (d *MachinesDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = "runpod_machines"
@@ -40,9 +47,11 @@ func (d *MachinesDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	variables := map[string]interface{}{}
 
-	apiKey := os.Getenv("RUNPOD_API_KEY")
-	runpodClient := client.NewRunPodClient(apiKey, client.GetGraphQLEndpoint())
-	result, err := runpodClient.Query(ctx, query, variables)
+	if d.client == nil {
+		resp.Diagnostics.AddError("Client not configured", "RunPod client is not configured")
+		return
+	}
+	result, err := d.client.Query(ctx, query, variables)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

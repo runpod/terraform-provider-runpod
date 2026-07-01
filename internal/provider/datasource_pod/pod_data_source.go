@@ -1,7 +1,6 @@
 package datasource_pod
 
 import (
-	"os"
 	"context"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -12,7 +11,15 @@ func NewPodDataSource() datasource.DataSource {
 	return &PodDataSource{}
 }
 
-type PodDataSource struct{}
+type PodDataSource struct {
+	client *client.RunPodClient
+}
+
+func (d *PodDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
+	if req.ProviderData != nil {
+		d.client = req.ProviderData.(*client.RunPodClient)
+	}
+}
 
 func (d *PodDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
 	resp.TypeName = "runpod_pod"
@@ -61,9 +68,11 @@ variables := map[string]interface{}{
 		"podId": config.Id.ValueString(),
 	}
 
-	apiKey := os.Getenv("RUNPOD_API_KEY")
-	runpodClient := client.NewRunPodClient(apiKey, client.GetGraphQLEndpoint())
-	result, err := runpodClient.Query(ctx, query, variables)
+	if d.client == nil {
+		resp.Diagnostics.AddError("Client not configured", "RunPod client is not configured")
+		return
+	}
+	result, err := d.client.Query(ctx, query, variables)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

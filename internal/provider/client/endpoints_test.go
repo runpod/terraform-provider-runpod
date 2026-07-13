@@ -20,7 +20,7 @@ func TestGetGraphQLEndpoint(t *testing.T) {
 func TestGetRestBaseURL(t *testing.T) {
 	t.Run("default when unset", func(t *testing.T) {
 		t.Setenv("RUNPOD_BASE_URL", "")
-		if got := GetRestBaseURL(); got != "https://rest.runpod.io/v1" {
+		if got := GetRestBaseURL(); got != "https://api.runpod.io/v2" {
 			t.Errorf("got %q, want default REST base URL", got)
 		}
 	})

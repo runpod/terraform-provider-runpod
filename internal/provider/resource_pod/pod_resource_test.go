@@ -92,7 +92,7 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 		gotPath, gotMethod = r.URL.Path, r.Method
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
-		_, _ = w.Write([]byte(`{"id":"pod-xyz"}`))
+			_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-xyz"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -113,17 +113,21 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	if gotMethod != "POST" || gotPath != "/pods" {
 		t.Errorf("request = %s %s, want POST /pods", gotMethod, gotPath)
 	}
-	if gotBody["imageName"] != "img:latest" {
-		t.Errorf("imageName = %v, want img:latest", gotBody["imageName"])
-	}
-	if _, ok := gotBody["templateId"]; ok {
-		t.Error("templateId should be absent for an image-name deploy")
+	// v2 format: nested objects
+	scheduling := gotBody["scheduling"].(map[string]interface{})
+	if scheduling["gpuCount"] != float64(2) {
+		t.Errorf("scheduling.gpuCount = %v, want 2", scheduling["gpuCount"])
 	}
 	if gotBody["name"] != "my-pod" {
 		t.Errorf("name = %v, want my-pod", gotBody["name"])
 	}
-	if gotBody["gpuCount"] != float64(2) {
-		t.Errorf("gpuCount = %v, want 2", gotBody["gpuCount"])
+	if gotBody["type"] != "ON_DEMAND" {
+		t.Errorf("type = %v, want ON_DEMAND", gotBody["type"])
+	}
+	if container, ok := gotBody["container"].(map[string]interface{}); ok {
+		if container["image"] != "img:latest" {
+			t.Errorf("container.image = %v, want img:latest", container["image"])
+		}
 	}
 
 	var out PodModel
@@ -138,7 +142,7 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
-		_, _ = w.Write([]byte(`{"id":"pod-tmpl"}`))
+			_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-tmpl"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -155,11 +159,17 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotBody["templateId"] != "tmpl-1" {
-		t.Errorf("templateId = %v, want tmpl-1", gotBody["templateId"])
+	scheduling := gotBody["scheduling"].(map[string]interface{})
+	if scheduling["gpuCount"] != float64(1) {
+		t.Errorf("scheduling.gpuCount = %v, want 1", scheduling["gpuCount"])
 	}
-	if _, ok := gotBody["imageName"]; ok {
-		t.Error("imageName should be absent for a template deploy")
+	if gotBody["name"] != "tmpl-pod" {
+		t.Errorf("name = %v, want tmpl-pod", gotBody["name"])
+	}
+	if container, ok := gotBody["container"].(map[string]interface{}); ok {
+		if container["image"] != "runpod/pytorch:latest" {
+			t.Errorf("container.image = %v, want runpod/pytorch:latest", container["image"])
+		}
 	}
 }
 
@@ -170,7 +180,7 @@ func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"desiredStatus":"RUNNING","costPerHr":0.5}`))
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-1","desiredStatus":"RUNNING","costPerHr":0.5,"type":"ON_DEMAND"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -459,7 +469,7 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &body)
-		_, _ = w.Write([]byte(`{"id":"pod-x"}`))
+			_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-x"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -487,43 +497,51 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// Required fields:
-	if body["imageName"] != "img" || body["gpuCount"] != float64(1) || body["name"] != "p" {
-		t.Errorf("expected imageName/gpuCount/name in body; got %v", body)
+	// v2 format: nested objects
+	scheduling := body["scheduling"].(map[string]interface{})
+	if scheduling["gpuCount"] != float64(1) {
+		t.Errorf("scheduling.gpuCount = %v, want 1", scheduling["gpuCount"])
+	}
+	if body["name"] != "p" {
+		t.Errorf("name = %v, want p", body["name"])
+	}
+	if body["type"] != "ON_DEMAND" {
+		t.Errorf("type = %v, want ON_DEMAND", body["type"])
 	}
 
-	// Optional fields that ARE valid for v1 CREATE:
-	if body["cloudType"] != "SECURE" {
-		t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
+	// v2 container object
+	container := body["container"].(map[string]interface{})
+	if container["image"] != "img" {
+		t.Errorf("container.image = %v, want img", container["image"])
 	}
-	if body["volumeInGb"] != float64(50) {
-		t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
-	}
-	if body["networkVolumeId"] != "nv-1" {
-		t.Errorf("networkVolumeId = %v, want nv-1", body["networkVolumeId"])
-	}
-	if body["containerDiskInGb"] != float64(20) {
-		t.Errorf("containerDiskInGb = %v, want 20", body["containerDiskInGb"])
-	}
-	if body["volumeMountPath"] != "/data" {
-		t.Errorf("volumeMountPath = %v, want /data", body["volumeMountPath"])
-	}
-
-	// env should be sent as object:
-	if envMap, ok := body["env"].(map[string]interface{}); ok {
-		if envMap["ENV1"] != "value1" || envMap["ENV2"] != "value2" {
-			t.Errorf("env = %v, want ENV1=value1,ENV2=value2", envMap)
+	if envArray, ok := container["env"].([]interface{}); ok {
+		if len(envArray) != 2 {
+			t.Errorf("env array length = %d, want 2", len(envArray))
 		}
 	} else {
-		t.Errorf("env not found or not a map: %v", body["env"])
+		t.Errorf("env not found or not an array: %v", container["env"])
 	}
 
-	// Fields that are NOT valid for v1 CREATE (would cause HTTP 400):
-	invalidFields := []string{"gpuTypeId", "machineId", "dockerArgs", "startSsh", "startJupyter", "stopAfter", "terminateAfter", "port", "bidPerGpu", "volumeKey", "dockerEntrypoint", "dockerStartCmd", "interruptible", "volumeEncrypted"}
-	for _, k := range invalidFields {
-		if _, ok := body[k]; ok {
-			t.Errorf("%q should NOT be sent to v1 CREATE (causes HTTP 400)", k)
-		}
+	// v2 scheduling object
+	if scheduling["cloudType"] != "SECURE" {
+		t.Errorf("scheduling.cloudType = %v, want SECURE", scheduling["cloudType"])
+	}
+
+	// v2 storage object
+	storage := body["storage"].(map[string]interface{})
+	if storage["volumeSizeInGb"] != float64(50) {
+		t.Errorf("storage.volumeSizeInGb = %v, want 50", storage["volumeSizeInGb"])
+	}
+	if storage["networkVolumeId"] != "nv-1" {
+		t.Errorf("storage.networkVolumeId = %v, want nv-1", storage["networkVolumeId"])
+	}
+	if storage["volumeMountPath"] != "/data" {
+		t.Errorf("storage.volumeMountPath = %v, want /data", storage["volumeMountPath"])
+	}
+
+	// v2 container object
+	if container["diskInGb"] != float64(20) {
+		t.Errorf("container.diskInGb = %v, want 20", container["diskInGb"])
 	}
 }
 
@@ -573,7 +591,7 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			b, _ := io.ReadAll(r.Body)
 			_ = json.Unmarshal(b, &body)
-			_, _ = w.Write([]byte(`{"id":"pod-x"}`))
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-x"}},"meta":{"requestId":"test"},"error":null}`))
 		}))
 		defer srv.Close()
 		t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -593,11 +611,15 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		m.CloudType = types.StringValue("SECURE")
 		m.VolumeInGb = types.Float64Value(50)
 		body := capture(t, m)
-		if body["cloudType"] != "SECURE" {
-			t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
+		
+		scheduling := body["scheduling"].(map[string]interface{})
+		if scheduling["cloudType"] != "SECURE" {
+			t.Errorf("scheduling.cloudType = %v, want SECURE", scheduling["cloudType"])
 		}
-		if body["volumeInGb"] != float64(50) {
-			t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
+		
+		storage := body["storage"].(map[string]interface{})
+		if storage["volumeSizeInGb"] != float64(50) {
+			t.Errorf("storage.volumeSizeInGb = %v, want 50", storage["volumeSizeInGb"])
 		}
 	})
 

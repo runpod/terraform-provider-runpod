@@ -130,7 +130,12 @@ func (c *RunPodClient) RestQuery(ctx context.Context, method, path string, param
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
+	// Handle v2 response envelope: {data: {...}, meta: {...}, error: ...}
 	if resultMap, ok := result.(map[string]interface{}); ok {
+		// Check for v2 envelope
+		if data, ok := resultMap["data"].(map[string]interface{}); ok {
+			return data, nil
+		}
 		return resultMap, nil
 	}
 	if resultArray, ok := result.([]interface{}); ok {

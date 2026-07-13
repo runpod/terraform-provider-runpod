@@ -87,7 +87,7 @@ func TestConfigure_BaseURLDefault(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if p.baseUrl != "https://rest.runpod.io/v1" {
+	if p.baseUrl != "https://api.runpod.io/v2" {
 		t.Errorf("baseUrl = %q, want default", p.baseUrl)
 	}
 }

@@ -117,50 +117,131 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	url := endpoint + "/pods"
 
-	// Build the REST API request body
+  // Build the REST API request body (v2 format with nested objects)
 	body := map[string]interface{}{
-		"gpuCount": int64(config.GpuCount.ValueInt64()),
-		"name":     config.Name.ValueString(),
+		"scheduling": map[string]interface{}{
+			"gpuCount": int64(config.GpuCount.ValueInt64()),
+		},
+		"name": config.Name.ValueString(),
 	}
 
 	if hasTemplateId {
 		body["templateId"] = config.TemplateId.ValueString()
 	} else {
-		body["imageName"] = config.ImageName.ValueString()
+		// v2 format: image in container object
+		if _, ok := body["container"]; !ok {
+			body["container"] = make(map[string]interface{})
+		}
+		body["container"].(map[string]interface{})["image"] = config.ImageName.ValueString()
 	}
 
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		body["cloudType"] = config.CloudType.ValueString()
+		if _, ok := body["scheduling"]; !ok {
+			body["scheduling"] = make(map[string]interface{})
+		}
+		body["scheduling"].(map[string]interface{})["cloudType"] = config.CloudType.ValueString()
+	}
+
+	// Add type field (v2 requires explicit ON_DEMAND or SPOT)
+	if !config.Interruptible.IsNull() && config.Interruptible.ValueBool() {
+		body["type"] = "SPOT"
+	} else {
+		body["type"] = "ON_DEMAND"
+	}
+
+	// Add scheduling fields
+	if _, ok := body["scheduling"]; !ok {
+		body["scheduling"] = make(map[string]interface{})
+	}
+	scheduling := body["scheduling"].(map[string]interface{})
+
+	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		scheduling["gpuTypeId"] = config.GpuTypeId.ValueString()
+	}
+
+	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
+		scheduling["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
 	}
 
 	if config.VolumeInGb.ValueFloat64() > 0 {
-		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
+		if _, ok := body["storage"]; !ok {
+			body["storage"] = make(map[string]interface{})
+		}
+		body["storage"].(map[string]interface{})["volumeSizeInGb"] = int64(config.VolumeInGb.ValueFloat64())
 	}
 
 	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+		if _, ok := body["storage"]; !ok {
+			body["storage"] = make(map[string]interface{})
+		}
+		body["storage"].(map[string]interface{})["networkVolumeId"] = config.NetworkVolumeId.ValueString()
 	}
 
 	if !config.ContainerDiskInGb.IsNull() {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
+		if _, ok := body["container"]; !ok {
+			body["container"] = make(map[string]interface{})
+		}
+		body["container"].(map[string]interface{})["diskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
+	}
+
+	// Handle ports - convert from string format to v2 array format
+	if !config.Ports.IsNull() && config.Ports.ValueString() != "" {
+		portsArray := make([]map[string]interface{}, 0)
+		portsStr := config.Ports.ValueString()
+		ports := strings.Split(portsStr, ",")
+		for _, p := range ports {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				// Parse "8888/http" format
+				parts := strings.Split(trimmed, "/")
+				if len(parts) == 2 {
+					portsArray = append(portsArray, map[string]interface{}{
+						"port": parts[0],
+						"type": parts[1],
+					})
+				} else {
+					// Try "8888 http" format (space separated)
+					parts = strings.Split(trimmed, " ")
+					if len(parts) == 2 {
+						portsArray = append(portsArray, map[string]interface{}{
+							"port": parts[0],
+							"type": parts[1],
+						})
+					}
+				}
+			}
+		}
+		if len(portsArray) > 0 {
+			body["ports"] = portsArray
+		}
 	}
 
 	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
+		if _, ok := body["storage"]; !ok {
+			body["storage"] = make(map[string]interface{})
+		}
+		body["storage"].(map[string]interface{})["volumeMountPath"] = config.VolumeMountPath.ValueString()
 	}
 
 	if !config.Env.IsNull() && len(config.Env.Elements()) > 0 {
-		envMap := make(map[string]interface{})
+		// v2 format: array of key/value objects in container.env
+		envArray := make([]map[string]interface{}, 0)
 		for _, element := range config.Env.Elements() {
 			if elementStr, ok := element.(types.String); ok {
 				parts := strings.SplitN(elementStr.ValueString(), "=", 2)
 				if len(parts) == 2 {
-					envMap[parts[0]] = parts[1]
+					envArray = append(envArray, map[string]interface{}{
+						"key":   parts[0],
+						"value": parts[1],
+					})
 				}
 			}
 		}
-		if len(envMap) > 0 {
-			body["env"] = envMap
+		if len(envArray) > 0 {
+			if _, ok := body["container"]; !ok {
+				body["container"] = make(map[string]interface{})
+			}
+			body["container"].(map[string]interface{})["env"] = envArray
 		}
 	}
 
@@ -193,11 +274,28 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Parse the response
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	// Parse the response (v2 format with envelope)
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
+	}
+
+	// Extract pod from data.pod (v2 envelope)
+	var result map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		if pod, ok := data["pod"].(map[string]interface{}); ok {
+			result = pod
+		} else if pods, ok := data["pods"].([]interface{}); ok && len(pods) > 0 {
+			// For list operations
+			result = pods[0].(map[string]interface{})
+		} else {
+			resp.Diagnostics.AddError("API Error", "Failed to extract pod from response data")
+			return
+		}
+	} else {
+		// Fallback for v1 format (backward compatibility)
+		result = envelope
 	}
 
 	// Extract the pod ID from response
@@ -206,6 +304,22 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	} else {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from response: %v", result))
 		return
+	}
+
+	// Extract pod type (v2 required field)
+	if podType, ok := result["type"].(string); ok {
+		config.Type = types.StringValue(podType)
+	}
+
+	// Handle deprecated fields for backward compatibility
+	// v1 uses "interruptible" boolean, v2 uses "type" field
+	// If v2 type is SPOT, set interruptible to true for backward compat
+	if config.Interruptible.IsNull() {
+		if config.Type.ValueString() == "SPOT" {
+			config.Interruptible = types.BoolValue(true)
+		} else {
+			config.Interruptible = types.BoolValue(false)
+		}
 	}
 
 	if config.StartSsh.IsNull() {
@@ -280,15 +394,35 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	// Parse the response (v2 format with envelope)
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
+	}
+
+	// Extract pod from data.pod (v2 envelope)
+	var result map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		if pod, ok := data["pod"].(map[string]interface{}); ok {
+			result = pod
+		} else {
+			resp.Diagnostics.AddError("API Error", "Failed to extract pod from v2 response data")
+			return
+		}
+	} else {
+		// Fallback for v1 format (backward compatibility)
+		result = envelope
 	}
 
 	if result == nil {
 		resp.Diagnostics.AddError("API Error", "Empty response from API")
 		return
+	}
+
+	// Extract pod type (v2 required field)
+	if podType, ok := result["type"].(string); ok {
+		state.Type = types.StringValue(podType)
 	}
 
 	if val, ok := result["desiredStatus"].(string); ok && val != "" {
@@ -515,10 +649,25 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	// Parse the response (v2 format with envelope)
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
+	}
+
+	// Extract pod from data.pod (v2 envelope)
+	var result map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		if pod, ok := data["pod"].(map[string]interface{}); ok {
+			result = pod
+		} else {
+			resp.Diagnostics.AddError("API Error", "Failed to extract pod from v2 response data")
+			return
+		}
+	} else {
+		// Fallback for v1 format (backward compatibility)
+		result = envelope
 	}
 
 	if respHTTP.StatusCode != 200 && respHTTP.StatusCode != 201 {

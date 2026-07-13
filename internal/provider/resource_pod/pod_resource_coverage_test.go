@@ -39,12 +39,19 @@ func TestPodResource_MetadataAndSchema(t *testing.T) {
 func TestPodRead_FullFieldMapping(t *testing.T) {
 	ctx := context.Background()
 	sch := PodResourceSchema(ctx)
+	// v2 envelope format
 	body := `{
-		"id":"pod-1","status":"RUNNING","gpuTypeId":"NVIDIA A100","machineId":"m-1",
-		"costPerHr":1.5,"created_at":"2024-01-01T00:00:00Z","memoryInGb":16,
-		"volumeInGb":50,"containerDiskInGb":20,"templateId":"t-1","cloudType":"SECURE",
-		"networkVolume":{"id":"nv-1"},"dockerEntrypoint":["/bin/sh"],
-		"dockerStartCmd":["run"],"interruptible":true,"volumeEncrypted":true
+		"data": {
+			"pod": {
+				"id":"pod-1","status":"RUNNING","gpuTypeId":"NVIDIA A100","machineId":"m-1",
+				"costPerHr":1.5,"created_at":"2024-01-01T00:00:00Z","memoryInGb":16,
+				"volumeInGb":50,"containerDiskInGb":20,"templateId":"t-1","cloudType":"SECURE",
+				"networkVolume":{"id":"nv-1"},"dockerEntrypoint":["/bin/sh"],
+				"dockerStartCmd":["run"],"interruptible":true,"volumeEncrypted":true,"type":"ON_DEMAND"
+			}
+		},
+		"meta": {"requestId":"test"},
+		"error": null
 	}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(body))
@@ -117,7 +124,8 @@ func TestPodUpdate_ManyFieldsInBody(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &body)
-		_, _ = w.Write([]byte(`{"id":"pod-1"}`))
+		// v2 envelope format for response
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-1"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")

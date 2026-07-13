@@ -13,7 +13,7 @@ func GetGraphQLEndpoint() string {
 func GetRestBaseURL() string {
 	url := os.Getenv("RUNPOD_BASE_URL")
 	if url == "" {
-		url = "https://rest.runpod.io/v1"
+		url = "https://api.runpod.io/v2"
 	}
 	return url
 }

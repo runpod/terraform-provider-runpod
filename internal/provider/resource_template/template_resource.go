@@ -493,19 +493,18 @@ func (r *TemplateResource) Update(ctx context.Context, req resource.UpdateReques
 
 	body := map[string]interface{}{}
 
-	if !config.Name.IsNull() && config.Name.ValueString() != "" {
-		body["name"] = config.Name.ValueString()
-	}
+  if !config.Name.IsNull() && config.Name.ValueString() != "" {
+    body["name"] = config.Name.ValueString()
+  }
 
-	if !config.ImageName.IsNull() && config.ImageName.ValueString() != "" {
-		body["imageName"] = config.ImageName.ValueString()
-	}
+  if !config.ImageName.IsNull() && config.ImageName.ValueString() != "" {
+    body["imageName"] = config.ImageName.ValueString()
+  }
 
-	if !config.Category.IsNull() && config.Category.ValueString() != "" {
-		body["category"] = config.Category.ValueString()
-	}
+  // NOTE: 'category' is a computed field in the v1 templates PATCH API
+  // and cannot be updated. It is included in Create/Read but excluded from Update.
 
-	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
+  if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
 		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 

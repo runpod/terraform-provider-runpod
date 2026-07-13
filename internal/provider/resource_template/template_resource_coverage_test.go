@@ -119,9 +119,16 @@ func TestTemplateUpdate_ManyFields(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", resp.Diagnostics.Errors())
 	}
-	for _, k := range []string{"name", "imageName", "category", "containerDiskInGb", "containerRegistryAuthId", "env", "isPublic", "readme", "volumeMountPath"} {
-		if _, ok := body[k]; !ok {
-			t.Errorf("PATCH body missing %q; got %v", k, body)
-		}
-	}
+  // NOTE: 'category' is a computed field in the v1 templates PATCH API and
+  // should NOT be included in the PATCH request body. It is read from the API
+  // response during Read/Create but excluded from Update requests.
+  for _, k := range []string{"name", "imageName", "containerDiskInGb", "containerRegistryAuthId", "env", "isPublic", "readme", "volumeMountPath"} {
+    if _, ok := body[k]; !ok {
+      t.Errorf("PATCH body missing %q; got %v", k, body)
+    }
+  }
+
+  if _, ok := body["category"]; ok {
+    t.Errorf("PATCH body should NOT contain 'category'; got %v", body)
+  }
 }

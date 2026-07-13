@@ -7,7 +7,7 @@ variable "runpod_api_key" {
 
 variable "machine_id" {
   type        = string
-  description = "Machine ID to deploy pod on"
+  description = "Machine ID (v1 API does not support specifying this at pod creation time)"
   default     = ""
 }
 
@@ -31,13 +31,13 @@ variable "gpu_count" {
 
 variable "start_ssh" {
   type        = bool
-  description = "Start SSH on boot"
+  description = "Start SSH (v1 API does not support this at pod creation time - use template instead)"
   default     = true
 }
 
 variable "start_jupyter" {
   type        = bool
-  description = "Start Jupyter notebook on boot"
+  description = "Start Jupyter (v1 API does not support this at pod creation time - use template instead)"
   default     = true
 }
 
@@ -54,12 +54,11 @@ provider "runpod" {
 }
 
 resource "runpod_pod" "demo" {
-  machine_id    = var.machine_id
+  # Note: v1 API does not support machine_id, start_ssh, or start_jupyter at creation time.
+  # These fields are only available via templates or in the Read response.
   image_name    = var.image_name
   gpu_count     = var.gpu_count
   name          = var.pod_name
-  start_ssh     = var.start_ssh
-  start_jupyter = var.start_jupyter
 }
 
 output "pod_id" {

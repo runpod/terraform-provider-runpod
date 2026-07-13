@@ -14,6 +14,14 @@ This directory contains demo configurations for the RunPod Terraform provider.
 
 Creates a simple pod with SSH and Jupyter enabled.
 
+**Note:** This example uses the v1 REST API which has limited pod creation parameters. The following fields are **NOT supported** during pod creation:
+- `machine_id` (cannot be specified at creation time)
+- `gpu_type_id` (cannot be specified at creation time)
+- `start_ssh`, `start_jupyter` (must be enabled via template)
+- Other pod configuration options like `docker_args`, `stop_after`, etc.
+
+Supported fields for pod creation: `gpu_count`, `name`, `template_id` or `image_name`, `cloud_type`, `volume_in_gb`, `network_volume_id`, `container_disk_in_gb`, `volume_mount_path`, `env`.
+
 ```bash
 cd examples/basic
 terraform init
@@ -57,7 +65,47 @@ Monitors pod status and retrieves detailed information.
 ```bash
 cd examples/monitoring
 terraform init
-terraform plan
+terraform apply
+```
+
+### 6. Endpoint Creation (`examples/endpoint/`)
+
+Creates a serverless endpoint using a template.
+
+```bash
+cd examples/endpoint
+terraform init
+terraform apply
+```
+
+### 7. Network Volume (`examples/network_volume/`)
+
+Creates a network volume and attaches it to a pod.
+
+```bash
+cd examples/network_volume
+terraform init
+terraform apply
+```
+
+### 8. Container Registry Auth (`examples/container_registry_auth/`)
+
+Creates authentication for private container registries.
+
+```bash
+cd examples/container_registry_auth
+terraform init
+terraform apply
+```
+
+### 9. Template Creation (`examples/template/`)
+
+Creates a custom template for pod deployment.
+
+```bash
+cd examples/template
+terraform init
+terraform apply
 ```
 
 ## Example Workflow
@@ -73,8 +121,9 @@ terraform plan
     ```bash
     cd examples/basic
     terraform init
-    terraform apply -var="runpod_api_key=your-key" -var="machine_id=your-machine-id"
+    terraform apply -var="runpod_api_key=your-key"
     ```
+    **Note:** The `machine_id` variable in the basic example is currently unused due to v1 API limitations. To deploy to a specific machine, you must first create a machine listing (see `examples/machine/`) then use a template that targets that machine.
 
 3. **Monitor the pod:**
     ```bash

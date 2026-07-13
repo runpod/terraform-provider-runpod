@@ -45,12 +45,10 @@ output "public_key" {
   value       = data.runpod_user.current.pub_key
 }
 
-# List available machines
-data "runpod_machines" "available" {
-  listed = true
-}
+# List available machines (returns all machines - listed and unlisted)
+data "runpod_machines" "available" {}
 
 output "available_machines" {
-  description = "Available machines"
-  value       = data.runpod_machines.available
+  description = "Available machines (first 5 shown)"
+  value       = data.runpod_machines.available.machines[:5]
 }

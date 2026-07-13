@@ -998,12 +998,6 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		resp.Diagnostics.Append(diags...)
 		return
 	}
-
-	diags = resp.State.Set(ctx, &config)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
 }
 
 func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {

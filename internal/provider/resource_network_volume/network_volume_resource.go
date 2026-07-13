@@ -342,10 +342,4 @@ func (r *NetworkVolumeResource) Update(ctx context.Context, req resource.UpdateR
 		resp.Diagnostics.Append(diags...)
 		return
 	}
-
-	diags = resp.State.Set(ctx, &config)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
 }

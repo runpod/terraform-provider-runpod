@@ -79,7 +79,7 @@ variables := map[string]interface{}{
 	}
 
 	if pod, ok := result["pod"].(map[string]interface{}); ok {
-		envListValue := types.List{}
+		envListValue := types.ListNull(types.StringType)
 		if diags.HasError() {
 			resp.Diagnostics.Append(diags...)
 			return

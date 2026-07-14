@@ -114,18 +114,19 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	if gotMethod != "POST" || gotPath != "/pods" {
 		t.Errorf("request = %s %s, want POST /pods", gotMethod, gotPath)
 	}
-	// v2 format: flat fields
-	if gotBody["gpuCount"] != float64(2) {
-		t.Errorf("gpuCount = %v, want 2", gotBody["gpuCount"])
+	// v2 format: flat fields with v2 names
+	if gotBody["image"] != "img:latest" {
+		t.Errorf("image = %v, want img:latest", gotBody["image"])
 	}
 	if gotBody["name"] != "my-pod" {
 		t.Errorf("name = %v, want my-pod", gotBody["name"])
 	}
-	if gotBody["imageName"] != "img:latest" {
-		t.Errorf("imageName = %v, want img:latest", gotBody["imageName"])
-	}
-	if gotBody["type"] != "ON_DEMAND" {
-		t.Errorf("type = %v, want ON_DEMAND", gotBody["type"])
+	if gpu, ok := gotBody["gpu"].(map[string]interface{}); ok {
+		if gpu["count"] != float64(2) {
+			t.Errorf("gpu.count = %v, want 2", gpu["count"])
+		}
+	} else {
+		t.Errorf("gpu object not found or not a map: %v", gotBody["gpu"])
 	}
 
 	var out PodModel
@@ -157,14 +158,18 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotBody["gpuCount"] != float64(1) {
-		t.Errorf("gpuCount = %v, want 1", gotBody["gpuCount"])
-	}
 	if gotBody["name"] != "tmpl-pod" {
 		t.Errorf("name = %v, want tmpl-pod", gotBody["name"])
 	}
 	if gotBody["templateId"] != "tmpl-1" {
 		t.Errorf("templateId = %v, want tmpl-1", gotBody["templateId"])
+	}
+	if gpu, ok := gotBody["gpu"].(map[string]interface{}); ok {
+		if gpu["count"] != float64(1) {
+			t.Errorf("gpu.count = %v, want 1", gpu["count"])
+		}
+	} else {
+		t.Errorf("gpu object not found or not a map: %v", gotBody["gpu"])
 	}
 }
 
@@ -493,18 +498,48 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// v2 format: flat fields
-	if body["gpuCount"] != float64(1) {
-		t.Errorf("gpuCount = %v, want 1", body["gpuCount"])
+	// v2 format: flat fields with v2 names
+	if body["image"] != "img" {
+		t.Errorf("image = %v, want img", body["image"])
 	}
 	if body["name"] != "p" {
 		t.Errorf("name = %v, want p", body["name"])
 	}
-	if body["type"] != "ON_DEMAND" {
-		t.Errorf("type = %v, want ON_DEMAND", body["type"])
+	if gpu, ok := body["gpu"].(map[string]interface{}); ok {
+		if gpu["count"] != float64(1) {
+			t.Errorf("gpu.count = %v, want 1", gpu["count"])
+		}
+	} else {
+		t.Errorf("gpu object not found or not a map: %v", body["gpu"])
 	}
-	if body["imageName"] != "img" {
-		t.Errorf("imageName = %v, want img", body["imageName"])
+	if body["cloud"] != "SECURE" {
+		t.Errorf("cloud = %v, want SECURE", body["cloud"])
+	}
+	if mounts, ok := body["mounts"].([]interface{}); ok && len(mounts) > 0 {
+		if len(mounts) != 2 {
+			t.Errorf("mounts array length = %d, want 2", len(mounts))
+		}
+		// First mount is volumeInGb
+		mount0 := mounts[0].(map[string]interface{})
+		if mount0["volumeInGb"] != float64(50) {
+			t.Errorf("mounts[0].volumeInGb = %v, want 50", mount0["volumeInGb"])
+		}
+		if mount0["volumeMountPath"] != "/data" {
+			t.Errorf("mounts[0].volumeMountPath = %v, want /data", mount0["volumeMountPath"])
+		}
+		// Second mount is networkVolumeId
+		mount1 := mounts[1].(map[string]interface{})
+		if mount1["networkVolumeId"] != "nv-1" {
+			t.Errorf("mounts[1].networkVolumeId = %v, want nv-1", mount1["networkVolumeId"])
+		}
+		if mount1["volumeMountPath"] != "/data" {
+			t.Errorf("mounts[1].volumeMountPath = %v, want /data", mount1["volumeMountPath"])
+		}
+	} else {
+		t.Errorf("mounts array not found or not correct type: %v", body["mounts"])
+	}
+	if body["disk"] != float64(20) {
+		t.Errorf("disk = %v, want 20", body["disk"])
 	}
 	if envMap, ok := body["env"].(map[string]interface{}); ok {
 		if len(envMap) != 2 {
@@ -512,21 +547,6 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 		}
 	} else {
 		t.Errorf("env not found or not a map: %v", body["env"])
-	}
-	if body["cloudType"] != "SECURE" {
-		t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
-	}
-	if body["volumeInGb"] != float64(50) {
-		t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
-	}
-	if body["networkVolumeId"] != "nv-1" {
-		t.Errorf("networkVolumeId = %v, want nv-1", body["networkVolumeId"])
-	}
-	if body["volumeMountPath"] != "/data" {
-		t.Errorf("volumeMountPath = %v, want /data", body["volumeMountPath"])
-	}
-	if body["containerDiskInGb"] != float64(20) {
-		t.Errorf("containerDiskInGb = %v, want 20", body["containerDiskInGb"])
 	}
 }
 
@@ -589,7 +609,7 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		return body
 	}
 
-	t.Run("cloud_type and volume present when set", func(t *testing.T) {
+	t.Run("cloud and volume present when set", func(t *testing.T) {
 		m := baseModel()
 		m.Name = types.StringValue("p")
 		m.ImageName = types.StringValue("img")
@@ -598,12 +618,17 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		m.Interruptible = types.BoolValue(false)
 		body := capture(t, m)
 		
-		if body["cloudType"] != "SECURE" {
-			t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
+		if body["cloud"] != "SECURE" {
+			t.Errorf("cloud = %v, want SECURE", body["cloud"])
 		}
 		
-		if body["volumeInGb"] != float64(50) {
-			t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
+		if mounts, ok := body["mounts"].([]interface{}); ok && len(mounts) > 0 {
+			mount := mounts[0].(map[string]interface{})
+			if mount["volumeInGb"] != float64(50) {
+				t.Errorf("mounts[0].volumeInGb = %v, want 50", mount["volumeInGb"])
+			}
+		} else {
+			t.Errorf("mounts array not found or not correct type: %v", body["mounts"])
 		}
 	})
 

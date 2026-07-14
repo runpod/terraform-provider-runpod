@@ -95,7 +95,6 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Use REST API endpoint
 	var apiKey string
 	var endpoint string
 	
@@ -111,7 +110,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 	
 	if apiKey == "" {
-		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set. Get your API key from https://runpod.io/console/user/settings")
+		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
 		return
 	}
 
@@ -125,46 +124,68 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	if hasTemplateId {
 		body["templateId"] = config.TemplateId.ValueString()
-	}
-
-	if !hasTemplateId && hasImageName {
-		body["imageName"] = config.ImageName.ValueString()
+	} else if hasImageName {
+		body["image"] = config.ImageName.ValueString()
 	}
 
 	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
-		body["gpuCount"] = int64(config.GpuCount.ValueInt64())
+		if _, ok := body["gpu"]; !ok {
+			body["gpu"] = make(map[string]interface{})
+		}
+		gpuObj := body["gpu"].(map[string]interface{})
+		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
 	}
 
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
-		body["gpuTypeId"] = config.GpuTypeId.ValueString()
+		if _, ok := body["gpu"]; !ok {
+			body["gpu"] = make(map[string]interface{})
+		}
+		gpuObj := body["gpu"].(map[string]interface{})
+		gpuObj["id"] = config.GpuTypeId.ValueString()
 	}
 
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		body["cloudType"] = config.CloudType.ValueString()
+		body["cloud"] = config.CloudType.ValueString()
 	}
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
 		body["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
 	}
 
-	if config.VolumeInGb.ValueFloat64() > 0 {
-		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
-	}
+	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.VolumeMountPath.IsNull() {
+		if _, ok := body["mounts"]; !ok {
+			body["mounts"] = make([]map[string]interface{}, 0)
+		}
+		mounts := body["mounts"].([]map[string]interface{})
+		
+		if config.VolumeInGb.ValueFloat64() > 0 {
+			mount := map[string]interface{}{
+				"volumeInGb": int64(config.VolumeInGb.ValueFloat64()),
+			}
+			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
+			}
+			if !config.VolumeEncrypted.IsNull() {
+				mount["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
+			}
+			mounts = append(mounts, mount)
+		}
 
-	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+		if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
+			mount := map[string]interface{}{
+				"networkVolumeId": config.NetworkVolumeId.ValueString(),
+			}
+			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
+			}
+			mounts = append(mounts, mount)
+		}
+		
+		body["mounts"] = mounts
 	}
 
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
-	}
-
-	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
-	}
-
-	if !config.VolumeEncrypted.IsNull() {
-		body["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
+		body["disk"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 
 	if !config.Ports.IsNull() && config.Ports.ValueString() != "" {
@@ -205,14 +226,6 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		body["startJupyter"] = config.StartJupyter.ValueBool()
 	}
 
-	if !config.Interruptible.IsNull() {
-		if config.Interruptible.ValueBool() {
-			body["type"] = "SPOT"
-		} else {
-			body["type"] = "ON_DEMAND"
-		}
-	}
-
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to marshal request body: %v", err))
@@ -242,14 +255,12 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Parse the response (v2 format with envelope)
 	var envelope map[string]interface{}
 	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
-	// Extract pod from data.pod (v2 envelope)
 	var result map[string]interface{}
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
 		if pod, ok := data["pod"].(map[string]interface{}); ok {

@@ -117,98 +117,64 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	url := endpoint + "/pods"
 
-  // Build the REST API request body (v2 format with nested objects)
-	body := map[string]interface{}{
-		"scheduling": map[string]interface{}{
-			"gpuCount": int64(config.GpuCount.ValueInt64()),
-		},
-		"name": config.Name.ValueString(),
+	body := map[string]interface{}{}
+
+	if !config.Name.IsNull() && config.Name.ValueString() != "" {
+		body["name"] = config.Name.ValueString()
 	}
 
 	if hasTemplateId {
 		body["templateId"] = config.TemplateId.ValueString()
-	} else {
-		// v2 format: image in container object
-		if _, ok := body["container"]; !ok {
-			body["container"] = make(map[string]interface{})
-		}
-		body["container"].(map[string]interface{})["image"] = config.ImageName.ValueString()
+	}
+
+	if !hasTemplateId && hasImageName {
+		body["imageName"] = config.ImageName.ValueString()
+	}
+
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
+		body["gpuCount"] = int64(config.GpuCount.ValueInt64())
+	}
+
+	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		body["gpuTypeId"] = config.GpuTypeId.ValueString()
 	}
 
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		if _, ok := body["scheduling"]; !ok {
-			body["scheduling"] = make(map[string]interface{})
-		}
-		body["scheduling"].(map[string]interface{})["cloudType"] = config.CloudType.ValueString()
-	}
-
-	// Add type field (v2 requires explicit ON_DEMAND or SPOT)
-	if !config.Interruptible.IsNull() && config.Interruptible.ValueBool() {
-		body["type"] = "SPOT"
-	} else {
-		body["type"] = "ON_DEMAND"
-	}
-
-	// Add scheduling fields
-	if _, ok := body["scheduling"]; !ok {
-		body["scheduling"] = make(map[string]interface{})
-	}
-	scheduling := body["scheduling"].(map[string]interface{})
-
-	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
-		scheduling["gpuTypeId"] = config.GpuTypeId.ValueString()
+		body["cloudType"] = config.CloudType.ValueString()
 	}
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
-		scheduling["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
+		body["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
 	}
 
 	if config.VolumeInGb.ValueFloat64() > 0 {
-		if _, ok := body["storage"]; !ok {
-			body["storage"] = make(map[string]interface{})
-		}
-		body["storage"].(map[string]interface{})["volumeSizeInGb"] = int64(config.VolumeInGb.ValueFloat64())
+		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
 	}
 
 	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-		if _, ok := body["storage"]; !ok {
-			body["storage"] = make(map[string]interface{})
-		}
-		body["storage"].(map[string]interface{})["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
 	}
 
-	if !config.ContainerDiskInGb.IsNull() {
-		if _, ok := body["container"]; !ok {
-			body["container"] = make(map[string]interface{})
-		}
-		body["container"].(map[string]interface{})["diskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
+	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
+		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 
-	// Handle ports - convert from string format to v2 array format
+	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
+	}
+
+	if !config.VolumeEncrypted.IsNull() {
+		body["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
+	}
+
 	if !config.Ports.IsNull() && config.Ports.ValueString() != "" {
-		portsArray := make([]map[string]interface{}, 0)
+		portsArray := make([]string, 0)
 		portsStr := config.Ports.ValueString()
 		ports := strings.Split(portsStr, ",")
 		for _, p := range ports {
 			trimmed := strings.TrimSpace(p)
 			if trimmed != "" {
-				// Parse "8888/http" format
-				parts := strings.Split(trimmed, "/")
-				if len(parts) == 2 {
-					portsArray = append(portsArray, map[string]interface{}{
-						"port": parts[0],
-						"type": parts[1],
-					})
-				} else {
-					// Try "8888 http" format (space separated)
-					parts = strings.Split(trimmed, " ")
-					if len(parts) == 2 {
-						portsArray = append(portsArray, map[string]interface{}{
-							"port": parts[0],
-							"type": parts[1],
-						})
-					}
-				}
+				portsArray = append(portsArray, trimmed)
 			}
 		}
 		if len(portsArray) > 0 {
@@ -216,32 +182,34 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 	}
 
-	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-		if _, ok := body["storage"]; !ok {
-			body["storage"] = make(map[string]interface{})
-		}
-		body["storage"].(map[string]interface{})["volumeMountPath"] = config.VolumeMountPath.ValueString()
-	}
-
 	if !config.Env.IsNull() && len(config.Env.Elements()) > 0 {
-		// v2 format: array of key/value objects in container.env
-		envArray := make([]map[string]interface{}, 0)
+		envMap := make(map[string]interface{})
 		for _, element := range config.Env.Elements() {
 			if elementStr, ok := element.(types.String); ok {
 				parts := strings.SplitN(elementStr.ValueString(), "=", 2)
 				if len(parts) == 2 {
-					envArray = append(envArray, map[string]interface{}{
-						"key":   parts[0],
-						"value": parts[1],
-					})
+					envMap[parts[0]] = parts[1]
 				}
 			}
 		}
-		if len(envArray) > 0 {
-			if _, ok := body["container"]; !ok {
-				body["container"] = make(map[string]interface{})
-			}
-			body["container"].(map[string]interface{})["env"] = envArray
+		if len(envMap) > 0 {
+			body["env"] = envMap
+		}
+	}
+
+	if !config.StartSsh.IsNull() {
+		body["startSsh"] = config.StartSsh.ValueBool()
+	}
+
+	if !config.StartJupyter.IsNull() {
+		body["startJupyter"] = config.StartJupyter.ValueBool()
+	}
+
+	if !config.Interruptible.IsNull() {
+		if config.Interruptible.ValueBool() {
+			body["type"] = "SPOT"
+		} else {
+			body["type"] = "ON_DEMAND"
 		}
 	}
 
@@ -287,18 +255,15 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		if pod, ok := data["pod"].(map[string]interface{}); ok {
 			result = pod
 		} else if pods, ok := data["pods"].([]interface{}); ok && len(pods) > 0 {
-			// For list operations
 			result = pods[0].(map[string]interface{})
 		} else {
 			resp.Diagnostics.AddError("API Error", "Failed to extract pod from response data")
 			return
 		}
 	} else {
-		// Fallback for v1 format (backward compatibility)
 		result = envelope
 	}
 
-	// Extract the pod ID from response
 	if podID, ok := result["id"].(string); ok {
 		config.Id = types.StringValue(podID)
 	} else {
@@ -306,30 +271,113 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	// Extract pod type (v2 required field)
 	if podType, ok := result["type"].(string); ok {
 		config.Type = types.StringValue(podType)
+	} else {
+		config.Type = types.StringValue("")
 	}
 
-	// Handle deprecated fields for backward compatibility
-	// v1 uses "interruptible" boolean, v2 uses "type" field
-	// If v2 type is SPOT, set interruptible to true for backward compat
-	if config.Interruptible.IsNull() {
-		if config.Type.ValueString() == "SPOT" {
-			config.Interruptible = types.BoolValue(true)
-		} else {
-			config.Interruptible = types.BoolValue(false)
+	if val, ok := result["desiredStatus"].(string); ok && val != "" {
+		config.Status = types.StringValue(val)
+	}
+
+	if val, ok := result["createdAt"].(string); ok && val != "" {
+		config.CreatedAt = types.StringValue(val)
+	}
+
+	if val, ok := result["machineId"].(string); ok && val != "" {
+		config.MachineId = types.StringValue(val)
+	}
+
+	if val, ok := result["costPerHr"].(float64); ok {
+		config.CostPerHr = types.Float64Value(val)
+	}
+
+	if val, ok := result["memoryInGb"].(float64); ok {
+		config.MemoryInGb = types.Float64Value(val)
+	}
+
+	if val, ok := result["volumeInGb"].(float64); ok {
+		config.VolumeInGb = types.Float64Value(val)
+	}
+
+	if val, ok := result["containerDiskInGb"].(float64); ok {
+		config.ContainerDiskInGb = types.Int64Value(int64(val))
+	}
+
+	if result["templateId"] != nil {
+		if val, ok := result["templateId"].(string); ok && val != "" {
+			config.TemplateId = types.StringValue(val)
 		}
 	}
 
-	if config.StartSsh.IsNull() {
-		config.StartSsh = types.BoolValue(false)
-	}
-	if config.StartJupyter.IsNull() {
-		config.StartJupyter = types.BoolValue(false)
+	if machine, ok := result["machine"].(map[string]interface{}); ok {
+		if val, ok := machine["gpuTypeId"].(string); ok && val != "" {
+			config.GpuTypeId = types.StringValue(val)
+		}
+		if v, ok := machine["secureCloud"].(bool); ok {
+			if v {
+				config.CloudType = types.StringValue("SECURE")
+			} else {
+				config.CloudType = types.StringValue("COMMUNITY")
+			}
+		}
 	}
 
-	// Set the state
+	if result["cloudType"] != nil {
+		if val, ok := result["cloudType"].(string); ok && val != "" {
+			config.CloudType = types.StringValue(val)
+		}
+	}
+
+	if result["networkVolume"] != nil {
+		if nv, ok := result["networkVolume"].(map[string]interface{}); ok {
+			if id, ok := nv["id"].(string); ok && id != "" {
+				config.NetworkVolumeId = types.StringValue(id)
+			}
+		}
+	}
+
+	if val, ok := result["dockerEntrypoint"].([]interface{}); ok {
+		entrypointList := make([]attr.Value, 0)
+		for _, v := range val {
+			if vStr, ok := v.(string); ok {
+				entrypointList = append(entrypointList, types.StringValue(vStr))
+			}
+		}
+		if len(entrypointList) > 0 {
+			config.DockerEntrypoint, diags = types.ListValue(types.StringType, entrypointList)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+		}
+	}
+
+	if val, ok := result["dockerStartCmd"].([]interface{}); ok {
+		startCmdList := make([]attr.Value, 0)
+		for _, v := range val {
+			if vStr, ok := v.(string); ok {
+				startCmdList = append(startCmdList, types.StringValue(vStr))
+			}
+		}
+		if len(startCmdList) > 0 {
+			config.DockerStartCmd, diags = types.ListValue(types.StringType, startCmdList)
+			if diags.HasError() {
+				resp.Diagnostics.Append(diags...)
+				return
+			}
+		}
+	}
+
+	if val, ok := result["interruptible"].(bool); ok {
+		config.Interruptible = types.BoolValue(val)
+	}
+
+	if val, ok := result["volumeEncrypted"].(bool); ok {
+		config.VolumeEncrypted = types.BoolValue(val)
+	}
+
 	diags = resp.State.Set(ctx, &config)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)
@@ -394,14 +442,12 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// Parse the response (v2 format with envelope)
 	var envelope map[string]interface{}
 	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
-	// Extract pod from data.pod (v2 envelope)
 	var result map[string]interface{}
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
 		if pod, ok := data["pod"].(map[string]interface{}); ok {
@@ -411,7 +457,6 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 			return
 		}
 	} else {
-		// Fallback for v1 format (backward compatibility)
 		result = envelope
 	}
 
@@ -420,7 +465,6 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	// Extract pod type (v2 required field)
 	if podType, ok := result["type"].(string); ok {
 		state.Type = types.StringValue(podType)
 	}
@@ -649,14 +693,12 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	// Parse the response (v2 format with envelope)
 	var envelope map[string]interface{}
 	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
-	// Extract pod from data.pod (v2 envelope)
 	var result map[string]interface{}
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
 		if pod, ok := data["pod"].(map[string]interface{}); ok {
@@ -666,7 +708,6 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 			return
 		}
 	} else {
-		// Fallback for v1 format (backward compatibility)
 		result = envelope
 	}
 

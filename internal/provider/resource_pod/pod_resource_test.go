@@ -102,6 +102,7 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	m.Name = types.StringValue("my-pod")
 	m.ImageName = types.StringValue("img:latest")
 	m.GpuCount = types.Int64Value(2)
+	m.Interruptible = types.BoolValue(false)
 
 	sch := PodResourceSchema(context.Background())
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: sch}}
@@ -113,21 +114,18 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	if gotMethod != "POST" || gotPath != "/pods" {
 		t.Errorf("request = %s %s, want POST /pods", gotMethod, gotPath)
 	}
-	// v2 format: nested objects
-	scheduling := gotBody["scheduling"].(map[string]interface{})
-	if scheduling["gpuCount"] != float64(2) {
-		t.Errorf("scheduling.gpuCount = %v, want 2", scheduling["gpuCount"])
+	// v2 format: flat fields
+	if gotBody["gpuCount"] != float64(2) {
+		t.Errorf("gpuCount = %v, want 2", gotBody["gpuCount"])
 	}
 	if gotBody["name"] != "my-pod" {
 		t.Errorf("name = %v, want my-pod", gotBody["name"])
 	}
+	if gotBody["imageName"] != "img:latest" {
+		t.Errorf("imageName = %v, want img:latest", gotBody["imageName"])
+	}
 	if gotBody["type"] != "ON_DEMAND" {
 		t.Errorf("type = %v, want ON_DEMAND", gotBody["type"])
-	}
-	if container, ok := gotBody["container"].(map[string]interface{}); ok {
-		if container["image"] != "img:latest" {
-			t.Errorf("container.image = %v, want img:latest", container["image"])
-		}
 	}
 
 	var out PodModel
@@ -159,17 +157,14 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	scheduling := gotBody["scheduling"].(map[string]interface{})
-	if scheduling["gpuCount"] != float64(1) {
-		t.Errorf("scheduling.gpuCount = %v, want 1", scheduling["gpuCount"])
+	if gotBody["gpuCount"] != float64(1) {
+		t.Errorf("gpuCount = %v, want 1", gotBody["gpuCount"])
 	}
 	if gotBody["name"] != "tmpl-pod" {
 		t.Errorf("name = %v, want tmpl-pod", gotBody["name"])
 	}
-	if container, ok := gotBody["container"].(map[string]interface{}); ok {
-		if container["image"] != "runpod/pytorch:latest" {
-			t.Errorf("container.image = %v, want runpod/pytorch:latest", container["image"])
-		}
+	if gotBody["templateId"] != "tmpl-1" {
+		t.Errorf("templateId = %v, want tmpl-1", gotBody["templateId"])
 	}
 }
 
@@ -484,6 +479,7 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 	m.NetworkVolumeId = types.StringValue("nv-1")
 	m.ContainerDiskInGb = types.Int64Value(20)
 	m.VolumeMountPath = types.StringValue("/data")
+	m.Interruptible = types.BoolValue(false)
 
 	envList := types.ListValueMust(types.StringType, []attr.Value{
 		types.StringValue("ENV1=value1"),
@@ -497,10 +493,9 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// v2 format: nested objects
-	scheduling := body["scheduling"].(map[string]interface{})
-	if scheduling["gpuCount"] != float64(1) {
-		t.Errorf("scheduling.gpuCount = %v, want 1", scheduling["gpuCount"])
+	// v2 format: flat fields
+	if body["gpuCount"] != float64(1) {
+		t.Errorf("gpuCount = %v, want 1", body["gpuCount"])
 	}
 	if body["name"] != "p" {
 		t.Errorf("name = %v, want p", body["name"])
@@ -508,40 +503,30 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 	if body["type"] != "ON_DEMAND" {
 		t.Errorf("type = %v, want ON_DEMAND", body["type"])
 	}
-
-	// v2 container object
-	container := body["container"].(map[string]interface{})
-	if container["image"] != "img" {
-		t.Errorf("container.image = %v, want img", container["image"])
+	if body["imageName"] != "img" {
+		t.Errorf("imageName = %v, want img", body["imageName"])
 	}
-	if envArray, ok := container["env"].([]interface{}); ok {
-		if len(envArray) != 2 {
-			t.Errorf("env array length = %d, want 2", len(envArray))
+	if envMap, ok := body["env"].(map[string]interface{}); ok {
+		if len(envMap) != 2 {
+			t.Errorf("env map length = %d, want 2", len(envMap))
 		}
 	} else {
-		t.Errorf("env not found or not an array: %v", container["env"])
+		t.Errorf("env not found or not a map: %v", body["env"])
 	}
-
-	// v2 scheduling object
-	if scheduling["cloudType"] != "SECURE" {
-		t.Errorf("scheduling.cloudType = %v, want SECURE", scheduling["cloudType"])
+	if body["cloudType"] != "SECURE" {
+		t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
 	}
-
-	// v2 storage object
-	storage := body["storage"].(map[string]interface{})
-	if storage["volumeSizeInGb"] != float64(50) {
-		t.Errorf("storage.volumeSizeInGb = %v, want 50", storage["volumeSizeInGb"])
+	if body["volumeInGb"] != float64(50) {
+		t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
 	}
-	if storage["networkVolumeId"] != "nv-1" {
-		t.Errorf("storage.networkVolumeId = %v, want nv-1", storage["networkVolumeId"])
+	if body["networkVolumeId"] != "nv-1" {
+		t.Errorf("networkVolumeId = %v, want nv-1", body["networkVolumeId"])
 	}
-	if storage["volumeMountPath"] != "/data" {
-		t.Errorf("storage.volumeMountPath = %v, want /data", storage["volumeMountPath"])
+	if body["volumeMountPath"] != "/data" {
+		t.Errorf("volumeMountPath = %v, want /data", body["volumeMountPath"])
 	}
-
-	// v2 container object
-	if container["diskInGb"] != float64(20) {
-		t.Errorf("container.diskInGb = %v, want 20", container["diskInGb"])
+	if body["containerDiskInGb"] != float64(20) {
+		t.Errorf("containerDiskInGb = %v, want 20", body["containerDiskInGb"])
 	}
 }
 
@@ -610,16 +595,15 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		m.ImageName = types.StringValue("img")
 		m.CloudType = types.StringValue("SECURE")
 		m.VolumeInGb = types.Float64Value(50)
+		m.Interruptible = types.BoolValue(false)
 		body := capture(t, m)
 		
-		scheduling := body["scheduling"].(map[string]interface{})
-		if scheduling["cloudType"] != "SECURE" {
-			t.Errorf("scheduling.cloudType = %v, want SECURE", scheduling["cloudType"])
+		if body["cloudType"] != "SECURE" {
+			t.Errorf("cloudType = %v, want SECURE", body["cloudType"])
 		}
 		
-		storage := body["storage"].(map[string]interface{})
-		if storage["volumeSizeInGb"] != float64(50) {
-			t.Errorf("storage.volumeSizeInGb = %v, want 50", storage["volumeSizeInGb"])
+		if body["volumeInGb"] != float64(50) {
+			t.Errorf("volumeInGb = %v, want 50", body["volumeInGb"])
 		}
 	})
 

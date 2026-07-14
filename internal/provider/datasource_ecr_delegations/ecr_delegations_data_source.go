@@ -79,6 +79,16 @@ func (d *EcrDelegationsDataSource) Read(ctx context.Context, req datasource.Read
 	}
 	defer respHTTP.Body.Close()
 
+	if respHTTP.StatusCode != 200 {
+		respBody, err := io.ReadAll(respHTTP.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
+			return
+		}
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch delegations (status: %d): %s", respHTTP.StatusCode, string(respBody)))
+		return
+	}
+
 	respBody, err := io.ReadAll(respHTTP.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))

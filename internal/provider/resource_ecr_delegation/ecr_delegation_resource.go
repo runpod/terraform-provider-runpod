@@ -101,6 +101,16 @@ func (r *EcrDelegationResource) Create(ctx context.Context, req resource.CreateR
 	}
 	defer respHTTP.Body.Close()
 
+	if respHTTP.StatusCode != 201 && respHTTP.StatusCode != 200 {
+		respBody, err := io.ReadAll(respHTTP.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
+			return
+		}
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create ECR delegation (status: %d): %s", respHTTP.StatusCode, string(respBody)))
+		return
+	}
+
 	respBody, err := io.ReadAll(respHTTP.Body)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
@@ -118,18 +128,18 @@ func (r *EcrDelegationResource) Create(ctx context.Context, req resource.CreateR
 		if delegation, ok := data["delegation"].(map[string]interface{}); ok {
 			result = delegation
 		} else if delegations, ok := data["delegations"].([]interface{}); ok && len(delegations) > 0 {
-			result = delegations[0].(map[string]interface{})
+			if delegation, ok := delegations[0].(map[string]interface{}); ok {
+				result = delegation
+			} else {
+				resp.Diagnostics.AddError("API Error", "Expected delegation object but got different type in delegations array")
+				return
+			}
 		} else {
 			resp.Diagnostics.AddError("API Error", "Failed to extract delegation from v2 response data")
 			return
 		}
 	} else {
 		result = envelope
-	}
-
-	if respHTTP.StatusCode != 201 {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create ECR delegation (status: %d): %s", respHTTP.StatusCode, string(respBody)))
-		return
 	}
 
 	if id, ok := result["id"].(string); ok {
@@ -233,7 +243,7 @@ func (r *EcrDelegationResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	if len(delegations) == 0 {
-		resp.Diagnostics.AddError("API Error", "No delegations found")
+		resp.State.RemoveResource(ctx)
 		return
 	}
 
@@ -321,7 +331,7 @@ func (r *EcrDelegationResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	if respHTTP.StatusCode != 204 {
+	if respHTTP.StatusCode != 204 && respHTTP.StatusCode != 200 {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to delete ECR delegation (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}

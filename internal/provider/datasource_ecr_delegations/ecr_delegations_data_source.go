@@ -155,14 +155,14 @@ func (d *EcrDelegationsDataSource) Read(ctx context.Context, req datasource.Read
 		}
 
 		models[i] = EcrDelegationModel{
-			Id:                 types.StringValue(id),
-			Name:               types.StringValue(name),
-			AwsUser:            types.StringValue(awsUser),
-			Repository:         types.StringValue(repository),
-			Tag:                types.StringValue(tag),
-			AwsRegion:          types.StringValue(awsRegion),
-			DockerRegistryUri:  types.StringValue(dockerRegistryUri),
-			CreatedAt:          types.StringValue(createdAt),
+			Id:                types.StringValue(id),
+			Name:              types.StringValue(name),
+			AwsUser:           types.StringValue(awsUser),
+			Repository:        types.StringValue(repository),
+			Tag:               types.StringValue(tag),
+			AwsRegion:         types.StringValue(awsRegion),
+			DockerRegistryUri: types.StringValue(dockerRegistryUri),
+			CreatedAt:         types.StringValue(createdAt),
 		}
 	}
 

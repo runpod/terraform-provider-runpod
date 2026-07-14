@@ -4,7 +4,6 @@ package resource_pod
 
 import (
 	"context"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64default"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
@@ -128,14 +127,12 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 				Computed:            true,
 				Description:         "Start Jupyter notebook on boot - DEPRECATED: Not supported in v2 API",
 				MarkdownDescription: "Start Jupyter notebook on boot - DEPRECATED: Not supported in v2 API. Start Jupyter manually inside the pod or use a custom Docker image that starts Jupyter automatically.",
-				Default:             booldefault.StaticBool(false),
 			},
 			"start_ssh": schema.BoolAttribute{
 				Optional:            true,
 				Computed:            true,
 				Description:         "Start SSH on boot - DEPRECATED: Not supported in v2 API",
 				MarkdownDescription: "Start SSH on boot - DEPRECATED: Not supported in v2 API. Start SSH manually inside the pod or use a custom Docker image that starts SSH automatically.",
-				Default:             booldefault.StaticBool(false),
 			},
 			"status": schema.StringAttribute{
 				Computed:            true,

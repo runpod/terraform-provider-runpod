@@ -1,10 +1,10 @@
 # Endpoint Example
 
-This example demonstrates how to create and manage RunPod Serverless endpoints.
+This example demonstrates how to create and manage Runpod Serverless endpoints.
 
 ## What's an Endpoint?
 
-RunPod **endpoints** are serverless compute resources that:
+Runpod **endpoints** are serverless compute resources that:
 - Automatically scale workers based on demand
 - Spin down when idle (no charges when no work is being processed)
 - Use templates to define the container image and configuration

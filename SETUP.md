@@ -1,6 +1,6 @@
-# RunPod Terraform Provider Setup
+# Runpod Terraform Provider Setup
 
-This document provides setup instructions for using the RunPod Terraform provider.
+This document provides setup instructions for using the Runpod Terraform provider.
 
 ## Quick Start (Recommended for Development)
 
@@ -22,8 +22,8 @@ provider_installation {
 ### 2. Update Example Configuration
 
 Edit `examples/basic/variables.tf` and replace:
-- `YOUR_API_KEY_HERE` with your RunPod API key
-- `YOUR_MACHINE_ID_HERE` with a machine ID from your RunPod account
+- `YOUR_API_KEY_HERE` with your Runpod API key
+- `YOUR_MACHINE_ID_HERE` with a machine ID from your Runpod account
 
 ### 3. Run the Demo
 
@@ -63,7 +63,7 @@ terraform apply
 
 ## Detailed Setup
 
-### Get RunPod API Key
+### Get Runpod API Key
 
 1. Visit https://runpod.io/console/user/settings
 2. Copy your API key
@@ -119,7 +119,7 @@ terraform apply \
 
 ### No Machines Available
 
-You need to list machines in your RunPod console before they appear in the API.
+You need to list machines in your Runpod console before they appear in the API.
 
 ### Authentication Errors
 

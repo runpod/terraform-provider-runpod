@@ -1,6 +1,6 @@
-# RunPod Terraform Provider
+# Runpod Terraform Provider
 
-A Terraform provider for managing RunPod infrastructure using the Terraform Plugin Framework.
+A Terraform provider for managing Runpod infrastructure using the Terraform Plugin Framework.
 
 ## Quick Start
 
@@ -8,7 +8,7 @@ A Terraform provider for managing RunPod infrastructure using the Terraform Plug
 
 - Go 1.21 or higher (for development)
 - Terraform 1.0 or higher
-- RunPod API token
+- Runpod API token
 
 ### Development Setup (Recommended)
 
@@ -85,13 +85,13 @@ resource "runpod_pod" "demo" {
 
 ### Environment Variable
 
-Set your RunPod API key as an environment variable:
+Set your Runpod API key as an environment variable:
 
 ```bash
 export RUNPOD_API_KEY="your-api-key-here"
 ```
 
-Get your API key from [RunPod Console](https://runpod.io/console/user/settings)
+Get your API key from [Runpod Console](https://runpod.io/console/user/settings)
 
 ### Examples Directory
 
@@ -134,7 +134,7 @@ terraform-provider-runpod/
 
 ## API Documentation
 
-- [RunPod API Docs](https://docs.runpod.io)
+- [Runpod API Docs](https://docs.runpod.io)
 - [REST API Reference](https://rest.runpod.io/v1/docs)
 
 ## Provider Specification

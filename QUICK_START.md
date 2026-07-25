@@ -1,4 +1,4 @@
-# RunPod Terraform Provider - Development Setup
+# Runpod Terraform Provider - Development Setup
 
 This provider uses Terraform's `dev_overrides` feature for local development - **no binary building required**!
 

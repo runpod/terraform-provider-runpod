@@ -1,6 +1,6 @@
-# RunPod Terraform Provider
+# Runpod Terraform Provider
 
-An official Terraform provider for managing RunPod GPU cloud resources.
+An official Terraform provider for managing Runpod GPU cloud resources.
 
 ## Installation
 
@@ -46,7 +46,7 @@ provider "runpod" {
 
 ### runpod_pod
 
-Deploy and manage RunPod pods (compute instances).
+Deploy and manage Runpod pods (compute instances).
 
 ```hcl
 resource "runpod_pod" "example" {
@@ -154,7 +154,7 @@ data "runpod_user" "current" {}
 
 ## Authentication
 
-The provider uses API key authentication. Get your API key from the RunPod console at https://www.runpod.io/console/user/settings.
+The provider uses API key authentication. Get your API key from the Runpod console at https://www.runpod.io/console/user/settings.
 
 ## Development
 

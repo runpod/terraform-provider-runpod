@@ -1,7 +1,7 @@
-# RunPod Terraform Provider Repository Setup
+# Runpod Terraform Provider Repository Setup
 
 ## What's Included
-- Complete Terraform provider code for RunPod API
+- Complete Terraform provider code for Runpod API
 - All resource and data source implementations
 - Example configurations
 - Provider specification (OpenAPI-based)

@@ -1,11 +1,11 @@
-# RunPod Terraform Provider Demo
+# Runpod Terraform Provider Demo
 
-This demo shows how to use the RunPod Terraform provider to manage RunPod resources.
+This demo shows how to use the Runpod Terraform provider to manage Runpod resources.
 
 ## Prerequisites
 
 - Terraform 1.0 or higher
-- RunPod API token (get from https://runpod.io/console/user/settings)
+- Runpod API token (get from https://runpod.io/console/user/settings)
 
 ## Development Setup
 

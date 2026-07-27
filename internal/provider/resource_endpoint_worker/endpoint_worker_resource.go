@@ -19,26 +19,26 @@ func NewEndpointWorkerResource() resource.Resource {
 }
 
 type EndpointWorkerResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointWorkerResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointWorkerResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, "", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointWorkerResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -63,11 +63,11 @@ func (r *EndpointWorkerResource) Read(ctx context.Context, req resource.ReadRequ
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
+	url := rlClient.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -76,7 +76,7 @@ func (r *EndpointWorkerResource) Read(ctx context.Context, req resource.ReadRequ
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -160,11 +160,11 @@ func (r *EndpointWorkerResource) Delete(ctx context.Context, req resource.Delete
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
+	url := rlClient.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
@@ -173,7 +173,7 @@ func (r *EndpointWorkerResource) Delete(ctx context.Context, req resource.Delete
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

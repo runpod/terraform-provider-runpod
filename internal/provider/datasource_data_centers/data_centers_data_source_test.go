@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// CE-1652 (GraphQL double-unwrap) is FIXED by PR #20: client.Query() returns the
+// CE-1652 (GraphQL double-unwrap) is FIXED by PR #20: rlClient.Query() returns the
 // inner "data" map and Read() reads result["dataCenter"] directly. This data
 // source is still non-functional because of a SEPARATE, pre-existing bug that
 // #20 did not touch: Read builds a []DataCentersModel slice and calls State.Set

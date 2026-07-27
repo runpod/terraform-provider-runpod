@@ -19,26 +19,26 @@ func NewEndpointDataSource() datasource.DataSource {
 }
 
 type EndpointDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointDataSource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -57,9 +57,9 @@ func (r *EndpointDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 	endpointId := config.Id.ValueString()
-	url := client.RestBaseURL + "/v2/serverless/" + endpointId
+	url := rlClient.RestBaseURL + "/v2/serverless/" + endpointId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -68,7 +68,7 @@ func (r *EndpointDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

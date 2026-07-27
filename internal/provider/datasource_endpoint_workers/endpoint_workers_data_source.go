@@ -20,26 +20,26 @@ func NewEndpointWorkersDataSource() datasource.DataSource {
 }
 
 type EndpointWorkersDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointWorkersDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointWorkersDataSource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	r.client = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointWorkersDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -58,9 +58,9 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/serverless/" + config.EndpointId.ValueString() + "/workers"
+	url := rlClient.RestBaseURL + "/serverless/" + config.EndpointId.ValueString() + "/workers"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -69,7 +69,7 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

@@ -21,27 +21,27 @@ func NewNetworkVolumeResource() resource.Resource {
 }
 
 type NetworkVolumeResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *NetworkVolumeResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
 		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
-			r.client = &client.RunPodClient{
+			r.rlClient = &client.RunPodClient{
 				APIKey:      clientWrapper.APIKey,
 				GraphQLEndpoint: "https://api.runpod.io/graphql",
 				RestBaseURL: clientWrapper.RestBaseURL,
 				Client: &http.Client{Timeout: 60 * time.Second},
 			}
 		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
-			r.client = client
+			r.rlClient = client
 		}
 	}
 }
 
 func (r *NetworkVolumeResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -52,8 +52,8 @@ func (r *NetworkVolumeResource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return r.rlClient
 }
 
 func (r *NetworkVolumeResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -72,9 +72,9 @@ func (r *NetworkVolumeResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes"
+	url := rlClient.RestBaseURL + "/network-volumes"
 
 	body := map[string]interface{}{
 		"name":       config.Name.ValueString(),
@@ -99,7 +99,7 @@ func (r *NetworkVolumeResource) Create(ctx context.Context, req resource.CreateR
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -182,9 +182,9 @@ func (r *NetworkVolumeResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -193,7 +193,7 @@ func (r *NetworkVolumeResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -272,9 +272,9 @@ func (r *NetworkVolumeResource) Update(ctx context.Context, req resource.UpdateR
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -311,7 +311,7 @@ func (r *NetworkVolumeResource) Update(ctx context.Context, req resource.UpdateR
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -381,9 +381,9 @@ func (r *NetworkVolumeResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
@@ -392,7 +392,7 @@ func (r *NetworkVolumeResource) Delete(ctx context.Context, req resource.DeleteR
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

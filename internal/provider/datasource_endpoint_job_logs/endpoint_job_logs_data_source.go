@@ -20,26 +20,26 @@ func NewEndpointJobLogsDataSource() datasource.DataSource {
 }
 
 type EndpointJobLogsDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointJobLogsDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointJobLogsDataSource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	r.client = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointJobLogsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -58,12 +58,12 @@ func (r *EndpointJobLogsDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
 	endpointId := config.EndpointId.ValueString()
 	jobId := config.JobId.ValueString()
 
-	wsURL := fmt.Sprintf("%s/serverless/%s/jobs/%s/logs", client.RestBaseURL, endpointId, jobId)
+	wsURL := fmt.Sprintf("%s/serverless/%s/jobs/%s/logs", rlClient.RestBaseURL, endpointId, jobId)
 	
 	u, err := url.Parse(wsURL)
 	if err != nil {
@@ -84,7 +84,7 @@ func (r *EndpointJobLogsDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

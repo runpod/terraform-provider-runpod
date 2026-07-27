@@ -19,18 +19,18 @@ func NewGpuTypesDataSource() datasource.DataSource {
 }
 
 type GpuTypesDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *GpuTypesDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *GpuTypesDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -41,8 +41,8 @@ func (d *GpuTypesDataSource) getClient() *client.RunPodClient {
 	if restBaseURL == "" {
 		restBaseURL = "https://api.runpod.io/v2"
 	}
-	d.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
+	return d.rlClient
 }
 
 func (d *GpuTypesDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -54,10 +54,10 @@ func (d *GpuTypesDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 }
 
 func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	client := d.getClient()
+	rlClient := d.getClient()
 
 	// Use v2 REST endpoint: GET /v2/catalog/gpus
-	url := client.RestBaseURL + "/catalog/gpus"
+	url := rlClient.RestBaseURL + "/catalog/gpus"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -66,7 +66,7 @@ func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

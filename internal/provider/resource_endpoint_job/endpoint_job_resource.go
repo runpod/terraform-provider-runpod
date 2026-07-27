@@ -20,26 +20,26 @@ func NewEndpointJobResource() resource.Resource {
 }
 
 type EndpointJobResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointJobResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointJobResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointJobResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -58,11 +58,11 @@ func (r *EndpointJobResource) Create(ctx context.Context, req resource.CreateReq
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 	endpointId := config.EndpointId.ValueString()
 
 	// First, fetch the endpoint to get the run URL
-	endpointUrl := client.RestBaseURL + "/serverless/" + endpointId
+	endpointUrl := rlClient.RestBaseURL + "/serverless/" + endpointId
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", endpointUrl, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create request: %v", err))
@@ -70,7 +70,7 @@ func (r *EndpointJobResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -153,7 +153,7 @@ func (r *EndpointJobResource) Create(ctx context.Context, req resource.CreateReq
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	respHTTP, err = httpClient.Do(reqHTTP)
 	if err != nil {

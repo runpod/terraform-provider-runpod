@@ -15,26 +15,26 @@ func NewDataCentersDataSource() datasource.DataSource {
 }
 
 type DataCentersDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *DataCentersDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *DataCentersDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
-	d.client = client.NewRunPodClient(apiKey, graphqlEndpoint, client.GetRestBaseURL())
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, client.GetRestBaseURL())
+	return d.rlClient
 }
 
 func (d *DataCentersDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {

@@ -22,27 +22,27 @@ func NewEndpointResource() resource.Resource {
 }
 
 type EndpointResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
 		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
-			r.client = &client.RunPodClient{
+			r.rlClient = &client.RunPodClient{
 				APIKey:      clientWrapper.APIKey,
 				GraphQLEndpoint: "https://api.runpod.io/graphql",
 				RestBaseURL: clientWrapper.RestBaseURL,
 				Client: &http.Client{Timeout: 60 * time.Second},
 			}
 		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
-			r.client = client
+			r.rlClient = client
 		}
 	}
 }
 
 func (r *EndpointResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -53,8 +53,8 @@ func (r *EndpointResource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io"
 	}
-	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -73,13 +73,13 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
 	// If template_id is provided, fetch the template to get the image
 	var image string
 	if !config.TemplateId.IsNull() && config.TemplateId.ValueString() != "" {
 		templateId := config.TemplateId.ValueString()
-		templateUrl := client.GetTemplateURL(templateId)
+		templateUrl := rlClient.GetTemplateURL(templateId)
 
 		reqHTTP, err := http.NewRequestWithContext(ctx, "GET", templateUrl, nil)
 		if err != nil {
@@ -88,7 +88,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		}
 
 		reqHTTP.Header.Set("Content-Type", "application/json")
-		reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+		reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 		httpClient := &http.Client{}
 		respHTTP, err := httpClient.Do(reqHTTP)
@@ -125,7 +125,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		image = config.ImageName.ValueString()
 	}
 
-	url := client.RestBaseURL + "/serverless"
+	url := rlClient.RestBaseURL + "/serverless"
 
 	// Build GPU pools array - required field for v2 serverless endpoints
 	gpuPools := make([]string, 0)
@@ -246,7 +246,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -494,9 +494,9 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -505,7 +505,7 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -724,9 +724,9 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -867,7 +867,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -1092,9 +1092,9 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
@@ -1103,7 +1103,7 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

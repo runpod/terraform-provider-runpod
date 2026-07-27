@@ -13,18 +13,18 @@ func NewUserDataSource() datasource.DataSource {
 }
 
 type UserDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *UserDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *UserDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -35,8 +35,8 @@ func (d *UserDataSource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = "https://rest.runpod.io/v1"
 	}
-	d.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return d.rlClient
 }
 
 func (d *UserDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -48,8 +48,8 @@ func (d *UserDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 }
 
 func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	client := d.getClient()
-	result, err := client.RestQuery(ctx, "GET", "user", nil)
+	rlClient := d.getClient()
+	result, err := rlClient.RestQuery(ctx, "GET", "user", nil)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

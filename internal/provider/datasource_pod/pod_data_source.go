@@ -12,12 +12,12 @@ func NewPodDataSource() datasource.DataSource {
 }
 
 type PodDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *PodDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
@@ -68,11 +68,11 @@ variables := map[string]interface{}{
 		"podId": config.Id.ValueString(),
 	}
 
-	if d.client == nil {
+	if d.rlClient == nil {
 		resp.Diagnostics.AddError("Client not configured", "RunPod client is not configured")
 		return
 	}
-	result, err := d.client.Query(ctx, query, variables)
+	result, err := d.rlClient.Query(ctx, query, variables)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

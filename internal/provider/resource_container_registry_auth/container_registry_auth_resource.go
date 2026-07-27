@@ -21,27 +21,27 @@ func NewContainerRegistryAuthResource() resource.Resource {
 }
 
 type ContainerRegistryAuthResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *ContainerRegistryAuthResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
 		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
-			r.client = &client.RunPodClient{
+			r.rlClient = &client.RunPodClient{
 				APIKey:      clientWrapper.APIKey,
 				GraphQLEndpoint: "https://api.runpod.io/graphql",
 				RestBaseURL: clientWrapper.RestBaseURL,
 				Client: &http.Client{Timeout: 60 * time.Second},
 			}
 		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
-			r.client = client
+			r.rlClient = client
 		}
 	}
 }
 
 func (r *ContainerRegistryAuthResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -52,8 +52,8 @@ func (r *ContainerRegistryAuthResource) getClient() *client.RunPodClient {
 	if restBaseURL == "" {
 		restBaseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
+	return r.rlClient
 }
 
 func (r *ContainerRegistryAuthResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

@@ -19,18 +19,18 @@ func NewEcrDelegationsDataSource() datasource.DataSource {
 }
 
 type EcrDelegationsDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *EcrDelegationsDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *EcrDelegationsDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -41,8 +41,8 @@ func (d *EcrDelegationsDataSource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	d.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return d.rlClient
 }
 
 func (d *EcrDelegationsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {

@@ -11,7 +11,7 @@ import (
 )
 
 // readWithServer wires the data source to a local REST stub and runs Read.
-// The stub body is written as-is; client.RestQuery handles v2 response envelope.
+// The stub body is written as-is; rlClient.RestQuery handles v2 response envelope.
 func readWithServer(t *testing.T, body string) *datasource.ReadResponse {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -45,7 +45,7 @@ func runRead(t *testing.T, body string) *datasource.ReadResponse {
 }
 
 // TestMachineDataSourceRead_GraphQLError covers the API-error branch: when the
-// GraphQL response carries an "errors" array, client.Query returns an error and
+// GraphQL response carries an "errors" array, rlClient.Query returns an error and
 // Read must surface it as a diagnostic (and must NOT set state).
 func TestMachineDataSourceRead_GraphQLError(t *testing.T) {
 	resp := runRead(t, `{"errors":[{"message":"machine boom"}]}`)
@@ -65,7 +65,7 @@ func TestMachineDataSourceRead_GraphQLError(t *testing.T) {
 }
 
 // TestMachineDataSourceRead_HTTPError covers the API-error branch via a non-200
-// HTTP status (client.Query turns it into an error before any parsing).
+// HTTP status (rlClient.Query turns it into an error before any parsing).
 func TestMachineDataSourceRead_HTTPError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

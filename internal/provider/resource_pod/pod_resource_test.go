@@ -158,8 +158,10 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	m.TemplateId = types.StringValue("tmpl-1")
 	m.GpuCount = types.Int64Value(1)
 
+	r := &PodResource{}
+	configureResourceWithTestClient(t, r, srv)
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
-	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	r.Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
@@ -610,8 +612,10 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		defer srv.Close()
 		t.Setenv("RUNPOD_API_KEY", "testkey123")
 		t.Setenv("RUNPOD_BASE_URL", srv.URL)
-		resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
-		(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	r := &PodResource{}
+	configureResourceWithTestClient(t, r, srv)
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	r.Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 		if resp.Diagnostics.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 		}

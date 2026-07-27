@@ -180,3 +180,7 @@ func formatHex(n int) string {
 	}
 	return result
 }
+
+var DefaultHTTPClient = &http.Client{
+	Timeout: 60 * time.Second,
+}

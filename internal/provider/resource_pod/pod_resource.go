@@ -25,27 +25,27 @@ func NewPodResource() resource.Resource {
 }
 
 type PodResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *PodResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
 		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
-			r.client = &client.RunPodClient{
+			r.rlClient = &client.RunPodClient{
 				APIKey:      clientWrapper.APIKey,
 				GraphQLEndpoint: "https://api.runpod.io/graphql",
 				RestBaseURL: clientWrapper.RestBaseURL,
 				Client: &http.Client{Timeout: 60 * time.Second},
 			}
 		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
-			r.client = client
+			r.rlClient = client
 		}
 	}
 }
 
 func (r *PodResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	
 	apiKey := os.Getenv("RUNPOD_API_KEY")
@@ -58,12 +58,12 @@ func (r *PodResource) getClient() *client.RunPodClient {
 		restBaseURL = "https://api.runpod.io"
 	}
 	
-	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
+	return r.rlClient
 }
 
-func (r *PodResource) fetchTemplate(ctx context.Context, templateId string, client *client.RunPodClient) (map[string]interface{}, error) {
-	url := client.GetTemplateURL(templateId)
+func (r *PodResource) fetchTemplate(ctx context.Context, templateId string, c *client.RunPodClient) (map[string]interface{}, error) {
+	url := c.GetTemplateURL(templateId)
 	
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -71,9 +71,9 @@ func (r *PodResource) fetchTemplate(ctx context.Context, templateId string, clie
 	}
 	
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
 	
-	httpClient := &http.Client{}
+	httpClient := client.DefaultHTTPClient
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make API call: %v", err)
@@ -142,9 +142,9 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.RestBaseURL
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
@@ -167,8 +167,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	if hasTemplateId {
-		client := r.getClient()
-		template, err := r.fetchTemplate(ctx, config.TemplateId.ValueString(), client)
+		template, err := r.fetchTemplate(ctx, config.TemplateId.ValueString(), r.getClient())
 		if err != nil {
 			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch template: %v", err))
 			return
@@ -532,9 +531,9 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.RestBaseURL
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
@@ -747,9 +746,9 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.RestBaseURL
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
@@ -911,9 +910,9 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.RestBaseURL
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")

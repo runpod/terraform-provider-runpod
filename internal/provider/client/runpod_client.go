@@ -101,7 +101,7 @@ func (c *RunPodClient) QueryRaw(ctx context.Context, query string) (map[string]i
 }
 
 func (c *RunPodClient) RestQuery(ctx context.Context, method, path string, params map[string]string) (map[string]interface{}, error) {
-	url := GetRestBaseURL() + "/" + path
+	url := c.getRestBaseURL() + "/" + path
 	
 	if len(params) > 0 {
 		queryParts := make([]string, 0, len(params))

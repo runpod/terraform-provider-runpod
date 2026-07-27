@@ -74,7 +74,7 @@ func (r *NetworkVolumeResource) Create(ctx context.Context, req resource.CreateR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/v2/network-volumes"
+	url := client.RestBaseURL + "/network-volumes"
 
 	body := map[string]interface{}{
 		"name":       config.Name.ValueString(),
@@ -184,7 +184,7 @@ func (r *NetworkVolumeResource) Read(ctx context.Context, req resource.ReadReque
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -274,7 +274,7 @@ func (r *NetworkVolumeResource) Update(ctx context.Context, req resource.UpdateR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -383,7 +383,7 @@ func (r *NetworkVolumeResource) Delete(ctx context.Context, req resource.DeleteR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

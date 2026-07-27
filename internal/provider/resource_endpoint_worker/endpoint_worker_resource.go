@@ -67,7 +67,7 @@ func (r *EndpointWorkerResource) Read(ctx context.Context, req resource.ReadRequ
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/v2/serverless/" + endpointId + "/workers/" + workerId
+	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -164,7 +164,7 @@ func (r *EndpointWorkerResource) Delete(ctx context.Context, req resource.Delete
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/v2/serverless/" + endpointId + "/workers/" + workerId
+	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

@@ -28,7 +28,7 @@ func TestRestQuery_BuildsURLAndDecodes(t *testing.T) {
 	// NewRunPodClient(apiKey, endpoint). NOTE: the second arg (Endpoint) is
 	// only used by the GraphQL Query method; RestQuery ignores it entirely and
 	// derives its base URL from the RUNPOD_BASE_URL env var (set above).
-	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", "https://rest.runpod.io/v1")
+	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", GetRestBaseURL())
 
 	res, err := c.RestQuery(context.Background(), "GET", "billing/pods", map[string]string{"granularity": "daily"})
 	if err != nil {
@@ -62,7 +62,7 @@ func TestRestQuery_NonOK_Errors(t *testing.T) {
 	defer srv.Close()
 
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
-	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", "https://rest.runpod.io/v1")
+	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", GetRestBaseURL())
 
 	res, err := c.RestQuery(context.Background(), "GET", "billing/pods", nil)
 	if err == nil {
@@ -93,7 +93,7 @@ func TestRestQuery_RespectsContextCancellation(t *testing.T) {
 	defer srv.Close()
 
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
-	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", "https://rest.runpod.io/v1")
+	c := NewRunPodClient("testkey123", "https://api.runpod.io/graphql", GetRestBaseURL())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before the call

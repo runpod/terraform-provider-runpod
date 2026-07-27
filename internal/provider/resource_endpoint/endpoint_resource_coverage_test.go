@@ -84,7 +84,7 @@ func TestEndpointUpdate_ManyFields(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", resp.Diagnostics.Errors())
 	}
-	for _, k := range []string{"name", "networkVolumeIds", "dataCenterIds", "env", "workersMin", "workersMax", "scalerType", "computeType", "flashboot"} {
+	for _, k := range []string{"name", "networkVolumeIds", "dataCenterIds", "env", "workers", "scaling", "computeType", "flashboot"} {
 		if _, ok := body[k]; !ok {
 			t.Errorf("PATCH body missing %q; got %v", k, body)
 		}

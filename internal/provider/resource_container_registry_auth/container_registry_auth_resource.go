@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -25,7 +26,16 @@ type ContainerRegistryAuthResource struct {
 
 func (r *ContainerRegistryAuthResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -40,7 +50,7 @@ func (r *ContainerRegistryAuthResource) getClient() *client.RunPodClient {
 	}
 	restBaseURL := os.Getenv("RUNPOD_BASE_URL")
 	if restBaseURL == "" {
-		restBaseURL = "https://rest.runpod.io/v1"
+		restBaseURL = client.GetRestBaseURL()
 	}
 	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
 	return r.client
@@ -68,7 +78,7 @@ func (r *ContainerRegistryAuthResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/containerregistryauth"
+	url := client.GetRestBaseURL() + "/v2/registries"
 
 	body := map[string]interface{}{
 		"name":     config.Name.ValueString(),
@@ -105,10 +115,22 @@ func (r *ContainerRegistryAuthResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
+	}
+
+	var result map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		if registry, ok := data["registry"].(map[string]interface{}); ok {
+			result = registry
+		} else {
+			resp.Diagnostics.AddError("API Error", "Failed to extract registry from v2 response data")
+			return
+		}
+	} else {
+		result = envelope
 	}
 
 	if respHTTP.StatusCode != 200 && respHTTP.StatusCode != 201 {
@@ -157,7 +179,7 @@ func (r *ContainerRegistryAuthResource) Read(ctx context.Context, req resource.R
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/containerregistryauth/" + state.Id.ValueString()
+	url := client.GetRestBaseURL() + "/v2/registries/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -187,10 +209,22 @@ func (r *ContainerRegistryAuthResource) Read(ctx context.Context, req resource.R
 		return
 	}
 
-	var result map[string]interface{}
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
+	}
+
+	var result map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		if registry, ok := data["registry"].(map[string]interface{}); ok {
+			result = registry
+		} else {
+			resp.Diagnostics.AddError("API Error", "Failed to extract registry from v2 response data")
+			return
+		}
+	} else {
+		result = envelope
 	}
 
 	if result == nil {
@@ -226,7 +260,7 @@ func (r *ContainerRegistryAuthResource) Delete(ctx context.Context, req resource
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/containerregistryauth/" + state.Id.ValueString()
+	url := client.GetRestBaseURL() + "/v2/registries/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

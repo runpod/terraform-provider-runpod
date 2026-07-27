@@ -28,6 +28,7 @@ func EndpointWorkersDataSourceSchema(ctx context.Context) schema.Schema {
 						"last_busy_ms": types.Int64Type,
 					},
 				},
+				Computed: true,
 			},
 		},
 	}

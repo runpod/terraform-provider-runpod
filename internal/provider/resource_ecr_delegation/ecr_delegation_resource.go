@@ -40,7 +40,7 @@ func (r *EcrDelegationResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = client.GetRestBaseURL()
 	}
 	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
 	return r.client
@@ -68,7 +68,7 @@ func (r *EcrDelegationResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations"
+	url := r.getClient().RestBaseURL + "/v2/registries/delegations"
 
 	body := map[string]interface{}{
 		"resource": config.Resource.ValueString(),
@@ -192,7 +192,7 @@ func (r *EcrDelegationResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations"
+	url := r.getClient().RestBaseURL + "/v2/registries/delegations"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -306,7 +306,7 @@ func (r *EcrDelegationResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations/" + state.Id.ValueString()
+	url := r.getClient().RestBaseURL + "/v2/registries/delegations/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

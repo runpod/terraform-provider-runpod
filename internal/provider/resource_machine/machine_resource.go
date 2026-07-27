@@ -2,10 +2,13 @@ package resource_machine
 
 import (
 	"context"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/runpod/terraform-provider-runpod/internal/provider/client"
-	"os"
 )
 
 func NewMachineResource() resource.Resource {
@@ -18,7 +21,16 @@ type MachineResource struct {
 
 func (r *MachineResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -33,7 +45,7 @@ func (r *MachineResource) getClient() *client.RunPodClient {
 	}
 	restBaseURL := os.Getenv("RUNPOD_BASE_URL")
 	if restBaseURL == "" {
-		restBaseURL = "https://api.runpod.io/v2"
+		restBaseURL = "https://rest.runpod.io/v1"
 	}
 	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
 	return r.client

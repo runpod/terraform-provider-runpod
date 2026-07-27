@@ -14,7 +14,7 @@ import (
 )
 
 // TestContainerRegistryAuthResource_Create verifies that Create POSTs the
-// name/username/password to /containerregistryauth and populates state from the
+// name/username/password to /v2/registries and populates state from the
 // JSON response (id, name, username).
 func TestContainerRegistryAuthResource_Create(t *testing.T) {
 	ctx := context.Background()
@@ -59,8 +59,8 @@ func TestContainerRegistryAuthResource_Create(t *testing.T) {
 	if gotMethod != http.MethodPost {
 		t.Errorf("request method = %q, want POST", gotMethod)
 	}
-	if gotPath != "/containerregistryauth" {
-		t.Errorf("request path = %q, want /containerregistryauth", gotPath)
+	if gotPath != "/v2/registries" {
+		t.Errorf("request path = %q, want /v2/registries", gotPath)
 	}
 	if gotAuth != "Bearer testkey123" {
 		t.Errorf("Authorization header = %q, want %q", gotAuth, "Bearer testkey123")
@@ -85,7 +85,7 @@ func TestContainerRegistryAuthResource_Create(t *testing.T) {
 }
 
 // TestContainerRegistryAuthResource_Create_Accepts201 locks in CE-1681: POST
-// /containerregistryauth returns 201 Created, so Create must treat 201 as success.
+// /v2/registries returns 201 Created, so Create must treat 201 as success.
 func TestContainerRegistryAuthResource_Create_Accepts201(t *testing.T) {
 	ctx := context.Background()
 	sch := ContainerRegistryAuthResourceSchema(ctx)
@@ -165,7 +165,7 @@ func TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic(
 }
 
 // TestContainerRegistryAuthResource_Read verifies that Read GETs
-// /containerregistryauth/{id} and updates name/username from the response.
+// /v2/registries/{id} and updates name/username from the response.
 func TestContainerRegistryAuthResource_Read(t *testing.T) {
 	ctx := context.Background()
 	sch := ContainerRegistryAuthResourceSchema(ctx)
@@ -203,8 +203,8 @@ func TestContainerRegistryAuthResource_Read(t *testing.T) {
 	if gotMethod != http.MethodGet {
 		t.Errorf("request method = %q, want GET", gotMethod)
 	}
-	if gotPath != "/containerregistryauth/cra-1" {
-		t.Errorf("request path = %q, want /containerregistryauth/cra-1", gotPath)
+	if gotPath != "/v2/registries/cra-1" {
+		t.Errorf("request path = %q, want /v2/registries/cra-1", gotPath)
 	}
 
 	var out ContainerRegistryAuthModel
@@ -220,7 +220,7 @@ func TestContainerRegistryAuthResource_Read(t *testing.T) {
 }
 
 // TestContainerRegistryAuthResource_Delete verifies that Delete issues a DELETE
-// to /containerregistryauth/{id} and treats a 204 response as success.
+// to /v2/registries/{id} and treats a 204 response as success.
 func TestContainerRegistryAuthResource_Delete(t *testing.T) {
 	ctx := context.Background()
 	sch := ContainerRegistryAuthResourceSchema(ctx)
@@ -257,7 +257,7 @@ func TestContainerRegistryAuthResource_Delete(t *testing.T) {
 	if gotMethod != http.MethodDelete {
 		t.Errorf("request method = %q, want DELETE", gotMethod)
 	}
-	if gotPath != "/containerregistryauth/cra-1" {
-		t.Errorf("request path = %q, want /containerregistryauth/cra-1", gotPath)
+	if gotPath != "/v2/registries/cra-1" {
+		t.Errorf("request path = %q, want /v2/registries/cra-1", gotPath)
 	}
 }

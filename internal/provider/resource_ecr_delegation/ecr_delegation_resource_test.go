@@ -307,8 +307,8 @@ func TestEcrDelegationDelete_Success(t *testing.T) {
 	if gotMethod != "DELETE" {
 		t.Errorf("expected DELETE, got %s", gotMethod)
 	}
-	if gotPath != "/registries/delegations/deleg-123" {
-		t.Errorf("expected /registries/delegations/deleg-123, got %s", gotPath)
+	if gotPath != "/v2/registries/delegations/deleg-123" {
+		t.Errorf("expected /v2/registries/delegations/deleg-123, got %s", gotPath)
 	}
 }
 

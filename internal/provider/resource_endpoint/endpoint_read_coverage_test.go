@@ -100,7 +100,7 @@ func TestEndpointCreate_AllScalars(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Create errored: %v", resp.Diagnostics.Errors())
 	}
-	for _, k := range []string{"computeType", "gpu", "vcpuCount", "workersMin", "workersMax", "idleTimeout", "scalerType", "scalerValue", "executionTimeoutMs", "flashboot", "minCudaVersion", "networkVolumeId"} {
+	for _, k := range []string{"gpu", "workers", "scaling", "timeout", "flashboot", "minCudaVersion", "networkVolumeId"} {
 		if _, ok := body[k]; !ok {
 			t.Errorf("POST body missing %q; got %v", k, body)
 		}

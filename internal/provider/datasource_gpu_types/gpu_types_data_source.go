@@ -56,8 +56,8 @@ func (d *GpuTypesDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
 	client := d.getClient()
 
-	// Use v2 REST endpoint: GET /v2/gpu
-	url := client.RestBaseURL + "/gpu"
+	// Use v2 REST endpoint: GET /v2/catalog/gpus
+	url := client.RestBaseURL + "/catalog/gpus"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -114,8 +114,8 @@ func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadReques
 	models := make([]GpuTypesModel, len(gpus))
 	for i, gpu := range gpus {
 		if gpuMap, ok := gpu.(map[string]interface{}); ok {
-			var id, displayName, manufacturer string
-			var cudaCores, memoryInGb float64
+			var id, name, displayName, manufacturer string
+			var memoryInGb, cudaCores float64
 			var communityPrice, securePrice float64
 			var secureCloud bool
 
@@ -126,10 +126,18 @@ func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadReques
 				return
 			}
 
+			// v2 uses 'name' field
+			if v, ok := gpuMap["name"].(string); ok {
+				name = v
+			}
+			
+			// For backwards compatibility, use displayName if available
 			if v, ok := gpuMap["displayName"].(string); ok {
 				displayName = v
+			} else if name != "" {
+				displayName = name
 			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'displayName' is missing or not a string in GPU type response")
+				resp.Diagnostics.AddError("API Error", "Field 'displayName' or 'name' is missing or not a string in GPU type response")
 				return
 			}
 
@@ -140,38 +148,48 @@ func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadReques
 				return
 			}
 
-			if v, ok := gpuMap["cuda_cores"].(float64); ok {
-				cudaCores = v
-			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'cuda_cores' is missing or not a float64 in GPU type response")
-				return
-			}
-
-			if v, ok := gpuMap["memory_in_gb"].(float64); ok {
+			// v2 uses 'memory' instead of 'memory_in_gb'
+			if v, ok := gpuMap["memory"].(float64); ok {
+				memoryInGb = v
+			} else if v, ok := gpuMap["memory_in_gb"].(float64); ok {
 				memoryInGb = v
 			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'memory_in_gb' is missing or not a float64 in GPU type response")
+				resp.Diagnostics.AddError("API Error", "Field 'memory' or 'memory_in_gb' is missing or not a float64 in GPU type response")
 				return
 			}
 
-			if v, ok := gpuMap["community_price"].(float64); ok {
-				communityPrice = v
+			// v2 uses nested 'price' object
+			if price, ok := gpuMap["price"].(map[string]interface{}); ok {
+				if v, ok := price["secure"].(float64); ok {
+					securePrice = v
+				}
+				if v, ok := price["community"].(float64); ok {
+					communityPrice = v
+				}
 			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'community_price' is missing or not a float64 in GPU type response")
-				return
+				// v1 uses flat fields
+				if v, ok := gpuMap["community_price"].(float64); ok {
+					communityPrice = v
+				}
+				if v, ok := gpuMap["secure_price"].(float64); ok {
+					securePrice = v
+				}
+			}
+			// Default to 0 if not provided
+			if communityPrice == 0 {
+				communityPrice = 0
+			}
+			if securePrice == 0 {
+				securePrice = 0
 			}
 
-			if v, ok := gpuMap["secure_price"].(float64); ok {
-				securePrice = v
-			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'secure_price' is missing or not a float64 in GPU type response")
-				return
-			}
-
-			if v, ok := gpuMap["secure_cloud"].(bool); ok {
+			// v2 uses 'secure' and 'community' boolean fields
+			if v, ok := gpuMap["secure"].(bool); ok {
+				secureCloud = v
+			} else if v, ok := gpuMap["secure_cloud"].(bool); ok {
 				secureCloud = v
 			} else {
-				resp.Diagnostics.AddError("API Error", "Field 'secure_cloud' is missing or not a bool in GPU type response")
+				resp.Diagnostics.AddError("API Error", "Field 'secure', 'secure_cloud', or 'secure_cloud' is missing or not a bool in GPU type response")
 				return
 			}
 

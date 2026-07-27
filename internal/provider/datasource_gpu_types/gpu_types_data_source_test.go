@@ -15,13 +15,13 @@ import (
 // The endpoint now uses GET /v2/gpu instead of GraphQL
 func TestGpuTypesRead_PopulatesState(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method and path
-		if r.Method != "GET" {
-			t.Errorf("expected GET request, got %q", r.Method)
-		}
-		if r.URL.Path != "/gpu" {
-			t.Errorf("expected path /gpu, got %q", r.URL.Path)
-		}
+	// Verify request method and path
+	if r.Method != "GET" {
+		t.Errorf("expected GET request, got %q", r.Method)
+	}
+	if r.URL.Path != "/catalog/gpus" {
+		t.Errorf("expected path /catalog/gpus, got %q", r.URL.Path)
+	}
 		// Verify authorization header
 		if auth := r.Header.Get("Authorization"); auth != "Bearer testkey123" {
 			t.Errorf("expected Bearer token, got %q", auth)

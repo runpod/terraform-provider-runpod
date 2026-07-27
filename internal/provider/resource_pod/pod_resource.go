@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -27,7 +30,16 @@ type PodResource struct {
 
 func (r *PodResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -35,29 +47,61 @@ func (r *PodResource) getClient() *client.RunPodClient {
 	if r.client != nil {
 		return r.client
 	}
-	var apiKey string
-	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
-	} else {
-		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
-	}
+	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
 	restBaseURL := os.Getenv("RUNPOD_BASE_URL")
 	if restBaseURL == "" {
-		restBaseURL = "https://rest.runpod.io/v1"
+		restBaseURL = "https://api.runpod.io"
 	}
+	
 	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
 	return r.client
+}
+
+func (r *PodResource) fetchTemplate(ctx context.Context, templateId string, client *client.RunPodClient) (map[string]interface{}, error) {
+	url := client.GetTemplateURL(templateId)
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make API call: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("template fetch failed (status %d): %s", resp.StatusCode, string(respBody))
+	}
+	
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+	
+	var template map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		template = data
+	} else {
+		template = envelope
+	}
+	
+	return template, nil
 }
 
 func (r *PodResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -105,7 +149,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
 		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
+			endpoint = "https://api.runpod.io"
 		}
 	}
 	
@@ -114,7 +158,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	url := endpoint + "/pods"
+	url := endpoint + "/v2/pods"
 
 	body := map[string]interface{}{}
 
@@ -123,17 +167,53 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	if hasTemplateId {
-		body["templateId"] = config.TemplateId.ValueString()
+		client := r.getClient()
+		template, err := r.fetchTemplate(ctx, config.TemplateId.ValueString(), client)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch template: %v", err))
+			return
+		}
+		
+		if templateImage, ok := template["image"].(string); ok {
+			body["image"] = templateImage
+		} else {
+			resp.Diagnostics.AddError("API Error", "Template response missing 'image' field")
+			return
+		}
+		
+		if templateArgs, ok := template["args"].(string); ok {
+			body["args"] = templateArgs
+		}
+		
+		if templatePorts, ok := template["ports"].([]interface{}); ok {
+			portsArray := make([]string, len(templatePorts))
+			for i, p := range templatePorts {
+				if portStr, ok := p.(string); ok {
+					portsArray[i] = portStr
+				}
+			}
+			if len(portsArray) > 0 {
+				body["ports"] = portsArray
+			}
+		}
+		
+		if templateEnv, ok := template["env"].(map[string]interface{}); ok {
+			body["env"] = templateEnv
+		}
+		
+		if templateDisk, ok := template["disk"].(float64); ok {
+			body["disk"] = int64(templateDisk)
+		}
+		
+		if templateMounts, ok := template["mounts"].(map[string]interface{}); ok {
+			body["mounts"] = templateMounts
+		}
+		
+		if templateRegistry, ok := template["registry"].(interface{}); ok {
+			body["registry"] = templateRegistry
+		}
 	} else if hasImageName {
 		body["image"] = config.ImageName.ValueString()
-	}
-
-	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
-		if _, ok := body["gpu"]; !ok {
-			body["gpu"] = make(map[string]interface{})
-		}
-		gpuObj := body["gpu"].(map[string]interface{})
-		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
 	}
 
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
@@ -142,6 +222,14 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 		gpuObj := body["gpu"].(map[string]interface{})
 		gpuObj["id"] = config.GpuTypeId.ValueString()
+	}
+
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
+		if _, ok := body["gpu"]; !ok {
+			body["gpu"] = make(map[string]interface{})
+		}
+		gpuObj := body["gpu"].(map[string]interface{})
+		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
 	}
 
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
@@ -245,6 +333,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to marshal request body: %v", err))
 		return
 	}
+	tflog.Debug(ctx, "Request body: "+string(jsonBody))
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -292,7 +381,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	if podID, ok := result["id"].(string); ok {
 		config.Id = types.StringValue(podID)
 	} else {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from response: %v", result))
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from response. Status: %d, Body: %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
@@ -450,7 +539,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
 		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
+			endpoint = "https://api.runpod.io"
 		}
 	}
 	
@@ -459,7 +548,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	url := endpoint + "/pods/" + state.Id.ValueString()
+	url := endpoint + "/v2/pods/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -665,7 +754,7 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
 		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
+			endpoint = "https://api.runpod.io"
 		}
 	}
 	if apiKey == "" {
@@ -673,7 +762,7 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 		return
 	}
 
-	url := endpoint + "/pods/" + state.Id.ValueString()
+	url := endpoint + "/v2/pods/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -829,7 +918,7 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		apiKey = os.Getenv("RUNPOD_API_KEY")
 		endpoint = os.Getenv("RUNPOD_BASE_URL")
 		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
+			endpoint = "https://api.runpod.io"
 		}
 	}
 	if apiKey == "" {
@@ -837,7 +926,7 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		return
 	}
 
-	url := endpoint + "/pods/" + state.Id.ValueString()
+	url := endpoint + "/v2/pods/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

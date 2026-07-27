@@ -111,8 +111,8 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotMethod != "POST" || gotPath != "/pods" {
-		t.Errorf("request = %s %s, want POST /pods", gotMethod, gotPath)
+	if gotMethod != "POST" || gotPath != "/v2/pods" {
+		t.Errorf("request = %s %s, want POST /v2/pods", gotMethod, gotPath)
 	}
 	// v2 format: flat fields with v2 names
 	if gotBody["image"] != "img:latest" {
@@ -137,11 +137,17 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 }
 
 func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
-	var gotBody map[string]interface{}
+	var gotPodBody map[string]interface{}
+	
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/templates/tmpl-1" {
+			_, _ = w.Write([]byte(`{"image":"runpod/pytorch:2.1.1","args":"","ports":["8888/http","22/tcp"],"env":{"JUPYTER_PASSWORD":"test"},"disk":50,"mounts":{}}`))
+			return
+		}
+		
 		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &gotBody)
-			_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-tmpl"}},"meta":{"requestId":"test"},"error":null}`))
+		_ = json.Unmarshal(b, &gotPodBody)
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-tmpl"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -158,18 +164,21 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotBody["name"] != "tmpl-pod" {
-		t.Errorf("name = %v, want tmpl-pod", gotBody["name"])
+	if gotPodBody["name"] != "tmpl-pod" {
+		t.Errorf("name = %v, want tmpl-pod", gotPodBody["name"])
 	}
-	if gotBody["templateId"] != "tmpl-1" {
-		t.Errorf("templateId = %v, want tmpl-1", gotBody["templateId"])
+	if _, ok := gotPodBody["templateId"]; ok {
+		t.Errorf("templateId should not be present, got %v", gotPodBody["templateId"])
 	}
-	if gpu, ok := gotBody["gpu"].(map[string]interface{}); ok {
+	if gotPodBody["image"] != "runpod/pytorch:2.1.1" {
+		t.Errorf("image = %v, want runpod/pytorch:2.1.1", gotPodBody["image"])
+	}
+	if gpu, ok := gotPodBody["gpu"].(map[string]interface{}); ok {
 		if gpu["count"] != float64(1) {
 			t.Errorf("gpu.count = %v, want 1", gpu["count"])
 		}
 	} else {
-		t.Errorf("gpu object not found or not a map: %v", gotBody["gpu"])
+		t.Errorf("gpu object not found or not a map: %v", gotPodBody["gpu"])
 	}
 }
 
@@ -196,8 +205,8 @@ func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotPath != "/pods/pod-1" {
-		t.Errorf("Read hit path %q, want /pods/pod-1 (CE-1650: must honor RUNPOD_BASE_URL)", gotPath)
+	if gotPath != "/v2/pods/pod-1" {
+		t.Errorf("Read hit path %q, want /v2/pods/pod-1 (CE-1650: must honor RUNPOD_BASE_URL)", gotPath)
 	}
 	var out PodModel
 	resp.State.Get(context.Background(), &out)
@@ -323,8 +332,8 @@ func TestPodUpdate_AppliesChanges(t *testing.T) {
 	if method != "PATCH" {
 		t.Errorf("expected PATCH, got %s", method)
 	}
-	if path != "/pods/pod-1" {
-		t.Errorf("expected /pods/pod-1, got %s", path)
+	if path != "/v2/pods/pod-1" {
+		t.Errorf("expected /v2/pods/pod-1, got %s", path)
 	}
 	if body["name"] != "changed-name" {
 		t.Errorf("expected name=changed-name in PATCH body, got %v", body)
@@ -666,8 +675,8 @@ func TestPodDelete_Success(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotMethod != "DELETE" || gotPath != "/pods/pod-1" {
-		t.Errorf("request = %s %s, want DELETE /pods/pod-1", gotMethod, gotPath)
+	if gotMethod != "DELETE" || gotPath != "/v2/pods/pod-1" {
+		t.Errorf("request = %s %s, want DELETE /v2/pods/pod-1", gotMethod, gotPath)
 	}
 }
 
@@ -694,6 +703,11 @@ func TestPodDelete_Non204_Errors(t *testing.T) {
 func TestPodCreate_OmittedStartSshStartJupyter_DefaultsToFalse(t *testing.T) {
 	var gotBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/templates/tmpl-1" {
+			_, _ = w.Write([]byte(`{"image":"runpod/pytorch:2.1.1","args":"","ports":["8888/http","22/tcp"],"env":{},"disk":50,"mounts":{}}`))
+			return
+		}
+		
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
 		_, _ = w.Write([]byte(`{"id":"pod-1"}`))

@@ -63,7 +63,7 @@ func (d *TemplateDataSource) Read(ctx context.Context, req datasource.ReadReques
 	client := d.getClient()
 
 	// Use v2 REST endpoint: GET /v2/templates/{templateId}
-	url := client.RestBaseURL + "/templates/" + config.Id.ValueString()
+	url := client.GetTemplateURL(config.Id.ValueString())
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

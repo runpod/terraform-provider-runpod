@@ -16,7 +16,7 @@ import (
 //
 // The generated schema root (BillingNetworkVolumeDataSourceSchema /
 // BillingNetworkVolumeModel in data_source_gen.go) is a single OBJECT with a
-// `billing_records` ListNestedAttribute. Given a valid `{"billing":[{...}]}` REST
+// `billing_records` ListNestedAttribute. Given a valid `{"records":[{...}]}` REST
 // response, Read should populate the parent model's BillingRecords list and
 // produce NO diagnostics errors.
 func TestBillingNetworkVolumeDataSourceRead_PopulatesBillingRecords(t *testing.T) {
@@ -25,11 +25,11 @@ func TestBillingNetworkVolumeDataSourceRead_PopulatesBillingRecords(t *testing.T
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// RestQuery requests baseURL + "/billing/networkvolumes" and decodes this JSON
 		// object. Read then reads result["billing"] as an array.
-		_, _ = w.Write([]byte(`{"billing":[{
-			"amount":4.56,
+		_, _ = w.Write([]byte(`{"records":[{
+			"totalAmount":4.56,
 			"diskSpaceBilledGb":100,
 			"networkVolumeId":"nv-123",
-			"time":"2026-06-01T00:00:00Z",
+			"startTime":"2026-06-01T00:00:00Z",
 			"timeBilledMs":3600000
 		}]}`))
 	}))

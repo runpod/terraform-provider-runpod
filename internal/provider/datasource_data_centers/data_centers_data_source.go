@@ -33,7 +33,7 @@ func (d *DataCentersDataSource) getClient() *client.RunPodClient {
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
-	d.client = client.NewRunPodClient(apiKey, graphqlEndpoint, "https://rest.runpod.io/v1")
+	d.client = client.NewRunPodClient(apiKey, graphqlEndpoint, client.GetRestBaseURL())
 	return d.client
 }
 
@@ -46,20 +46,7 @@ func (d *DataCentersDataSource) Schema(ctx context.Context, req datasource.Schem
 }
 
 func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	query := `
-		query GetDataCenters {
-			dataCenters {
-				id
-				name
-				location
-				globalNetwork
-			}
-		}
-	`
-
-	variables := map[string]interface{}{}
-
-	result, err := d.getClient().Query(ctx, query, variables)
+	result, err := d.getClient().RestQuery(ctx, "GET", "v2/catalog/datacenters", nil)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

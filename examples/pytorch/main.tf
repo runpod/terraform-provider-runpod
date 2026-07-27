@@ -1,26 +1,47 @@
-# RunPod PyTorch Pod with RTX 4090
+# RunPod PyTorch Pod Example
+# 
+# You can deploy using either:
+# 1. A template_id (uses a pre-configured template)
+# 2. An image_name + gpu_type_id (deploys directly from Docker image)
+#
+# If template_id is provided, it will be used. Otherwise, image_name and gpu_type_id are required.
+
+variable "runpod_api_key" {
+  type        = string
+  description = "RunPod API key"
+  sensitive   = true
+  default     = ""
+}
+
+variable "template_id" {
+  type        = string
+  description = "Template ID for the pod (get from https://www.runpod.io/console/templates)"
+  default     = "6cqbth7fkj"
+}
+
+variable "image_name" {
+  type        = string
+  description = "Docker image name for direct deployment (alternative to template_id)"
+  default     = ""
+}
 
 terraform {
   required_providers {
     runpod = {
-      source = "registry.terraform.io/runpod/runpod"
+      source = "runpod/runpod"
     }
   }
 }
 
-# API key must be set via RUNPOD_API_KEY environment variable
-# Run: export RUNPOD_API_KEY="your-api-key-here"
-# before running: terraform init && terraform apply
+provider "runpod" {
+  api_key = var.runpod_api_key
+}
 
 resource "runpod_pod" "pytorch_experiment" {
-  # Use template_id to deploy using a specific template
   template_id   = var.template_id
-  image_name    = var.image_name
+  gpu_type_id   = "NVIDIA GeForce RTX 3090"
   gpu_count     = 1
   name          = "pytorch-experiment"
-  start_ssh     = true
-  start_jupyter = true
-  volume_in_gb  = 10
 }
 
 # Output pod details

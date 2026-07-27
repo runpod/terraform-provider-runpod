@@ -40,7 +40,7 @@ func (r *EndpointJobResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = "https://rest.runpod.io/v1"
 	}
 	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
 	return r.client

@@ -8,11 +8,13 @@ variable "runpod_api_key" {
 variable "image_name" {
   type        = string
   description = "Container image name (v2 required)"
+  default     = "runpod/echo-server"
 }
 
 variable "gpu_type_id" {
   type        = string
   description = "GPU type ID (v2 required)"
+  default     = "NVIDIA A100-SXM-80GB"
 }
 
 variable "endpoint_name" {

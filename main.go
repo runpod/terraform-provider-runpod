@@ -126,7 +126,7 @@ func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	}
 
 	if p.baseUrl == "" {
-		p.baseUrl = "https://api.runpod.io/v2"
+		p.baseUrl = "https://rest.runpod.io/v1"
 	}
 	p.graphqlUrl = "https://api.runpod.io/graphql"
 

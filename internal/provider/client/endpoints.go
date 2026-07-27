@@ -1,6 +1,9 @@
 package client
 
-import "os"
+import (
+	"os"
+	"strings"
+)
 
 func GetGraphQLEndpoint() string {
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -23,4 +26,12 @@ func (c *RunPodClient) getRestBaseURL() string {
 		return c.RestBaseURL
 	}
 	return GetRestBaseURL()
+}
+
+func (c *RunPodClient) GetTemplateURL(templateId string) string {
+	base := c.getRestBaseURL()
+	if !strings.HasSuffix(base, "/v2") {
+		return base + "/v2/templates/" + templateId
+	}
+	return base + "/templates/" + templateId
 }

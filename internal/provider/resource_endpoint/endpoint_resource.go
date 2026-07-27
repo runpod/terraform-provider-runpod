@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -26,7 +27,16 @@ type EndpointResource struct {
 
 func (r *EndpointResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -41,7 +51,7 @@ func (r *EndpointResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = "https://api.runpod.io"
 	}
 	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
 	return r.client
@@ -65,18 +75,98 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints"
+	// If template_id is provided, fetch the template to get the image
+	var image string
+	if !config.TemplateId.IsNull() && config.TemplateId.ValueString() != "" {
+		templateId := config.TemplateId.ValueString()
+		templateUrl := client.GetTemplateURL(templateId)
+
+		reqHTTP, err := http.NewRequestWithContext(ctx, "GET", templateUrl, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create request: %v", err))
+			return
+		}
+
+		reqHTTP.Header.Set("Content-Type", "application/json")
+		reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+
+		httpClient := &http.Client{}
+		respHTTP, err := httpClient.Do(reqHTTP)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to make API call: %v", err))
+			return
+		}
+		defer respHTTP.Body.Close()
+
+		respBody, err := io.ReadAll(respHTTP.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
+			return
+		}
+
+		if respHTTP.StatusCode != 200 {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch template (status: %d): %s", respHTTP.StatusCode, string(respBody)))
+			return
+		}
+
+		var templateResult map[string]interface{}
+		if err := json.Unmarshal(respBody, &templateResult); err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse template response: %v", err))
+			return
+		}
+
+		if img, ok := templateResult["image"].(string); ok {
+			image = img
+		} else {
+			resp.Diagnostics.AddError("API Error", "Template response missing image field")
+			return
+		}
+	} else {
+		image = config.ImageName.ValueString()
+	}
+
+	url := client.RestBaseURL + "/v2/serverless"
+
+	// Build GPU pools array - required field for v2 serverless endpoints
+	gpuPools := make([]string, 0)
+	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		gpuPools = append(gpuPools, config.GpuTypeId.ValueString())
+	}
 
 	body := map[string]interface{}{
-		"image": config.ImageName.ValueString(),
+		"name":  config.Name.ValueString(),
+		"image": image,
 		"gpu": map[string]interface{}{
-			"id":    config.GpuTypeId.ValueString(),
+			"pools": gpuPools,
 			"count": config.GpuCount.ValueInt64(),
 		},
 	}
 
-	if !config.Name.IsNull() && config.Name.ValueString() != "" {
-		body["name"] = config.Name.ValueString()
+	// workers configuration
+	workers := make(map[string]interface{})
+	if !config.WorkersMin.IsNull() {
+		workers["min"] = int64(config.WorkersMin.ValueInt64())
+	}
+	if !config.WorkersMax.IsNull() {
+		workers["max"] = int64(config.WorkersMax.ValueInt64())
+	}
+	if len(workers) > 0 {
+		body["workers"] = workers
+	}
+
+	// scaling configuration
+	scaling := make(map[string]interface{})
+	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
+		scaling["type"] = config.ScalerType.ValueString()
+	}
+	if !config.ScalerValue.IsNull() {
+		scaling["value"] = int64(config.ScalerValue.ValueInt64())
+	}
+	if !config.IdleTimeout.IsNull() {
+		scaling["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
+	}
+	if len(scaling) > 0 {
+		body["scaling"] = scaling
 	}
 
 	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
@@ -93,46 +183,6 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		if len(networkVolumeIds) > 0 {
 			body["networkVolumeIds"] = networkVolumeIds
 		}
-	}
-
-	if !config.WorkersMin.IsNull() {
-		body["workersMin"] = int64(config.WorkersMin.ValueInt64())
-	}
-
-	if !config.WorkersMax.IsNull() {
-		body["workersMax"] = int64(config.WorkersMax.ValueInt64())
-	}
-
-	if !config.IdleTimeout.IsNull() {
-		body["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
-	}
-
-	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
-		body["scalerType"] = config.ScalerType.ValueString()
-	}
-
-	if !config.ScalerValue.IsNull() {
-		body["scalerValue"] = int64(config.ScalerValue.ValueInt64())
-	}
-
-	if !config.ExecutionTimeoutMs.IsNull() {
-		body["executionTimeoutMs"] = int64(config.ExecutionTimeoutMs.ValueInt64())
-	}
-
-	if !config.ComputeType.IsNull() && config.ComputeType.ValueString() != "" {
-		body["computeType"] = config.ComputeType.ValueString()
-	}
-
-	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		body["cloudType"] = config.CloudType.ValueString()
-	}
-
-	if !config.ContainerDiskInGb.IsNull() {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
-	}
-
-	if !config.VcpuCount.IsNull() {
-		body["vcpuCount"] = int64(config.VcpuCount.ValueInt64())
 	}
 
 	if !config.DataCenterIds.IsNull() && len(config.DataCenterIds.Elements()) > 0 {
@@ -175,20 +225,8 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		body["minCudaVersion"] = config.MinCudaVersion.ValueString()
 	}
 
-	if !config.CpuFlavorIds.IsNull() && len(config.CpuFlavorIds.Elements()) > 0 {
-		cpuFlavorIds := make([]interface{}, 0)
-		for _, id := range config.CpuFlavorIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				cpuFlavorIds = append(cpuFlavorIds, strVal.ValueString())
-			}
-		}
-		if len(cpuFlavorIds) > 0 {
-			body["cpuFlavorIds"] = cpuFlavorIds
-		}
-	}
-
-	if !config.CpuFlavorPriority.IsNull() && config.CpuFlavorPriority.ValueString() != "" {
-		body["cpuFlavorPriority"] = config.CpuFlavorPriority.ValueString()
+	if !config.ExecutionTimeoutMs.IsNull() {
+		body["timeout"] = int64(config.ExecutionTimeoutMs.ValueInt64())
 	}
 
 	if !config.Flashboot.IsNull() {
@@ -458,7 +496,7 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -688,7 +726,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/serverless/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -699,9 +737,12 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 	if !config.ImageName.IsNull() && config.ImageName.ValueString() != "" {
 		body["image"] = config.ImageName.ValueString()
 	}
+
+	// Build GPU pools array - required field for v2 serverless endpoints
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		gpuPools := []string{config.GpuTypeId.ValueString()}
 		body["gpu"] = map[string]interface{}{
-			"id":    config.GpuTypeId.ValueString(),
+			"pools": gpuPools,
 			"count": config.GpuCount.ValueInt64(),
 		}
 	}
@@ -722,28 +763,35 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		}
 	}
 
-	if !config.WorkersMin.IsNull() {
-		body["workersMin"] = int64(config.WorkersMin.ValueInt64())
+	// workers configuration
+	if !config.WorkersMin.IsNull() || !config.WorkersMax.IsNull() {
+		workers := make(map[string]interface{})
+		if !config.WorkersMin.IsNull() {
+			workers["min"] = int64(config.WorkersMin.ValueInt64())
+		}
+		if !config.WorkersMax.IsNull() {
+			workers["max"] = int64(config.WorkersMax.ValueInt64())
+		}
+		body["workers"] = workers
 	}
 
-	if !config.WorkersMax.IsNull() {
-		body["workersMax"] = int64(config.WorkersMax.ValueInt64())
-	}
-
-	if !config.IdleTimeout.IsNull() {
-		body["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
-	}
-
-	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
-		body["scalerType"] = config.ScalerType.ValueString()
-	}
-
-	if !config.ScalerValue.IsNull() {
-		body["scalerValue"] = int64(config.ScalerValue.ValueInt64())
+	// scaling configuration
+	if !config.ScalerType.IsNull() || !config.ScalerValue.IsNull() || !config.IdleTimeout.IsNull() {
+		scaling := make(map[string]interface{})
+		if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
+			scaling["type"] = config.ScalerType.ValueString()
+		}
+		if !config.ScalerValue.IsNull() {
+			scaling["value"] = int64(config.ScalerValue.ValueInt64())
+		}
+		if !config.IdleTimeout.IsNull() {
+			scaling["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
+		}
+		body["scaling"] = scaling
 	}
 
 	if !config.ExecutionTimeoutMs.IsNull() {
-		body["executionTimeoutMs"] = int64(config.ExecutionTimeoutMs.ValueInt64())
+		body["timeout"] = int64(config.ExecutionTimeoutMs.ValueInt64())
 	}
 
 	if !config.ComputeType.IsNull() && config.ComputeType.ValueString() != "" {
@@ -802,27 +850,8 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		body["minCudaVersion"] = config.MinCudaVersion.ValueString()
 	}
 
-	if !config.CpuFlavorIds.IsNull() && len(config.CpuFlavorIds.Elements()) > 0 {
-		cpuFlavorIds := make([]interface{}, 0)
-		for _, id := range config.CpuFlavorIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				cpuFlavorIds = append(cpuFlavorIds, strVal.ValueString())
-			}
-		}
-		if len(cpuFlavorIds) > 0 {
-			body["cpuFlavorIds"] = cpuFlavorIds
-		}
-	}
-
-	if !config.CpuFlavorPriority.IsNull() && config.CpuFlavorPriority.ValueString() != "" {
-		body["cpuFlavorPriority"] = config.CpuFlavorPriority.ValueString()
-	}
-
 	if !config.Flashboot.IsNull() {
 		body["flashboot"] = config.Flashboot.ValueBool()
-	}
-
-	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -1065,7 +1094,7 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

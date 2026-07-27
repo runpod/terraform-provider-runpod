@@ -64,6 +64,11 @@ func newBaseModel() EndpointModel {
 func stubServer(t *testing.T, status int, respBody string, captured *map[string]interface{}, method, path *string) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/templates/tmpl-123" || r.URL.Path == "/v2/templates/t-1" {
+			_, _ = w.Write([]byte(`{"image":"runpod/worker:latest","args":"","ports":["8000/http"],"env":{},"disk":50,"mounts":{}}`))
+			return
+		}
+		
 		if method != nil {
 			*method = r.Method
 		}
@@ -120,8 +125,9 @@ func TestEndpointCreate_Success(t *testing.T) {
 		t.Errorf("request body image = %v, want runpod/worker:latest", captured["image"])
 	}
 	gpu := captured["gpu"].(map[string]interface{})
-	if gpu["id"] != "GPU-1" {
-		t.Errorf("request body gpu.id = %v, want GPU-1", gpu["id"])
+	pools := gpu["pools"].([]interface{})
+	if pools[0].(string) != "GPU-1" {
+		t.Errorf("request body gpu.pools = %v, want GPU-1", pools)
 	}
 	if gpu["count"] != float64(1) {
 		t.Errorf("request body gpu.count = %v, want 1", gpu["count"])
@@ -129,8 +135,9 @@ func TestEndpointCreate_Success(t *testing.T) {
 	if captured["name"] != "my-ep" {
 		t.Errorf("request body name = %v, want my-ep", captured["name"])
 	}
-	if captured["workersMin"] != float64(1) {
-		t.Errorf("request body workersMin = %v, want 1", captured["workersMin"])
+	workers := captured["workers"].(map[string]interface{})
+	if workers["min"] != float64(1) {
+		t.Errorf("request body workers.min = %v, want 1", workers["min"])
 	}
 
 	// state assertions
@@ -149,7 +156,7 @@ func TestEndpointCreate_Success(t *testing.T) {
 	}
 }
 
-// TestEndpointCreate_Accepts201 locks in CE-1681: POST /endpoints returns 201
+// TestEndpointCreate_Accepts201 locks in CE-1681: POST /v2/serverless returns 201
 // Created, so Create must treat 201 as success (not only 200).
 func TestEndpointCreate_Accepts201(t *testing.T) {
 	ctx := context.Background()
@@ -346,8 +353,8 @@ func TestEndpointRead_Success(t *testing.T) {
 	if gotMethod != "GET" {
 		t.Errorf("Read method = %q, want GET", gotMethod)
 	}
-	if gotPath != "/endpoints/ep-1" {
-		t.Errorf("Read path = %q, want /endpoints/ep-1", gotPath)
+	if gotPath != "/v2/serverless/ep-1" {
+		t.Errorf("Read path = %q, want /v2/serverless/ep-1", gotPath)
 	}
 
 	var out EndpointModel
@@ -390,8 +397,8 @@ func TestEndpointDelete_Success(t *testing.T) {
 	if gotMethod != "DELETE" {
 		t.Errorf("Delete method = %q, want DELETE", gotMethod)
 	}
-	if gotPath != "/endpoints/ep-1" {
-		t.Errorf("Delete path = %q, want /endpoints/ep-1", gotPath)
+	if gotPath != "/v2/serverless/ep-1" {
+		t.Errorf("Delete path = %q, want /v2/serverless/ep-1", gotPath)
 	}
 }
 
@@ -508,7 +515,7 @@ func TestEndpointUpdate_Success(t *testing.T) {
 
 	var body map[string]interface{}
 	var method, path string
-	srv := stubServer(t, 200, `{"id":"ep-1","name":"old-name","workersMin":5,"version":3}`, &body, &method, &path)
+	srv := stubServer(t, 200, `{"id":"ep-1","name":"old-name","workers":{"min":5,"max":5},"scaling":{"idleTimeout":300},"version":3}`, &body, &method, &path)
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
@@ -522,11 +529,12 @@ func TestEndpointUpdate_Success(t *testing.T) {
 	if uresp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", uresp.Diagnostics.Errors())
 	}
-	if method != "PATCH" || path != "/endpoints/ep-1" {
-		t.Errorf("expected PATCH /endpoints/ep-1, got %s %s", method, path)
+	if method != "PATCH" || path != "/v2/serverless/ep-1" {
+		t.Errorf("expected PATCH /v2/serverless/ep-1, got %s %s", method, path)
 	}
-	if body["workersMin"] != float64(5) {
-		t.Errorf("PATCH body workersMin = %v, want 5", body["workersMin"])
+	workers := body["workers"].(map[string]interface{})
+	if workers["min"] != float64(5) {
+		t.Errorf("PATCH body workers.min = %v, want 5", workers["min"])
 	}
 }
 
@@ -963,8 +971,8 @@ func TestEndpointUpdate_Flashboot(t *testing.T) {
 	if uresp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", uresp.Diagnostics.Errors())
 	}
-	if method != "PATCH" || path != "/endpoints/ep-1" {
-		t.Errorf("expected PATCH /endpoints/ep-1, got %s %s", method, path)
+	if method != "PATCH" || path != "/v2/serverless/ep-1" {
+		t.Errorf("expected PATCH /v2/serverless/ep-1, got %s %s", method, path)
 	}
 	if body["flashboot"] != true {
 		t.Errorf("PATCH body flashboot = %v, want true", body["flashboot"])

@@ -7,20 +7,32 @@ variable "runpod_api_key" {
 
 variable "machine_id" {
   type        = string
-  description = "Machine ID to deploy pod on"
+  description = "Machine ID to deploy pod on (v1 only, ignored in v2)"
   default     = ""
 }
 
 variable "image_name" {
   type        = string
-  description = "Docker image name"
-  default     = "runpod/pytorch:1.0.7-cu1281-torch291-ubuntu2404"
+  description = "Docker image name (use template_id or image_name, not both)"
+  default     = ""
+}
+
+variable "template_id" {
+  type        = string
+  description = "Template ID to use for pod creation"
+  default     = "6cqbth7fkj"
 }
 
 variable "pod_name" {
   type        = string
   description = "Pod name"
   default     = "demo-pod"
+}
+
+variable "gpu_type_id" {
+  type        = string
+  description = "GPU type ID (required in v2)"
+  default     = "NVIDIA GeForce RTX 3090"
 }
 
 variable "gpu_count" {
@@ -31,14 +43,14 @@ variable "gpu_count" {
 
 variable "start_ssh" {
   type        = bool
-  description = "Start SSH on boot"
-  default     = true
+  description = "Start SSH on boot (v1 only)"
+  default     = false
 }
 
 variable "start_jupyter" {
   type        = bool
-  description = "Start Jupyter notebook on boot"
-  default     = true
+  description = "Start Jupyter notebook on boot (v1 only)"
+  default     = false
 }
 
 terraform {
@@ -54,12 +66,10 @@ provider "runpod" {
 }
 
 resource "runpod_pod" "demo" {
-  machine_id    = var.machine_id
-  image_name    = var.image_name
+  template_id   = var.template_id
+  gpu_type_id   = "NVIDIA GeForce RTX 3090"
   gpu_count     = var.gpu_count
   name          = var.pod_name
-  start_ssh     = var.start_ssh
-  start_jupyter = var.start_jupyter
 }
 
 output "pod_id" {

@@ -43,7 +43,7 @@ func (r *PodActionResource) Configure(ctx context.Context, req resource.Configur
 		r.baseURL = os.Getenv("RUNPOD_BASE_URL")
 	}
 	if r.baseURL == "" {
-		r.baseURL = "https://api.runpod.io/v2"
+		r.baseURL = client.GetRestBaseURL()
 	}
 	
 	// Initialize httpClient if not already set
@@ -81,7 +81,7 @@ func (r *PodActionResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// Build REST API URL for pod actions
-	url := strings.TrimSuffix(r.baseURL, "/") + "/pods/" + podID + "/actions"
+	url := strings.TrimSuffix(r.baseURL, "/") + "/v2/pods/" + podID + "/actions"
 
 	// Build request body with action
 	body := map[string]interface{}{

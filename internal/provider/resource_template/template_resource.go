@@ -8,10 +8,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 
 	client "github.com/runpod/terraform-provider-runpod/internal/provider/client"
 )
@@ -26,7 +27,16 @@ type TemplateResource struct {
 
 func (r *TemplateResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -41,7 +51,7 @@ func (r *TemplateResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = "https://api.runpod.io"
 	}
 	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
 	return r.client
@@ -314,7 +324,7 @@ func (r *TemplateResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/templates/" + state.Id.ValueString()
+	url := client.GetTemplateURL(state.Id.ValueString())
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -473,7 +483,7 @@ func (r *TemplateResource) Update(ctx context.Context, req resource.UpdateReques
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/templates/" + state.Id.ValueString()
+	url := client.GetTemplateURL(state.Id.ValueString())
 
 	body := map[string]interface{}{}
 
@@ -735,7 +745,7 @@ func (r *TemplateResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/templates/" + state.Id.ValueString()
+	url := client.GetTemplateURL(state.Id.ValueString())
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

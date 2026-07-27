@@ -35,7 +35,7 @@ func (r *EndpointWorkerResource) getClient() *client.RunPodClient {
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = client.GetRestBaseURL()
 	}
 	r.client = client.NewRunPodClient(apiKey, "", baseURL)
 	return r.client
@@ -67,7 +67,7 @@ func (r *EndpointWorkerResource) Read(ctx context.Context, req resource.ReadRequ
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
+	url := client.RestBaseURL + "/v2/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -164,7 +164,7 @@ func (r *EndpointWorkerResource) Delete(ctx context.Context, req resource.Delete
 
 	endpointId := state.EndpointId.ValueString()
 	workerId := state.Id.ValueString()
-	url := client.RestBaseURL + "/serverless/" + endpointId + "/workers/" + workerId
+	url := client.RestBaseURL + "/v2/serverless/" + endpointId + "/workers/" + workerId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

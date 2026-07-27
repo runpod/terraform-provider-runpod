@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -25,7 +26,16 @@ type NetworkVolumeResource struct {
 
 func (r *NetworkVolumeResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.client = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = client
+		}
 	}
 }
 
@@ -40,7 +50,7 @@ func (r *NetworkVolumeResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = client.GetRestBaseURL()
 	}
 	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
 	return r.client
@@ -64,7 +74,7 @@ func (r *NetworkVolumeResource) Create(ctx context.Context, req resource.CreateR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes"
+	url := client.RestBaseURL + "/v2/network-volumes"
 
 	body := map[string]interface{}{
 		"name":       config.Name.ValueString(),
@@ -174,7 +184,7 @@ func (r *NetworkVolumeResource) Read(ctx context.Context, req resource.ReadReque
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -264,7 +274,7 @@ func (r *NetworkVolumeResource) Update(ctx context.Context, req resource.UpdateR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -373,7 +383,7 @@ func (r *NetworkVolumeResource) Delete(ctx context.Context, req resource.DeleteR
 
 	client := r.getClient()
 
-	url := client.RestBaseURL + "/network-volumes/" + state.Id.ValueString()
+	url := client.RestBaseURL + "/v2/network-volumes/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

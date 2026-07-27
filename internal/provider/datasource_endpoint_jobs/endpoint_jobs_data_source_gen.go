@@ -41,6 +41,7 @@ func EndpointJobsDataSourceSchema(ctx context.Context) schema.Schema {
 						"output":       types.StringType,
 					},
 				},
+				Computed: true,
 			},
 		},
 	}

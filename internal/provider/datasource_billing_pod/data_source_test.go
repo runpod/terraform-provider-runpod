@@ -16,7 +16,7 @@ import (
 //
 // The generated schema root (BillingPodDataSourceSchema / BillingPodModel in
 // data_source_gen.go) is a single OBJECT with a `billing_records`
-// ListNestedAttribute. Given a valid `{"billing":[{...}]}` REST response, Read
+// ListNestedAttribute. Given a valid `{"records":[{...}]}` REST response, Read
 // should populate the parent model's BillingRecords list and produce NO
 // diagnostics errors.
 func TestBillingPodDataSourceRead_PopulatesBillingRecords(t *testing.T) {
@@ -25,13 +25,13 @@ func TestBillingPodDataSourceRead_PopulatesBillingRecords(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// RestQuery requests baseURL + "/billing/pods" and decodes this JSON object.
 		// Read then reads result["billing"] as an array.
-		_, _ = w.Write([]byte(`{"billing":[{
-			"amount":7.89,
+		_, _ = w.Write([]byte(`{"records":[{
+			"totalAmount":7.89,
 			"diskSpaceBilledGb":50,
 			"endpointId":"ep-123",
 			"gpuTypeId":"NVIDIA A100 80GB PCIe",
 			"podId":"pod-123",
-			"time":"2026-06-01T00:00:00Z",
+			"startTime":"2026-06-01T00:00:00Z",
 			"timeBilledMs":3600000
 		}]}`))
 	}))

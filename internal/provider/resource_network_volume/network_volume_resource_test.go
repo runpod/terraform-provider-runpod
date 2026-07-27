@@ -106,7 +106,7 @@ func TestNetworkVolumeCreate_Success(t *testing.T) {
 }
 
 // TestNetworkVolumeCreate_Accepts201 locks in CE-1681: the v1 API returns 201
-// Created for POST /network-volumes, so Create must treat 201 as success (not only
+// Created for POST /v2/network-volumes, so Create must treat 201 as success (not only
 // 200). Before #44 this failed on a successful create and orphaned the volume.
 func TestNetworkVolumeCreate_Accepts201(t *testing.T) {
 	ctx := context.Background()
@@ -191,8 +191,8 @@ func TestNetworkVolumeRead_Success(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Read errored: %v", resp.Diagnostics.Errors())
 	}
-	if method != "GET" || path != "/network-volumes/nv-1" {
-		t.Errorf("expected GET /network-volumes/nv-1, got %s %s", method, path)
+	if method != "GET" || path != "/v2/network-volumes/nv-1" {
+		t.Errorf("expected GET /v2/network-volumes/nv-1, got %s %s", method, path)
 	}
 	var out NetworkVolumeModel
 	if d := resp.State.Get(ctx, &out); d.HasError() {
@@ -253,8 +253,8 @@ func TestNetworkVolumeUpdate_Success(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", resp.Diagnostics.Errors())
 	}
-	if method != "PATCH" || path != "/network-volumes/nv-1" {
-		t.Errorf("expected PATCH /network-volumes/nv-1, got %s %s", method, path)
+	if method != "PATCH" || path != "/v2/network-volumes/nv-1" {
+		t.Errorf("expected PATCH /v2/network-volumes/nv-1, got %s %s", method, path)
 	}
 }
 
@@ -373,8 +373,8 @@ func TestNetworkVolumeDelete_Success(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Delete errored: %v", resp.Diagnostics.Errors())
 	}
-	if method != "DELETE" || path != "/network-volumes/nv-1" {
-		t.Errorf("expected DELETE /network-volumes/nv-1, got %s %s", method, path)
+	if method != "DELETE" || path != "/v2/network-volumes/nv-1" {
+		t.Errorf("expected DELETE /v2/network-volumes/nv-1, got %s %s", method, path)
 	}
 }
 

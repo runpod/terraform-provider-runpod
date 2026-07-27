@@ -1,10 +1,10 @@
-# RunPod Terraform Provider Demo
+# Runpod Terraform Provider Demo
 
-This directory contains demo configurations for the RunPod Terraform provider.
+This directory contains demo configurations for the Runpod Terraform provider.
 
 ## Prerequisites
 
-1. Get your RunPod API key from https://runpod.io/console/user/settings
+1. Get your Runpod API key from https://runpod.io/console/user/settings
 2. Update `variables.tf` files with your API key and machine IDs
 3. Set up development environment: see `LOCAL_SETUP.md` for recommended approach
 

@@ -1,4 +1,4 @@
-# RunPod Terraform Provider - Verification
+# Runpod Terraform Provider - Verification
 
 ## Overview
 

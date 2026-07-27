@@ -1,4 +1,4 @@
-# RunPod PyTorch Pod Example
+# Runpod PyTorch Pod Example
 
 This example creates a PyTorch pod using Terraform on dev.runpod.io.
 
@@ -12,8 +12,8 @@ This example creates a PyTorch pod using Terraform on dev.runpod.io.
 ## What Works
 
 The provider successfully:
-1. Authenticates with your RunPod API key
-2. Calls the RunPod REST API at `https://rest.runpod.io/v1/pods`
+1. Authenticates with your Runpod API key
+2. Calls the Runpod REST API at `https://rest.runpod.io/v1/pods`
 3. Creates pods using the correct API endpoint
 
 ## Configuration

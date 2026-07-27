@@ -1,13 +1,13 @@
 # Container Registry Auth Example
 
-This example demonstrates how to create and manage container registry authentication for RunPod.
+This example demonstrates how to create and manage container registry authentication for Runpod.
 
 ## What's Container Registry Auth?
 
-RunPod **container registry auth** allows you to:
+Runpod **container registry auth** allows you to:
 - Authenticate with private Docker registries (Docker Hub, ECR, GCR, etc.)
 - Use private images in your Pods and Serverless endpoints
-- Store credentials securely in RunPod's infrastructure
+- Store credentials securely in Runpod's infrastructure
 
 ## Configuration
 
@@ -60,5 +60,5 @@ resource "runpod_endpoint" "with_private_image" {
 ## Notes
 
 - Authentication names must be unique per user
-- Passwords are stored securely by RunPod
+- Passwords are stored securely by Runpod
 - You can use personal access tokens instead of passwords for registries like Docker Hub

@@ -1,8 +1,8 @@
-# RunPod Terraform Provider - Demo Setup Complete
+# Runpod Terraform Provider - Demo Setup Complete
 
 ## What Was Created
 
-This repository now contains a complete demo setup for the RunPod Terraform provider:
+This repository now contains a complete demo setup for the Runpod Terraform provider:
 
 ### Generated Provider Code
 - `internal/provider/` - Generated Go code for all resources and data sources
@@ -73,7 +73,7 @@ terraform apply
 
 ## What You Can Do
 
-- Create and manage RunPod pods
+- Create and manage Runpod pods
 - Perform pod actions (stop, resume, terminate, reset)
 - List available machines and GPU types
 - Query data centers and user information
@@ -81,7 +81,7 @@ terraform apply
 
 ## Next Steps
 
-1. Get your RunPod API key from https://runpod.io/console/user/settings
+1. Get your Runpod API key from https://runpod.io/console/user/settings
 2. Follow `LOCAL_SETUP.md` for development setup (recommended) or `SETUP.md` for production
 3. Try the basic example to create your first pod
 4. Explore other examples for advanced features

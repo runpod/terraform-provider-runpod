@@ -1,10 +1,10 @@
-# RunPod Terraform Provider
+# Runpod Terraform Provider
 
-A Terraform provider for managing RunPod infrastructure.
+A Terraform provider for managing Runpod infrastructure.
 
 ## Overview
 
-This provider allows you to manage RunPod resources using Terraform, including:
+This provider allows you to manage Runpod resources using Terraform, including:
 
 - Creating and managing pods
 - Performing pod actions (stop, resume, terminate, reset)
@@ -35,7 +35,7 @@ For local development without building a binary, see `LOCAL_SETUP.md`.
 
 ### runpod_pod
 
-Create and manage RunPod pods.
+Create and manage Runpod pods.
 
 **Arguments:**
 

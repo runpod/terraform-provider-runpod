@@ -1,4 +1,4 @@
-# RunPod Terraform Provider - Development Setup
+# Runpod Terraform Provider - Development Setup
 
 This provider uses the Terraform Plugin Framework and supports local development without building a binary.
 

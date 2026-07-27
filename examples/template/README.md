@@ -1,10 +1,10 @@
 # Template Example
 
-This example demonstrates how to create and manage RunPod templates.
+This example demonstrates how to create and manage Runpod templates.
 
 ## What's a Template?
 
-RunPod **templates** are reusable configurations that define:
+Runpod **templates** are reusable configurations that define:
 - Container image to use
 - GPU/CPU resources
 - Environment variables
@@ -74,6 +74,6 @@ resource "runpod_endpoint" "from_template" {
 ## Notes
 
 - Template names must be unique per user
-- Public templates can be used by any RunPod user
+- Public templates can be used by any Runpod user
 - Serverless templates power endpoint workers
 - Pod templates create dedicated GPU instances

@@ -1,14 +1,14 @@
 # Network Volume Example
 
-This example demonstrates how to create and manage standalone network volumes with RunPod.
+This example demonstrates how to create and manage standalone network volumes with Runpod.
 
 ## What's a Network Volume?
 
-RunPod **network volumes** are persistent, portable storage resources that:
+Runpod **network volumes** are persistent, portable storage resources that:
 - Exist independently of any pod
 - Can be attached to multiple pods
 - Retain data even after pods are deleted
-- Are stored on RunPod's network-attached storage infrastructure
+- Are stored on Runpod's network-attached storage infrastructure
 - Support two tiers: STANDARD and HIGH_PERFORMANCE
 
 ## Pricing

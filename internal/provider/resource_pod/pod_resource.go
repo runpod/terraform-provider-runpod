@@ -333,7 +333,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to marshal request body: %v", err))
 		return
 	}
-	tflog.Debug(ctx, "Request body: "+string(jsonBody))
+	tflog.Debug(ctx, "Request body: "+redactRequestBody(jsonBody))
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -955,4 +955,58 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to delete pod (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
+}
+
+var defaultSensitiveKeys = []string{
+	"env",
+	"REGISTRY_USER",
+	"REGISTRY_PASS",
+	"API_KEY",
+	"API_SECRET",
+	"SECRET",
+	"TOKEN",
+	"PASSWORD",
+	"passwd",
+	"ssh_key",
+	"private_key",
+	"certificate",
+}
+
+func redactRequestBody(body []byte) string {
+	return redactSensitiveFields(body, defaultSensitiveKeys)
+}
+
+func redactSensitiveFields(body []byte, sensitiveKeys []string) string {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return "<failed to unmarshal body>"
+	}
+
+	for key := range obj {
+		if containsString(sensitiveKeys, key) {
+			if _, ok := obj[key].(string); ok {
+				obj[key] = "***REDACTED***"
+			} else if val, ok := obj[key].(map[string]interface{}); ok {
+				for k := range val {
+					val[k] = "***REDACTED***"
+				}
+				obj[key] = val
+			}
+		}
+	}
+
+	redacted, err := json.Marshal(obj)
+	if err != nil {
+		return "<failed to marshal redacted body>"
+	}
+	return string(redacted)
+}
+
+func containsString(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

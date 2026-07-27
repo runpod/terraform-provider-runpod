@@ -2,6 +2,7 @@ package datasource_data_centers
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -46,16 +47,43 @@ func (d *DataCentersDataSource) Schema(ctx context.Context, req datasource.Schem
 }
 
 func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	query := `
+	// Read input arguments (gpu_count / secure_cloud) that parameterize the
+	// per-data-center GPU availability query.
+	var config DataCentersDataSourceModel
+	diags := req.Config.Get(ctx, &config)
+	if diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
+
+	gpuCount := int64(1)
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
+		gpuCount = config.GpuCount.ValueInt64()
+	}
+	secureCloud := true
+	if !config.SecureCloud.IsNull() {
+		secureCloud = config.SecureCloud.ValueBool()
+	}
+
+	// gpuAvailability(input:) is inlined as an object literal (matching the form
+	// verified against the real RunPod GraphQL API) to avoid depending on the
+	// server-side input type name. gpuCount/secureCloud are validated scalars.
+	query := fmt.Sprintf(`
 		query GetDataCenters {
 			dataCenters {
 				id
 				name
 				location
 				globalNetwork
+				gpuAvailability(input: { gpuCount: %d, secureCloud: %t }) {
+					gpuTypeId
+					displayName
+					stockStatus
+					available
+				}
 			}
 		}
-	`
+	`, gpuCount, secureCloud)
 
 	variables := map[string]interface{}{}
 
@@ -71,44 +99,82 @@ func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadReq
 			if dcMap, ok := dc.(map[string]interface{}); ok {
 				var id, name, location string
 				var globalNetwork bool
-				
+
 				if v, ok := dcMap["id"].(string); ok {
 					id = v
 				} else {
 					resp.Diagnostics.AddError("API Error", "Field 'id' is missing or not a string in data center response")
 					return
 				}
-				
+
 				if v, ok := dcMap["name"].(string); ok {
 					name = v
 				} else {
 					resp.Diagnostics.AddError("API Error", "Field 'name' is missing or not a string in data center response")
 					return
 				}
-				
+
 				if v, ok := dcMap["location"].(string); ok {
 					location = v
 				} else {
 					resp.Diagnostics.AddError("API Error", "Field 'location' is missing or not a string in data center response")
 					return
 				}
-				
+
 				if v, ok := dcMap["globalNetwork"].(bool); ok {
 					globalNetwork = v
 				} else {
 					resp.Diagnostics.AddError("API Error", "Field 'globalNetwork' is missing or not a bool in data center response")
 					return
 				}
-				
+
+				// gpuAvailability is optional/nullable per data center.
+				availability := make([]GpuAvailabilityModel, 0)
+				if rawAvail, ok := dcMap["gpuAvailability"].([]interface{}); ok {
+					for _, ga := range rawAvail {
+						gaMap, ok := ga.(map[string]interface{})
+						if !ok {
+							continue
+						}
+
+						gpuTypeId := ""
+						if v, ok := gaMap["gpuTypeId"].(string); ok {
+							gpuTypeId = v
+						}
+						displayName := ""
+						if v, ok := gaMap["displayName"].(string); ok {
+							displayName = v
+						}
+						stockStatus := ""
+						if v, ok := gaMap["stockStatus"].(string); ok {
+							stockStatus = v
+						}
+						available := false
+						if v, ok := gaMap["available"].(bool); ok {
+							available = v
+						}
+
+						availability = append(availability, GpuAvailabilityModel{
+							GpuTypeId:   types.StringValue(gpuTypeId),
+							DisplayName: types.StringValue(displayName),
+							StockStatus: types.StringValue(stockStatus),
+							Available:   types.BoolValue(available),
+						})
+					}
+				}
+
 				models[i] = DataCentersModel{
-					Id:            types.StringValue(id),
-					Name:          types.StringValue(name),
-					Location:      types.StringValue(location),
-					GlobalNetwork: types.BoolValue(globalNetwork),
+					Id:              types.StringValue(id),
+					Name:            types.StringValue(name),
+					Location:        types.StringValue(location),
+					GlobalNetwork:   types.BoolValue(globalNetwork),
+					GpuAvailability: availability,
 				}
 			}
 		}
 		parent := DataCentersDataSourceModel{
+			GpuCount:    config.GpuCount,
+			SecureCloud: config.SecureCloud,
 			DataCenters: models,
 		}
 		diags := resp.State.Set(ctx, &parent)

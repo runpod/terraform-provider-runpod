@@ -17,64 +17,16 @@ func UserDataSourceSchema(ctx context.Context) schema.Schema {
 				Description:         "User ID",
 				MarkdownDescription: "User ID",
 			},
-			"name": schema.StringAttribute{
-				Computed:            true,
-				Description:         "User's name",
-				MarkdownDescription: "User's name",
-			},
-			"email": schema.StringAttribute{
-				Computed:            true,
-				Description:         "User's email address",
-				MarkdownDescription: "User's email address",
-			},
 			"pub_key": schema.StringAttribute{
 				Computed:            true,
 				Description:         "User's public SSH key",
 				MarkdownDescription: "User's public SSH key",
-			},
-			"verified": schema.BoolAttribute{
-				Computed:            true,
-				Description:         "Whether the user's email is verified",
-				MarkdownDescription: "Whether the user's email is verified",
-			},
-			"cloud_type": schema.StringAttribute{
-				Computed:            true,
-				Description:         "User's cloud type",
-				MarkdownDescription: "User's cloud type",
-			},
-			"gpu_limit": schema.Float64Attribute{
-				Computed:            true,
-				Description:         "User's GPU limit",
-				MarkdownDescription: "User's GPU limit",
-			},
-			"gpu_usage": schema.Float64Attribute{
-				Computed:            true,
-				Description:         "User's current GPU usage",
-				MarkdownDescription: "User's current GPU usage",
-			},
-			"storage_limit": schema.Float64Attribute{
-				Computed:            true,
-				Description:         "User's storage limit",
-				MarkdownDescription: "User's storage limit",
-			},
-			"storage_usage": schema.Float64Attribute{
-				Computed:            true,
-				Description:         "User's current storage usage",
-				MarkdownDescription: "User's current storage usage",
 			},
 		},
 	}
 }
 
 type UserModel struct {
-	Id           types.String `tfsdk:"id"`
-	Name         types.String `tfsdk:"name"`
-	Email        types.String `tfsdk:"email"`
-	PubKey       types.String `tfsdk:"pub_key"`
-	Verified     types.Bool   `tfsdk:"verified"`
-	CloudType    types.String `tfsdk:"cloud_type"`
-	GpuLimit     types.Float64 `tfsdk:"gpu_limit"`
-	GpuUsage     types.Float64 `tfsdk:"gpu_usage"`
-	StorageLimit types.Float64 `tfsdk:"storage_limit"`
-	StorageUsage types.Float64 `tfsdk:"storage_usage"`
+	Id     types.String `tfsdk:"id"`
+	PubKey types.String `tfsdk:"pub_key"`
 }

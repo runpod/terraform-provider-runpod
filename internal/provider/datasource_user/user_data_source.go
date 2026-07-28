@@ -1,8 +1,9 @@
 package datasource_user
 
 import (
-	"os"
 	"context"
+	"os"
+
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/runpod/terraform-provider-runpod/internal/provider/client"
@@ -31,11 +32,7 @@ func (d *UserDataSource) getClient() *client.RunPodClient {
 	if endpoint == "" {
 		endpoint = "https://api.runpod.io/graphql"
 	}
-	baseURL := os.Getenv("RUNPOD_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://rest.runpod.io/v1"
-	}
-	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, "")
 	return d.rlClient
 }
 
@@ -48,89 +45,44 @@ func (d *UserDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 }
 
 func (d *UserDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	rlClient := d.getClient()
-	result, err := rlClient.RestQuery(ctx, "GET", "user", nil)
+	// There is no user/identity endpoint in the v2 REST API; account info is
+	// only available via the GraphQL `myself` query, which exposes id and
+	// pubKey for the current user (matching the schema in the provider spec).
+	query := `
+		query GetUser {
+			myself {
+				id
+				pubKey
+			}
+		}
+	`
+
+	result, err := d.getClient().Query(ctx, query, map[string]interface{}{})
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return
 	}
 
-	var idVal, nameVal, emailVal, pubKeyVal, cloudTypeStr string
-	var verifiedVal bool
-	var gpuLimitVal, gpuUsageVal, storageLimitVal, storageUsageVal float64
+	user, ok := result["myself"].(map[string]interface{})
+	if !ok {
+		resp.Diagnostics.AddError("API Error", "User data not found in response")
+		return
+	}
 
-	// Parse v2 REST response (RestQuery already unwraps the {data: {...}} envelope)
-	// Fields are now directly accessible from result
-	// Parse id
-	if id, ok := result["id"].(string); ok {
-		idVal = id
-	} else {
+	id, ok := user["id"].(string)
+	if !ok {
 		resp.Diagnostics.AddError("API Error", "Field 'id' is missing or not a string in user response")
 		return
 	}
 
-	// Parse name (optional)
-	if name, ok := result["name"].(string); ok {
-		nameVal = name
+	model := UserModel{
+		Id:     types.StringValue(id),
+		PubKey: types.StringNull(),
+	}
+	if pubKey, ok := user["pubKey"].(string); ok {
+		model.PubKey = types.StringValue(pubKey)
 	}
 
-	// Parse email (optional)
-	if email, ok := result["email"].(string); ok {
-		emailVal = email
-	}
-
-	// Parse pubKey (optional)
-	if pubKey, ok := result["pubKey"].(string); ok {
-		pubKeyVal = pubKey
-	}
-
-	// Parse verified (optional)
-	if verified, ok := result["verified"].(bool); ok {
-		verifiedVal = verified
-	}
-
-	// Parse cloudType (optional)
-	if cloudType, ok := result["cloudType"].(string); ok {
-		cloudTypeStr = cloudType
-	}
-
-	// Parse gpuLimit (optional)
-	if gpuLimit, ok := result["gpuLimit"].(float64); ok {
-		gpuLimitVal = gpuLimit
-	}
-
-	// Parse gpuUsage (optional)
-	if gpuUsage, ok := result["gpuUsage"].(float64); ok {
-		gpuUsageVal = gpuUsage
-	}
-
-	// Parse storageLimit (optional)
-	if storageLimit, ok := result["storageLimit"].(float64); ok {
-		storageLimitVal = storageLimit
-	}
-
-	// Parse storageUsage (optional)
-	if storageUsage, ok := result["storageUsage"].(float64); ok {
-		storageUsageVal = storageUsage
-	}
-
-		// Map fields to model
-		// id → id
-		// pubKey → pub_key (for backward compatibility)
-		// name, email, verified, cloudType, gpuLimit, gpuUsage, storageLimit, storageUsage
-
-		model := UserModel{
-			Id:           types.StringValue(idVal),
-			Name:         types.StringValue(nameVal),
-			Email:        types.StringValue(emailVal),
-			PubKey:       types.StringValue(pubKeyVal),
-			Verified:     types.BoolValue(verifiedVal),
-			CloudType:    types.StringValue(cloudTypeStr),
-			GpuLimit:     types.Float64Value(gpuLimitVal),
-			GpuUsage:     types.Float64Value(gpuUsageVal),
-			StorageLimit: types.Float64Value(storageLimitVal),
-			StorageUsage: types.Float64Value(storageUsageVal),
-		}
 	diags := resp.State.Set(ctx, &model)
 	if diags.HasError() {
 		resp.Diagnostics.Append(diags...)

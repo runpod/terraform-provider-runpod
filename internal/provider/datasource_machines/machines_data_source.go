@@ -33,7 +33,7 @@ func (d *MachinesDataSource) getClient() *client.RunPodClient {
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
-	d.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, "https://rest.runpod.io/v1")
+	d.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, "")
 	return d.rlClient
 }
 

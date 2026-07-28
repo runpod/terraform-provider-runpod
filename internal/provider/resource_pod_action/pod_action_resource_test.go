@@ -58,23 +58,24 @@ func TestPodActionCreate_SetsStatus(t *testing.T) {
 	}
 }
 
-// TestPodActionCreate_SendsCorrectRequest covers the action→REST routing
-// (the switch in Create) for all actions. We capture the request body and
-// assert the right action + podId went on the wire.
+// TestPodActionCreate_SendsCorrectRequest drives Create for all v2-supported
+// actions. We capture the request path and body and assert the right action +
+// podId went on the wire to POST /v2/pods/{id}/action.
 func TestPodActionCreate_SendsCorrectRequest(t *testing.T) {
 	cases := []struct {
 		action string
 	}{
+		{"start"},
 		{"stop"},
-		{"resume"},
 		{"restart"},
-		{"reset"},
 		{"terminate"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.action, func(t *testing.T) {
 			var body map[string]interface{}
+			var gotPath string
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotPath = r.URL.Path
 				b, _ := io.ReadAll(r.Body)
 				_ = json.Unmarshal(b, &body)
 				_, _ = w.Write([]byte(`{"data":{"result":{"status":"OK"}}}`))
@@ -94,7 +95,9 @@ func TestPodActionCreate_SendsCorrectRequest(t *testing.T) {
 			resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodActionResourceSchema(context.Background())}}
 			r.Create(context.Background(), resource.CreateRequest{Config: actionConfig(t, m)}, resp)
 
-			// Check that the request body contains the correct action
+			if gotPath != "/v2/pods/pod-xyz/action" {
+				t.Errorf("action %q: path = %q, want %q", tc.action, gotPath, "/v2/pods/pod-xyz/action")
+			}
 			if body["action"] != tc.action {
 				t.Errorf("action %q: body.action = %v, want %q", tc.action, body["action"], tc.action)
 			}

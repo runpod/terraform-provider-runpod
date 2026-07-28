@@ -141,17 +141,7 @@ terraform init
 terraform apply -var="runpod_api_key=your-key" -var="endpoint_id=your-endpoint-id" -var="input={\"prompt\":\"hello world\"}"
 ```
 
-### 14. Endpoint Worker (`examples/endpoint_worker/`)
-
-Retrieves information about endpoint workers using v2 REST API.
-
-```bash
-cd examples/endpoint_worker
-terraform init
-terraform apply -var="runpod_api_key=your-key" -var="endpoint_id=your-endpoint-id"
-```
-
-### 15. Integrated (Pod + Template + Network Volume) (`examples/integrated/`)
+### 14. Integrated (Pod + Template + Network Volume) (`examples/integrated/`)
 
 Demonstrates a complete workflow:
 - Creates a network volume for persistent storage

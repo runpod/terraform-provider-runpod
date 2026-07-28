@@ -558,9 +558,12 @@
           },
           {
             "name": "env",
-            "object": {
+            "map": {
               "computed_optional_required": "computed",
-              "description": "Environment variables object"
+              "element_type": {
+                "string": {}
+              },
+              "description": "Environment variables"
             }
           },
           {
@@ -633,193 +636,6 @@
       }
     },
     {
-      "name": "endpoint_jobs",
-      "description": "List jobs on a RunPod serverless endpoint",
-      "schema": {
-        "attributes": [
-          {
-            "name": "endpoint_id",
-            "string": {
-              "computed_optional_required": "required",
-              "description": "Endpoint ID"
-            }
-          },
-          {
-            "name": "status",
-            "string": {
-              "computed_optional_required": "computed_optional",
-              "description": "Filter by job status"
-            }
-          },
-          {
-            "name": "limit",
-            "int64": {
-              "computed_optional_required": "computed_optional",
-              "description": "Maximum number of jobs to return"
-            }
-          },
-          {
-            "name": "offset",
-            "int64": {
-              "computed_optional_required": "computed_optional",
-              "description": "Offset for pagination"
-            }
-          },
-          {
-            "name": "since",
-            "string": {
-              "computed_optional_required": "computed_optional",
-              "description": "Return jobs created since this timestamp"
-            }
-          },
-          {
-            "name": "cursor",
-            "string": {
-              "computed_optional_required": "computed_optional",
-              "description": "Cursor for pagination"
-            }
-          },
-          {
-            "name": "jobs",
-            "list": {
-              "computed_optional_required": "computed",
-              "element_type": {
-                "object": {
-                  "attributes": {
-                    "id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "status": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "duration": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "pod_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "container_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "worker_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "input": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "output": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "log": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "created_at": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "started_at": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "completed_at": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    }
-                  }
-                }
-              },
-              "description": "List of jobs"
-            }
-          },
-          {
-            "name": "next_page_cursor",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Cursor for next page of results"
-            }
-          }
-        ]
-      }
-    },
-    {
-      "name": "endpoint_job_logs",
-      "description": "Stream logs from a RunPod serverless endpoint job via SSE",
-      "schema": {
-        "attributes": [
-          {
-            "name": "endpoint_id",
-            "string": {
-              "computed_optional_required": "required",
-              "description": "Endpoint ID"
-            }
-          },
-          {
-            "name": "job_id",
-            "string": {
-              "computed_optional_required": "required",
-              "description": "Job ID"
-            }
-          },
-          {
-            "name": "timeout",
-            "int64": {
-              "computed_optional_required": "computed_optional",
-              "description": "Timeout in seconds for SSE connection"
-            }
-          },
-          {
-            "name": "logs",
-            "list": {
-              "computed_optional_required": "computed",
-              "element_type": {
-                "object": {
-                  "attributes": {
-                    "timestamp": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "message": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    },
-                    "type": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
-                    }
-                  }
-                }
-              },
-              "description": "List of log events"
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "endpoint_workers",
       "description": "List workers on a RunPod serverless endpoint",
       "schema": {
@@ -858,48 +674,40 @@
               "computed_optional_required": "computed",
               "element_type": {
                 "object": {
-                  "attributes": {
-                    "id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                  "attribute_types": [
+                    {
+                      "name": "id",
+                      "string": {}
                     },
-                    "pod_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "pod_id",
+                      "string": {}
                     },
-                    "status": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "status",
+                      "string": {}
                     },
-                    "uptime_ms": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "uptime_ms",
+                      "int64": {}
                     },
-                    "start_time": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "start_time",
+                      "string": {}
                     },
-                    "last_busy_ms": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "last_busy_ms",
+                      "int64": {}
                     },
-                    "idle_seconds": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "idle_seconds",
+                      "int64": {}
                     },
-                    "container_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "container_id",
+                      "string": {}
                     }
-                  }
+                  ]
                 }
               },
               "description": "List of workers"
@@ -940,23 +748,20 @@
               "computed_optional_required": "computed",
               "element_type": {
                 "object": {
-                  "attributes": {
-                    "timestamp": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                  "attribute_types": [
+                    {
+                      "name": "timestamp",
+                      "string": {}
                     },
-                    "message": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "message",
+                      "string": {}
                     },
-                    "type": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "type",
+                      "string": {}
                     }
-                  }
+                  ]
                 }
               },
               "description": "List of log events"
@@ -1200,7 +1005,7 @@
             "name": "action",
             "string": {
               "computed_optional_required": "required",
-              "description": "Action to perform: stop, resume, terminate, reset"
+              "description": "Action to perform: start, stop, restart, terminate"
             }
           },
           {
@@ -1470,38 +1275,32 @@
               "computed_optional_required": "computed",
               "element_type": {
                 "object": {
-                  "attributes": {
-                    "id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                  "attribute_types": [
+                    {
+                      "name": "id",
+                      "string": {}
                     },
-                    "pod_id": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "pod_id",
+                      "string": {}
                     },
-                    "status": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "status",
+                      "string": {}
                     },
-                    "uptime_ms": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "uptime_ms",
+                      "int64": {}
                     },
-                    "start_time": {
-                      "string": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "start_time",
+                      "string": {}
                     },
-                    "last_busy_ms": {
-                      "int64": {
-                        "computed_optional_required": "computed"
-                      }
+                    {
+                      "name": "last_busy_ms",
+                      "int64": {}
                     }
-                  }
+                  ]
                 }
               },
               "description": "List of workers (pods)"
@@ -1617,77 +1416,6 @@
       }
     },
     {
-      "name": "endpoint_worker",
-      "description": "Manage workers on RunPod serverless endpoints",
-      "schema": {
-        "attributes": [
-          {
-            "name": "endpoint_id",
-            "string": {
-              "computed_optional_required": "required",
-              "description": "Endpoint ID"
-            }
-          },
-          {
-            "name": "id",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Worker ID"
-            }
-          },
-          {
-            "name": "pod_id",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Pod ID"
-            }
-          },
-          {
-            "name": "status",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Worker status"
-            }
-          },
-          {
-            "name": "uptime_ms",
-            "int64": {
-              "computed_optional_required": "computed",
-              "description": "Worker uptime in milliseconds"
-            }
-          },
-          {
-            "name": "start_time",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Worker start time"
-            }
-          },
-          {
-            "name": "last_busy_ms",
-            "int64": {
-              "computed_optional_required": "computed",
-              "description": "Milliseconds since epoch when worker was last busy"
-            }
-          },
-          {
-            "name": "idle_seconds",
-            "int64": {
-              "computed_optional_required": "computed",
-              "description": "Seconds since worker was last busy"
-            }
-          },
-          {
-            "name": "container_id",
-            "string": {
-              "computed_optional_required": "computed",
-              "description": "Container ID"
-            }
-          }
-        ]
-      }
-    },
-    {
       "name": "template",
       "description": "Manage RunPod reusable templates for pod configurations",
       "schema": {
@@ -1756,9 +1484,12 @@
           },
           {
             "name": "env",
-            "object": {
+            "map": {
               "computed_optional_required": "computed_optional",
-              "description": "Environment variables object"
+              "element_type": {
+                "string": {}
+              },
+              "description": "Environment variables"
             }
           },
           {

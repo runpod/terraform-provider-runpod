@@ -11,7 +11,7 @@ variable "pod_id" {
 
 variable "action" {
   type        = string
-  description = "Action to perform: stop, resume, terminate, reset"
+  description = "Action to perform: start, stop, restart, terminate"
   default     = "stop"
 }
 

@@ -31,11 +31,8 @@ func (d *MachineDataSource) getClient() *client.RunPodClient {
 	if endpoint == "" {
 		endpoint = "https://api.runpod.io/graphql"
 	}
-	baseURL := os.Getenv("RUNPOD_BASE_URL")
-	if baseURL == "" {
-		baseURL = "https://rest.runpod.io/v1"
-	}
-	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	// Machines are GraphQL-only; the REST base URL is unused here.
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, "")
 	return d.rlClient
 }
 

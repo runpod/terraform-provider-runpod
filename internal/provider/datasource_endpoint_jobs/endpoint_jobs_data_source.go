@@ -62,7 +62,7 @@ func (r *EndpointJobsDataSource) Read(ctx context.Context, req datasource.ReadRe
 
 	rlClient := r.getClient()
 
-	url := rlClient.RestBaseURL + "/serverless/" + config.EndpointId.ValueString() + "/jobs"
+	url := rlClient.BaseURL() + "/serverless/" + config.EndpointId.ValueString() + "/jobs"
 
 	queryParams := []string{}
 	if !config.StatusFilter.IsNull() && config.StatusFilter.ValueString() != "" {

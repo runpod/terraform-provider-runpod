@@ -78,7 +78,7 @@ func (r *ContainerRegistryAuthResource) Create(ctx context.Context, req resource
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/v2/registries"
+	url := r.getClient().BaseURL() + "/registries"
 
 	body := map[string]interface{}{
 		"name":     config.Name.ValueString(),
@@ -179,7 +179,7 @@ func (r *ContainerRegistryAuthResource) Read(ctx context.Context, req resource.R
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/v2/registries/" + state.Id.ValueString()
+	url := r.getClient().BaseURL() + "/registries/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -260,7 +260,7 @@ func (r *ContainerRegistryAuthResource) Delete(ctx context.Context, req resource
 		return
 	}
 
-	url := client.GetRestBaseURL() + "/v2/registries/" + state.Id.ValueString()
+	url := r.getClient().BaseURL() + "/registries/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

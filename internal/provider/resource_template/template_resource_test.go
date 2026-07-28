@@ -133,7 +133,7 @@ func TestTemplateResource_Create_Success(t *testing.T) {
 	if gotMethod != "POST" {
 		t.Errorf("method = %q, want POST", gotMethod)
 	}
-	if gotPath != "/templates" {
+	if gotPath != "/v2/templates" {
 		t.Errorf("path = %q, want /templates", gotPath)
 	}
 	if gotAuth != "Bearer testkey123" {

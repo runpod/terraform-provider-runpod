@@ -75,7 +75,7 @@ func (r *TemplateResource) Create(ctx context.Context, req resource.CreateReques
 
 	rlClient := r.getClient()
 
-	url := rlClient.RestBaseURL + "/templates"
+	url := rlClient.BaseURL() + "/templates"
 
 	body := map[string]interface{}{
 		"name":   config.Name.ValueString(),

@@ -63,7 +63,7 @@ func (r *EndpointWorkerLogsDataSource) Read(ctx context.Context, req datasource.
 	endpointId := config.EndpointId.ValueString()
 	workerId := config.WorkerId.ValueString()
 
-	wsURL := fmt.Sprintf("%s/serverless/%s/workers/%s/logs", rlClient.RestBaseURL, endpointId, workerId)
+	wsURL := fmt.Sprintf("%s/serverless/%s/workers/%s/logs", rlClient.BaseURL(), endpointId, workerId)
 	
 	u, err := url.Parse(wsURL)
 	if err != nil {

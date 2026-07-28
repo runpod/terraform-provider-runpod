@@ -57,7 +57,7 @@ func (d *BillingPodDataSource) Read(ctx context.Context, req datasource.ReadRequ
 	}
 
 	runpodClient := client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", restUrl)
-	result, err := runpodClient.RestQuery(ctx, "GET", "v2/billing/pods", params)
+	result, err := runpodClient.RestQuery(ctx, "GET", "billing/pods", params)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return

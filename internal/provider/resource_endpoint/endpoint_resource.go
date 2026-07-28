@@ -125,7 +125,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		image = config.ImageName.ValueString()
 	}
 
-	url := rlClient.RestBaseURL + "/serverless"
+	url := rlClient.BaseURL() + "/serverless"
 
 	// Build GPU pools array - required field for v2 serverless endpoints
 	gpuPools := make([]string, 0)
@@ -496,7 +496,7 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	rlClient := r.getClient()
 
-	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -726,7 +726,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 
 	rlClient := r.getClient()
 
-	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -1094,7 +1094,7 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	rlClient := r.getClient()
 
-	url := rlClient.RestBaseURL + "/serverless/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

@@ -62,7 +62,7 @@ func (r *EndpointJobResource) Create(ctx context.Context, req resource.CreateReq
 	endpointId := config.EndpointId.ValueString()
 
 	// First, fetch the endpoint to get the run URL
-	endpointUrl := rlClient.RestBaseURL + "/serverless/" + endpointId
+	endpointUrl := rlClient.BaseURL() + "/serverless/" + endpointId
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", endpointUrl, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create request: %v", err))

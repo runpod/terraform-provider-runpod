@@ -353,8 +353,8 @@ func TestEndpointRead_Success(t *testing.T) {
 	if gotMethod != "GET" {
 		t.Errorf("Read method = %q, want GET", gotMethod)
 	}
-	if gotPath != "/serverless/ep-1" {
-		t.Errorf("Read path = %q, want /serverless/ep-1", gotPath)
+	if gotPath != "/v2/serverless/ep-1" {
+		t.Errorf("Read path = %q, want /v2/serverless/ep-1", gotPath)
 	}
 
 	var out EndpointModel
@@ -397,8 +397,8 @@ func TestEndpointDelete_Success(t *testing.T) {
 	if gotMethod != "DELETE" {
 		t.Errorf("Delete method = %q, want DELETE", gotMethod)
 	}
-	if gotPath != "/serverless/ep-1" {
-		t.Errorf("Delete path = %q, want /serverless/ep-1", gotPath)
+	if gotPath != "/v2/serverless/ep-1" {
+		t.Errorf("Delete path = %q, want /v2/serverless/ep-1", gotPath)
 	}
 }
 
@@ -529,8 +529,8 @@ func TestEndpointUpdate_Success(t *testing.T) {
 	if uresp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", uresp.Diagnostics.Errors())
 	}
-	if method != "PATCH" || path != "/serverless/ep-1" {
-		t.Errorf("expected PATCH /serverless/ep-1, got %s %s", method, path)
+	if method != "PATCH" || path != "/v2/serverless/ep-1" {
+		t.Errorf("expected PATCH /v2/serverless/ep-1, got %s %s", method, path)
 	}
 	workers := body["workers"].(map[string]interface{})
 	if workers["min"] != float64(5) {
@@ -971,8 +971,8 @@ func TestEndpointUpdate_Flashboot(t *testing.T) {
 	if uresp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", uresp.Diagnostics.Errors())
 	}
-	if method != "PATCH" || path != "/serverless/ep-1" {
-		t.Errorf("expected PATCH /serverless/ep-1, got %s %s", method, path)
+	if method != "PATCH" || path != "/v2/serverless/ep-1" {
+		t.Errorf("expected PATCH /v2/serverless/ep-1, got %s %s", method, path)
 	}
 	if body["flashboot"] != true {
 		t.Errorf("PATCH body flashboot = %v, want true", body["flashboot"])

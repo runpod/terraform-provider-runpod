@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -81,7 +80,7 @@ func (r *PodActionResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	// Build REST API URL for pod actions
-	url := strings.TrimSuffix(r.baseURL, "/") + "/v2/pods/" + podID + "/actions"
+	url := client.NormalizeRestBaseURL(r.baseURL) + "/pods/" + podID + "/actions"
 
 	// Build request body with action
 	body := map[string]interface{}{

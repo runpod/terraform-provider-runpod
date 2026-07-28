@@ -57,7 +57,7 @@ func (d *ContainerRegistryAuthDataSource) Read(ctx context.Context, req datasour
 	rlClient := d.getClient()
 
 	// Use v2 REST endpoint: GET /v2/registries
-	url := rlClient.RestBaseURL + "/registries"
+	url := rlClient.BaseURL() + "/registries"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

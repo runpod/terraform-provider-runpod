@@ -57,7 +57,7 @@ func (d *GpuTypesDataSource) Read(ctx context.Context, req datasource.ReadReques
 	rlClient := d.getClient()
 
 	// Use v2 REST endpoint: GET /v2/catalog/gpus
-	url := rlClient.RestBaseURL + "/catalog/gpus"
+	url := rlClient.BaseURL() + "/catalog/gpus"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

@@ -19,8 +19,8 @@ func TestGpuTypesRead_PopulatesState(t *testing.T) {
 	if r.Method != "GET" {
 		t.Errorf("expected GET request, got %q", r.Method)
 	}
-	if r.URL.Path != "/catalog/gpus" {
-		t.Errorf("expected path /catalog/gpus, got %q", r.URL.Path)
+	if r.URL.Path != "/v2/catalog/gpus" {
+		t.Errorf("expected path /v2/catalog/gpus, got %q", r.URL.Path)
 	}
 		// Verify authorization header
 		if auth := r.Header.Get("Authorization"); auth != "Bearer testkey123" {

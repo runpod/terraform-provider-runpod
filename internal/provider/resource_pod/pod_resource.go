@@ -144,13 +144,10 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	
 	if r.rlClient != nil {
 		apiKey = r.rlClient.APIKey
-		endpoint = r.rlClient.RestBaseURL
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://api.runpod.io"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	
 	if apiKey == "" {
@@ -158,7 +155,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
-	url := endpoint + "/v2/pods"
+	url := endpoint + "/pods"
 
 	body := map[string]interface{}{}
 
@@ -533,13 +530,10 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	
 	if r.rlClient != nil {
 		apiKey = r.rlClient.APIKey
-		endpoint = r.rlClient.RestBaseURL
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://api.runpod.io"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	
 	if apiKey == "" {
@@ -547,7 +541,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 		return
 	}
 
-	url := endpoint + "/v2/pods/" + state.Id.ValueString()
+	url := endpoint + "/pods/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -748,20 +742,17 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	
 	if r.rlClient != nil {
 		apiKey = r.rlClient.APIKey
-		endpoint = r.rlClient.RestBaseURL
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://api.runpod.io"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
 		return
 	}
 
-	url := endpoint + "/v2/pods/" + state.Id.ValueString()
+	url := endpoint + "/pods/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -912,20 +903,17 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	
 	if r.rlClient != nil {
 		apiKey = r.rlClient.APIKey
-		endpoint = r.rlClient.RestBaseURL
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://api.runpod.io"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
 		return
 	}
 
-	url := endpoint + "/v2/pods/" + state.Id.ValueString()
+	url := endpoint + "/pods/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

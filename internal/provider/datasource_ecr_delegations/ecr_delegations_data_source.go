@@ -60,7 +60,7 @@ func (d *EcrDelegationsDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	url := d.getClient().RestBaseURL + "/registries/delegations"
+	url := d.getClient().BaseURL() + "/registries/delegations"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

@@ -59,7 +59,7 @@ func (r *EndpointDataSource) Read(ctx context.Context, req datasource.ReadReques
 
 	rlClient := r.getClient()
 	endpointId := config.Id.ValueString()
-	url := rlClient.RestBaseURL + "/v2/serverless/" + endpointId
+	url := rlClient.BaseURL() + "/serverless/" + endpointId
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

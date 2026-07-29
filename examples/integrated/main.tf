@@ -42,7 +42,7 @@ resource "runpod_pod" "training" {
   template_id       = runpod_template.pytorch.id
   gpu_count         = var.gpu_count
   cloud_type        = "SECURE"
-  network_volume_id = runpod_network_volume.data.id
+  network_volume_ids = [runpod_network_volume.data.id]
   volume_mount_path = "/workspace/data"
 }
 

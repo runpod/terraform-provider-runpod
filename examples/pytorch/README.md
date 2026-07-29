@@ -30,8 +30,6 @@ resource "runpod_pod" "pytorch_experiment" {
   image_name    = var.image_name
   gpu_count     = 1
   name          = "pytorch-experiment"
-  start_ssh     = true
-  start_jupyter = true
   volume_in_gb  = 10
 }
 ```

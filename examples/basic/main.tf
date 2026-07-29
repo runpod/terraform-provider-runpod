@@ -41,18 +41,6 @@ variable "gpu_count" {
   default     = 1
 }
 
-variable "start_ssh" {
-  type        = bool
-  description = "Start SSH on boot (v1 only)"
-  default     = false
-}
-
-variable "start_jupyter" {
-  type        = bool
-  description = "Start Jupyter notebook on boot (v1 only)"
-  default     = false
-}
-
 terraform {
   required_providers {
     runpod = {

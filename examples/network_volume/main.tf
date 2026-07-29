@@ -78,7 +78,7 @@ output "volume_info" {
 resource "runpod_pod" "with_network_volume" {
   image_name      = var.image_name
   gpu_count       = var.gpu_count
-  network_volume_id = runpod_network_volume.demo.id
+  network_volume_ids = [runpod_network_volume.demo.id]
 }
 
 output "pod_id" {

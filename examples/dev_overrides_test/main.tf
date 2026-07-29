@@ -14,7 +14,6 @@ resource "runpod_pod" "demo" {
   machine_id  = "test-machine-id"
   image_name  = "runpod/miniconda:py3.10-cuda11.8.0"
   gpu_count   = 1
-  start_ssh   = true
 }
 
 output "pod_id" {

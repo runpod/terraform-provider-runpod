@@ -105,13 +105,25 @@ Get your API key from [Runpod Console](https://runpod.io/console/user/settings)
 
 ### Provider Specification
 
-The provider schema is defined in `terraform-provider-spec.json`. To regenerate provider code after modifying the spec:
+The provider schema is defined in `terraform-provider-spec.json`, which documents the
+logical schema of every resource and data source. Regeneration produces semantically
+equivalent schema code:
 
 ```bash
 tfplugingen-framework generate all \
     --input terraform-provider-spec.json \
     --output internal/provider
 ```
+
+Notes:
+
+- The 8 data sources with `list_nested` schemas (`data_centers`, `gpu_types`,
+  `machines`, `container_registry_auth`, `ecr_delegations`, and the three `billing_*`
+  sources) are marked hand-maintained in their `_gen.go` headers: the installed
+  generator emits custom types for nested attributes, while these files use plain
+  model slices. Update their schema by hand and mirror the change into the spec.
+- The spec is current with the provider's shipped schemas; treat it as the source of
+  truth for attribute-level changes to all other components.
 
 ### Directory Structure
 

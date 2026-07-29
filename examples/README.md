@@ -145,8 +145,8 @@ terraform apply -var="runpod_api_key=your-key" -var="endpoint_id=your-endpoint-i
 
 Demonstrates a complete workflow:
 - Creates a network volume for persistent storage
-- Creates a template with the volume mounted
-- Launches a pod using the template
+- Creates a template
+- Launches a pod using the template with the volume attached
 
 ```bash
 cd examples/integrated

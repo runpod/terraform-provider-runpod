@@ -1,3 +1,7 @@
+// Schema/model definitions. Hand-maintained: terraform-provider-spec.json documents this
+// logical schema, but the installed generator emits custom types for list_nested
+// attributes, so this file is not byte-regenerable. Keep the spec in sync manually.
+
 package datasource_billing_network_volume
 
 import (

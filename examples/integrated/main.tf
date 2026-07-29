@@ -18,7 +18,7 @@ resource "runpod_network_volume" "data" {
   type           = "STANDARD"
 }
 
-# Create a template that uses the image and includes network volume config
+# Create a template for the training image
 resource "runpod_template" "pytorch" {
   name                 = var.template_name
   image_name           = var.image_name
@@ -26,30 +26,24 @@ resource "runpod_template" "pytorch" {
   is_public            = false
   is_serverless        = false
   container_disk_in_gb = 50
-  
-  # Define mounts - this template supports network volumes
-  mounts = {
-    network = [{
-      volumeId = runpod_network_volume.data.id
-      path     = "/workspace/data"
-    }]
-  }
-  
+
   ports = ["8888/http", "22/tcp"]
-  
+
   env = {
     PYTHONUNBUFFERED = "1"
     PYTHONDONTWRITEBYTECODE = "1"
   }
 }
 
-# Create a pod using the template
+# Create a pod from the template and attach the network volume
+# (volumes attach to pods, not templates)
 resource "runpod_pod" "training" {
-  name           = "pytorch-training-pod"
-  template_id    = runpod_template.pytorch.id
-  gpu_count      = var.gpu_count
-  cloud_type     = "SECURE"
-  data_center_id = var.data_center_id
+  name              = "pytorch-training-pod"
+  template_id       = runpod_template.pytorch.id
+  gpu_count         = var.gpu_count
+  cloud_type        = "SECURE"
+  network_volume_id = runpod_network_volume.data.id
+  volume_mount_path = "/workspace/data"
 }
 
 # Output all resource IDs and details
@@ -91,33 +85,19 @@ output "pod_id" {
 output "pod_info" {
   description = "Pod details"
   value = {
-    id          = runpod_pod.training.id
-    name        = runpod_pod.training.name
-    status      = runpod_pod.training.status
-    gpu_count   = runpod_pod.training.gpu_count
-    data_center = runpod_pod.training.data_center_id
+    id        = runpod_pod.training.id
+    name      = runpod_pod.training.name
+    status    = runpod_pod.training.status
+    gpu_count = runpod_pod.training.gpu_count
   }
 }
 
-output "pod_ssh_info" {
-  description = "SSH connection info"
-  value = {
-    ssh_port   = runpod_pod.training.ports["22/tcp"].public
-    pod_ip     = runpod_pod.training.ports["22/tcp"].ip
-    ssh_cmd    = format("ssh -p %d root@%s", runpod_pod.training.ports["22/tcp"].public, runpod_pod.training.ports["22/tcp"].ip)
-  }
-}
-
-output "pod_jupyter_info" {
-  description = "Jupyter connection info"
-  value = {
-    http_port = runpod_pod.training.ports["8888/http"].public
-    pod_ip    = runpod_pod.training.ports["8888/http"].ip
-    url       = format("http://%s:%d", runpod_pod.training.ports["8888/http"].ip, runpod_pod.training.ports["8888/http"].public)
-  }
+output "pod_ports" {
+  description = "Port mappings as returned by the API (ports is a string attribute, e.g. \"22/TCP -> 203.0.113.10:31333|8888/HTTP -> ...\")"
+  value       = runpod_pod.training.ports
 }
 
 output "pod_logs_url" {
-  description = "Pod logs stream URL"
-  value       = format("%s/v1/pods/%s/logs", runpod_template.pytorch.image_name, runpod_pod.training.id)
+  description = "Pod logs endpoint (v2 REST)"
+  value       = format("https://api.runpod.io/v2/pods/%s/logs", runpod_pod.training.id)
 }

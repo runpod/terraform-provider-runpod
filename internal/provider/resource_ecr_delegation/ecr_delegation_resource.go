@@ -236,12 +236,16 @@ func (r *EcrDelegationResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	var delegations []map[string]interface{}
+	// v2 returns the list at the top level: {"delegations": [...]}; tolerate a
+	// {data: {...}} envelope too
+	source := envelope
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
-		if delegationsList, ok := data["delegations"].([]interface{}); ok {
-			for _, d := range delegationsList {
-				if delegation, ok := d.(map[string]interface{}); ok {
-					delegations = append(delegations, delegation)
-				}
+		source = data
+	}
+	if delegationsList, ok := source["delegations"].([]interface{}); ok {
+		for _, d := range delegationsList {
+			if delegation, ok := d.(map[string]interface{}); ok {
+				delegations = append(delegations, delegation)
 			}
 		}
 	} else {

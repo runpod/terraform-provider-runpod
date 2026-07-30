@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -99,10 +100,31 @@ func (r *EndpointWorkerLogsDataSource) Read(ctx context.Context, req datasource.
 		return
 	}
 
-	logs, err := io.ReadAll(respHTTP.Body)
-	if err != nil {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read logs: %v", err))
-		return
+	// Worker logs are server-sent events on a stream that the API holds open
+	// for live workers. Read with a deadline and return whatever arrived; this
+	// data source is a snapshot, not a tail.
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	done := make(chan readResult, 1)
+	go func() {
+		data, err := io.ReadAll(respHTTP.Body)
+		done <- readResult{data, err}
+	}()
+
+	var logs []byte
+	select {
+	case r := <-done:
+		if r.err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read logs: %v", r.err))
+			return
+		}
+		logs = r.data
+	case <-time.After(15 * time.Second):
+		respHTTP.Body.Close() // unblocks the goroutine read
+		r := <-done
+		logs = r.data
 	}
 
 	config.Logs = types.StringValue(string(logs))

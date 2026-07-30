@@ -105,13 +105,28 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 	workers := make([]attr.Value, 0)
 	for _, worker := range workersData {
 		if workerMap, ok := worker.(map[string]interface{}); ok {
+			// v2 worker shape: {id, status, startedAt, uptimeSeconds, ...};
+			// podId/lastBusyMs are v1-only and absent in v2
+			str := func(k string) string {
+				if v, ok := workerMap[k].(string); ok {
+					return v
+				}
+				return ""
+			}
+			uptimeMs := int64(0)
+			if v, ok := workerMap["uptimeSeconds"].(float64); ok {
+				uptimeMs = int64(v * 1000)
+			} else if v, ok := workerMap["uptimeMs"].(float64); ok {
+				uptimeMs = int64(v)
+			}
+
 			workerObj := map[string]attr.Value{
-				"id":           types.StringValue(workerMap["id"].(string)),
-				"pod_id":       types.StringValue(workerMap["podId"].(string)),
-				"status":       types.StringValue(workerMap["status"].(string)),
-				"uptime_ms":    types.Int64Value(int64(workerMap["uptimeMs"].(float64))),
-				"start_time":   types.StringValue(workerMap["startTime"].(string)),
-				"last_busy_ms": types.Int64Value(int64(workerMap["lastBusyMs"].(float64))),
+				"id":           types.StringValue(str("id")),
+				"pod_id":       types.StringNull(),
+				"status":       types.StringValue(str("status")),
+				"uptime_ms":    types.Int64Value(uptimeMs),
+				"start_time":   types.StringValue(str("startedAt")),
+				"last_busy_ms": types.Int64Null(),
 			}
 			workerVal, diags := types.ObjectValue(map[string]attr.Type{
 				"id":           types.StringType,

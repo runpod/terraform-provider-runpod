@@ -25,6 +25,18 @@ variable "image_name" {
   default     = ""
 }
 
+variable "gpu_type_id" {
+  type        = string
+  description = "GPU type (availability varies; check the Runpod console)"
+  default     = "NVIDIA GeForce RTX 3090"
+}
+
+variable "pod_name" {
+  type        = string
+  description = "Pod name"
+  default     = "pytorch-experiment"
+}
+
 terraform {
   required_providers {
     runpod = {
@@ -39,9 +51,9 @@ provider "runpod" {
 
 resource "runpod_pod" "pytorch_experiment" {
   template_id   = var.template_id
-  gpu_type_id   = "NVIDIA GeForce RTX 3090"
+  gpu_type_id   = var.gpu_type_id
   gpu_count     = 1
-  name          = "pytorch-experiment"
+  name          = var.pod_name
 }
 
 # Output pod details

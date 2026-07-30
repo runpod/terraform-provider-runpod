@@ -8,3 +8,8 @@ terraform-provider-runpod_*
 
 # Build artifacts
 *.go?
+
+# Terraform local state from live example runs
+examples/**/.terraform/
+examples/**/terraform.tfstate*
+examples/**/.terraform.lock.hcl

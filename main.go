@@ -34,6 +34,7 @@ import (
 
 	datasource_endpoint_worker_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_worker_logs"
 	datasource_endpoint_workers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_workers"
+	datasource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint"
 
 	datasource_billing_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_endpoint"
 	datasource_billing_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_network_volume"
@@ -161,6 +162,7 @@ func (p *runpodProvider) DataSources(ctx context.Context) []func() datasource.Da
 		datasource_template.NewTemplateDataSource,
 		datasource_container_registry_auth.NewContainerRegistryAuthDataSource,
 		datasource_ecr_delegations.NewEcrDelegationsDataSource,
+		datasource_endpoint.NewEndpointDataSource,
 		datasource_endpoint_workers.NewEndpointWorkersDataSource,
 		datasource_endpoint_worker_logs.NewEndpointWorkerLogsDataSource,
 		datasource_billing_pod.NewBillingPodDataSource,

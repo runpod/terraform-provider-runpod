@@ -994,8 +994,11 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
+	// Seed identity from prior state; v2 PATCH responses may omit fields
+	config.Id = state.Id
+
 	if val, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(val)
+		config.Name = types.StringValue(val)
 	}
 
 	if val, ok := result["workers"].([]interface{}); ok {
@@ -1051,7 +1054,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.Workers = workersList
+			config.Workers = workersList
 		}
 	}
 
@@ -1068,44 +1071,44 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.DataCenterIds = dataCenterIdsList
+			config.DataCenterIds = dataCenterIdsList
 		}
 	}
 
 	if val, ok := result["computeType"].(string); ok {
-		state.ComputeType = types.StringValue(val)
+		config.ComputeType = types.StringValue(val)
 	}
 
 	if val, ok := result["gpuCount"].(float64); ok {
-		state.GpuCount = types.Int64Value(int64(val))
+		config.GpuCount = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["vcpuCount"].(float64); ok {
-		state.VcpuCount = types.Int64Value(int64(val))
+		config.VcpuCount = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["workersMin"].(float64); ok {
-		state.WorkersMin = types.Int64Value(int64(val))
+		config.WorkersMin = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["workersMax"].(float64); ok {
-		state.WorkersMax = types.Int64Value(int64(val))
+		config.WorkersMax = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["idleTimeout"].(float64); ok {
-		state.IdleTimeout = types.Int64Value(int64(val))
+		config.IdleTimeout = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["scalerType"].(string); ok {
-		state.ScalerType = types.StringValue(val)
+		config.ScalerType = types.StringValue(val)
 	}
 
 	if val, ok := result["scalerValue"].(float64); ok {
-		state.ScalerValue = types.Int64Value(int64(val))
+		config.ScalerValue = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["executionTimeoutMs"].(float64); ok {
-		state.ExecutionTimeoutMs = types.Int64Value(int64(val))
+		config.ExecutionTimeoutMs = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["env"].(map[string]interface{}); ok {
@@ -1121,12 +1124,12 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.Env = envObj
+			config.Env = envObj
 		}
 	}
 
 	if val, ok := result["networkVolumeId"].(string); ok {
-		state.NetworkVolumeId = types.StringValue(val)
+		config.NetworkVolumeId = types.StringValue(val)
 	}
 
 	if val, ok := result["networkVolumeIds"].([]interface{}); ok {
@@ -1142,16 +1145,16 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.NetworkVolumeIds = networkVolumeIdsList
+			config.NetworkVolumeIds = networkVolumeIdsList
 		}
 	}
 
 	if val, ok := result["flashboot"].(bool); ok {
-		state.Flashboot = types.BoolValue(val)
+		config.Flashboot = types.BoolValue(val)
 	}
 
 	if val, ok := result["gpuTypePriority"].(string); ok {
-		state.GpuTypePriority = types.StringValue(val)
+		config.GpuTypePriority = types.StringValue(val)
 	}
 
 	if val, ok := result["cpuFlavorIds"].([]interface{}); ok {
@@ -1167,14 +1170,8 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.CpuFlavorIds = cpuFlavorIdsList
+			config.CpuFlavorIds = cpuFlavorIdsList
 		}
-	}
-
-	diags = resp.State.Set(ctx, &state)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
 	}
 
 	diags = resp.State.Set(ctx, &config)

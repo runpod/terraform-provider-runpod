@@ -55,6 +55,7 @@ func EndpointResourceSchema(ctx context.Context) schema.Schema {
 			},
 			"execution_timeout_ms": schema.Int64Attribute{
 				Optional:            true,
+				Computed:            true,
 				Description:         "Execution timeout in milliseconds",
 				MarkdownDescription: "Execution timeout in milliseconds",
 			},

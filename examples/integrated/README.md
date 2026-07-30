@@ -59,7 +59,7 @@ terraform apply \
   -var="template_name=my-template" \
   -var="image_name=my-image:latest" \
   -var="volume_size_gb=100" \
-  -var="data_center_id=US-KS-2" \
+  -var="data_center_id=US-MD-1" \
   -var="gpu_count=2"
 ```
 

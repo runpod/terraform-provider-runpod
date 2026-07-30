@@ -137,7 +137,7 @@ func TestPodUpdate_ManyFieldsInBody(t *testing.T) {
 		t.Fatalf("Update errored: %v", resp.Diagnostics.Errors())
 	}
 
-	validFields := []string{"name", "env", "ports", "volumeInGb", "volumeMountPath", "containerDiskInGb"}
+	validFields := []string{"name", "env", "ports", "mounts", "disk"}
 	for _, k := range validFields {
 		if _, ok := body[k]; !ok {
 			t.Errorf("PATCH body missing %q; got %v", k, body)

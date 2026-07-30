@@ -123,11 +123,10 @@ func TestContainerRegistryAuthResource_Create_Accepts201(t *testing.T) {
 	}
 }
 
-// TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic
-// asserts the CORRECT behavior: when the API returns a 200 body containing
-// "id" but omitting "name"/"username", Create should return a diagnostics
-// error gracefully rather than panicking on an unchecked type assertion.
-func TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic(t *testing.T) {
+// TestContainerRegistryAuthResource_Create_PartialResponse_KeepsConfigCredentials
+// asserts the CURRENT v2 behavior: create responses contain only {id, name};
+// username/password persist from config instead of erroring.
+func TestContainerRegistryAuthResource_Create_PartialResponse_KeepsConfigCredentials(t *testing.T) {
 
 	ctx := context.Background()
 	sch := ContainerRegistryAuthResourceSchema(ctx)
@@ -144,7 +143,7 @@ func TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic(
 	}
 	cfg := tfsdk.Config{Schema: sch, Raw: st.Raw}
 
-	// Response includes "id" but omits "name" and "username".
+	// v2 create response: only "id" (and sometimes "name"); no credentials echoed.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"id":"cra-1"}`))
@@ -157,10 +156,15 @@ func TestContainerRegistryAuthResource_Create_PartialResponse_ReturnsDiagnostic(
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: sch}}
 	(&ContainerRegistryAuthResource{}).Create(ctx, resource.CreateRequest{Config: cfg}, resp)
 
-	// CORRECT behavior: a partial response surfaces as a diagnostics error,
-	// not a panic.
-	if !resp.Diagnostics.HasError() {
-		t.Fatalf("expected diagnostics error for partial response missing name/username, got none")
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("expected no diagnostics on partial v2 response, got: %v", resp.Diagnostics)
+	}
+	var out ContainerRegistryAuthModel
+	if d := resp.State.Get(ctx, &out); d.HasError() {
+		t.Fatalf("reading state: %v", d)
+	}
+	if out.Username.ValueString() != "alice" || out.Password.ValueString() != "s3cret" {
+		t.Errorf("credentials should persist from config, got username=%q", out.Username.ValueString())
 	}
 }
 

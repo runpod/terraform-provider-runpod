@@ -13,14 +13,8 @@ variable "machine_id" {
 
 variable "image_name" {
   type        = string
-  description = "Docker image name (use template_id or image_name, not both)"
-  default     = ""
-}
-
-variable "template_id" {
-  type        = string
-  description = "Template ID to use for pod creation"
-  default     = "6cqbth7fkj"
+  description = "Docker image name"
+  default     = "runpod/pytorch:1.0.7-cu1281-torch291-ubuntu2404"
 }
 
 variable "pod_name" {
@@ -54,8 +48,8 @@ provider "runpod" {
 }
 
 resource "runpod_pod" "demo" {
-  template_id   = var.template_id
-  gpu_type_id   = "NVIDIA GeForce RTX 3090"
+  gpu_type_id   = var.gpu_type_id
+  image_name    = var.image_name
   gpu_count     = var.gpu_count
   name          = var.pod_name
 }

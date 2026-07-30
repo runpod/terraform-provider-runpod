@@ -14,7 +14,7 @@ variable "image_name" {
 variable "gpu_type_id" {
   type        = string
   description = "GPU type ID (v2 required)"
-  default     = "NVIDIA A100-SXM-80GB"
+  default     = "NVIDIA A100-SXM4-80GB"
 }
 
 variable "endpoint_name" {

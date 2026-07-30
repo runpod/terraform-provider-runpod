@@ -452,7 +452,6 @@ func TestEndpointCreate_WithListFields(t *testing.T) {
 	m.Name = types.StringValue("my-ep")
 	m.NetworkVolumeIds = strList("nv-1", "nv-2")
 	m.DataCenterIds = strList("US-CA-1")
-	m.AllowedCudaVersions = strList("12.0", "12.1")
 	m.Env = types.MapValueMust(types.StringType, map[string]attr.Value{"MY_VAR": types.StringValue("x")})
 
 	st := tfsdk.State{Schema: sch}
@@ -473,14 +472,14 @@ func TestEndpointCreate_WithListFields(t *testing.T) {
 		t.Fatalf("Create errored: %v", cresp.Diagnostics.Errors())
 	}
 
-	for _, k := range []string{"networkVolumeIds", "dataCenterIds", "allowedCudaVersions"} {
+	for _, k := range []string{"networkVolumes", "dataCenterIds"} {
 		arr, ok := body[k].([]interface{})
 		if !ok || len(arr) == 0 {
 			t.Errorf("body[%q] not a non-empty array; got %v", k, body[k])
 		}
 	}
-	if nv, _ := body["networkVolumeIds"].([]interface{}); len(nv) != 2 {
-		t.Errorf("networkVolumeIds = %v, want 2 elements", body["networkVolumeIds"])
+	if nv, _ := body["networkVolumes"].([]interface{}); len(nv) != 2 {
+		t.Errorf("networkVolumes = %v, want 2 elements", body["networkVolumes"])
 	}
 	if env, ok := body["env"].(map[string]interface{}); !ok || env["MY_VAR"] != "x" {
 		t.Errorf("body env = %v, want MY_VAR=x", body["env"])

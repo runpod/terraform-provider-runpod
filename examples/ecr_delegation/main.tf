@@ -7,7 +7,7 @@ variable "runpod_api_key" {
 
 variable "ecr_resource_arn" {
   type        = string
-  description = "ECR resource ARN (e.g., arn:aws:ecr:us-east-2:123456789:repository/myapp)"
+  description = "ECR resource ARN with image tag (e.g., arn:aws:ecr:us-east-2:123456789:repository/myapp:latest). The API verifies access against your AWS account, so the repository must exist and the Runpod ECR delegation trust must already be configured."
 }
 
 terraform {

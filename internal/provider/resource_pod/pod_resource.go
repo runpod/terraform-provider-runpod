@@ -139,6 +139,19 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// The v2 API requires a pod name
+	if config.Name.IsNull() || config.Name.ValueString() == "" {
+		resp.Diagnostics.AddError("Missing Required Field", "name is required by the v2 pod create API.")
+		return
+	}
+
+	// v2 GPU config requires the type id; count alone is rejected
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 &&
+		(config.GpuTypeId.IsNull() || config.GpuTypeId.ValueString() == "") {
+		resp.Diagnostics.AddError("Invalid Configuration", "gpu_count requires gpu_type_id in the v2 API.")
+		return
+	}
+
 	var apiKey string
 	var endpoint string
 	
@@ -233,53 +246,53 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
-		body["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
+		resp.Diagnostics.AddError("Unsupported in v2", "bid_per_gpu is not accepted by the v2 pod create API; use type = \"SPOT\" for interruptible pods")
+		return
 	}
 
-	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.VolumeMountPath.IsNull() {
-		if _, ok := body["mounts"]; !ok {
-			body["mounts"] = make([]map[string]interface{}, 0)
-		}
-		mounts := body["mounts"].([]map[string]interface{})
-		
-		if config.VolumeInGb.ValueFloat64() > 0 {
-			mount := map[string]interface{}{
-				"volumeInGb": int64(config.VolumeInGb.ValueFloat64()),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			if !config.VolumeEncrypted.IsNull() {
-				mount["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
-			}
-			mounts = append(mounts, mount)
-		}
+	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.NetworkVolumeIds.IsNull() {
+		// v2 Mounts: { persistent: {size, path} } XOR { network: [{volumeId, path}] }
+		mounts := make(map[string]interface{})
 
+		networkIds := make([]string, 0)
 		if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-			mount := map[string]interface{}{
-				"networkVolumeId": config.NetworkVolumeId.ValueString(),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			mounts = append(mounts, mount)
+			networkIds = append(networkIds, config.NetworkVolumeId.ValueString())
 		}
-
-		if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
+		if !config.NetworkVolumeIds.IsNull() {
 			for _, id := range config.NetworkVolumeIds.Elements() {
-				if strVal, ok := id.(types.String); ok {
-					mount := map[string]interface{}{
-						"networkVolumeId": strVal.ValueString(),
-					}
-					if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-						mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-					}
-					mounts = append(mounts, mount)
+				if strVal, ok := id.(types.String); ok && strVal.ValueString() != "" {
+					networkIds = append(networkIds, strVal.ValueString())
 				}
 			}
 		}
-		
-		body["mounts"] = mounts
+
+		path := "/workspace"
+		if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+			path = config.VolumeMountPath.ValueString()
+		}
+
+		switch {
+		case len(networkIds) > 0 && config.VolumeInGb.ValueFloat64() > 0:
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 allows at most one of volume_in_gb (persistent mount) or network volumes (network mount), not both")
+			return
+		case len(networkIds) > 1:
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 supports at most one network volume per pod today")
+			return
+		case len(networkIds) > 0:
+			mounts["network"] = []map[string]interface{}{{
+				"volumeId": networkIds[0], // v2 network mounts are maxItems 1 today
+				"path":     path,
+			}}
+		case config.VolumeInGb.ValueFloat64() > 0:
+			mounts["persistent"] = map[string]interface{}{
+				"size": int64(config.VolumeInGb.ValueFloat64()),
+				"path": path,
+			}
+		}
+
+		if len(mounts) > 0 {
+			body["mounts"] = mounts
+		}
 	}
 
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
@@ -316,12 +329,9 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 	}
 
-	if !config.StartSsh.IsNull() {
-		body["startSsh"] = config.StartSsh.ValueBool()
-	}
-
-	if !config.StartJupyter.IsNull() {
-		body["startJupyter"] = config.StartJupyter.ValueBool()
+	if (!config.StartSsh.IsNull() && config.StartSsh.ValueBool()) || (!config.StartJupyter.IsNull() && config.StartJupyter.ValueBool()) {
+		resp.Diagnostics.AddError("Unsupported in v2", "start_ssh and start_jupyter are not supported by the v2 API; bake these into the Docker image instead")
+		return
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -793,27 +803,51 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	if !config.VolumeInGb.IsNull() && config.VolumeInGb.ValueFloat64() != state.VolumeInGb.ValueFloat64() {
-		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
+		// v2 Mounts: persistent = {size, path}; immutable mount kind post-create
+		path := state.VolumeMountPath.ValueString()
+		if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+			path = config.VolumeMountPath.ValueString()
+		}
+		if path == "" {
+			path = "/workspace"
+		}
+		body["mounts"] = map[string]interface{}{
+			"persistent": map[string]interface{}{
+				"size": int64(config.VolumeInGb.ValueFloat64()),
+				"path": path,
+			},
+		}
 	}
 
 	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != state.VolumeMountPath.ValueString() {
-		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
+		// path changes go through mounts; folded into the persistent/network entry above
+		if _, ok := body["mounts"]; !ok && !state.NetworkVolumeIds.IsNull() && len(state.NetworkVolumeIds.Elements()) > 0 {
+			if id, ok := state.NetworkVolumeIds.Elements()[0].(types.String); ok {
+				body["mounts"] = map[string]interface{}{
+					"network": []map[string]interface{}{{"volumeId": id.ValueString(), "path": config.VolumeMountPath.ValueString()}},
+				}
+			}
+		}
 	}
 
 	if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
-		networkVolumeIds := make([]string, 0)
-		for _, id := range config.NetworkVolumeIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				networkVolumeIds = append(networkVolumeIds, strVal.ValueString())
-			}
+		if len(config.NetworkVolumeIds.Elements()) > 1 {
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 supports at most one network volume per pod today")
+			return
 		}
-		if len(networkVolumeIds) > 0 {
-			body["networkVolumeIds"] = networkVolumeIds
+		if strVal, ok := config.NetworkVolumeIds.Elements()[0].(types.String); ok {
+			path := config.VolumeMountPath.ValueString()
+			if path == "" {
+				path = "/workspace"
+			}
+			body["mounts"] = map[string]interface{}{
+				"network": []map[string]interface{}{{"volumeId": strVal.ValueString(), "path": path}},
+			}
 		}
 	}
 
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() != state.ContainerDiskInGb.ValueInt64() {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
+		body["disk"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 
 	if len(body) == 0 {

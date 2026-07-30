@@ -73,10 +73,14 @@ func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadReq
 					return
 				}
 				
-				if v, ok := dcMap["location"].(string); ok {
+				location = ""				
+				// v2 API uses 'region'; 'location' was the pre-v2 field name
+				if v, ok := dcMap["region"].(string); ok {
+					location = v
+				} else if v, ok := dcMap["location"].(string); ok {
 					location = v
 				} else {
-					resp.Diagnostics.AddError("API Error", "Field 'location' is missing or not a string in data center response")
+					resp.Diagnostics.AddError("API Error", "Field 'region' (or legacy 'location') is missing or not a string in data center response")
 					return
 				}
 				

@@ -1396,7 +1396,7 @@
           {
             "name": "execution_timeout_ms",
             "int64": {
-              "computed_optional_required": "optional",
+              "computed_optional_required": "computed_optional",
               "description": "Execution timeout in milliseconds"
             }
           },

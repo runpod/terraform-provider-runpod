@@ -21,7 +21,7 @@ Runpod **network volumes** are persistent, portable storage resources that:
 The example shows:
 - `name`: Volume name
 - `size`: Size in GB (1-4000)
-- `data_center_id`: Where the volume is hosted (e.g., US-KS-2, EU-RO-1)
+- `data_center_id`: Where the volume is hosted (e.g., US-MD-1, EU-RO-1)
 - `storage_tier`: STANDARD or HIGH_PERFORMANCE
 
 ## Usage

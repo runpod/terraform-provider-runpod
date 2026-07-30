@@ -2,6 +2,7 @@ variable "runpod_api_key" {
   type        = string
   description = "RunPod API key"
   sensitive   = true
+  default     = ""
 }
 
 variable "pod_id" {

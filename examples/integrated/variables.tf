@@ -32,7 +32,7 @@ variable "volume_size_gb" {
 variable "data_center_id" {
   type        = string
   description = "Data center ID"
-  default     = "US-KS-2"
+  default     = "US-MD-1"
 }
 
 variable "gpu_count" {

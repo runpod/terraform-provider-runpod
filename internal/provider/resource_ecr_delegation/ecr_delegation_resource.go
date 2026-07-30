@@ -25,7 +25,14 @@ type EcrDelegationResource struct {
 
 func (r *EcrDelegationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.rlClient = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.rlClient = &client.RunPodClient{
+				APIKey:     clientWrapper.APIKey,
+				RestBaseURL: clientWrapper.RestBaseURL,
+			}
+		} else if rlClient, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.rlClient = rlClient
+		}
 	}
 }
 

@@ -157,6 +157,18 @@ terraform init
 terraform apply -var="runpod_api_key=your-key" -var="volume_name=my-volume" -var="template_name=my-template"
 ```
 
+### 13. Instant Cluster (`examples/cluster/`)
+
+Creates an Instant Cluster (multi-node interconnect) via the GraphQL API — clusters have no REST v2 surface.
+
+```bash
+cd examples/cluster
+export RUNPOD_API_KEY="your-api-key"
+terraform apply
+```
+
+**Note**: `deploy_cost` is validated per GPU unit; private pools require whole-node sizing (`gpu_count_per_pod` = node's full GPU count). Clusters land on the 10.65.0.0/x interconnect; pods take minutes to reach RUNNING.
+
 ## Example Workflow
 
 1. **List available GPU types:**

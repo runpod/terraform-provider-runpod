@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/float64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/listplanmodifier"
@@ -99,6 +100,12 @@ func ClusterResourceSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Network volume to mount",
 				PlanModifiers:       []planmodifier.String{stringplanmodifier.RequiresReplace()},
 			},
+			"start_ssh": schema.BoolAttribute{
+				Optional:            true,
+				Description:         "Expose SSH (dockssh proxy) for cluster pods",
+				MarkdownDescription: "Expose SSH (dockssh proxy) for cluster pods. Without it, the public :22 mapping silently refuses — this flag is separate from sshd running inside the container.",
+				PlanModifiers:       []planmodifier.Bool{boolplanmodifier.RequiresReplace()},
+			},
 			"env": schema.MapAttribute{
 				ElementType:         types.StringType,
 				Optional:            true,
@@ -163,6 +170,7 @@ type ClusterModel struct {
 	ContainerDiskInGb types.Int64       `tfsdk:"container_disk_in_gb"`
 	Ports             types.String      `tfsdk:"ports"`
 	NetworkVolumeId   types.String      `tfsdk:"network_volume_id"`
+	StartSsh          types.Bool        `tfsdk:"start_ssh"`
 	Env               types.Map         `tfsdk:"env"`
 	Pods              []ClusterPodModel `tfsdk:"pods"`
 }

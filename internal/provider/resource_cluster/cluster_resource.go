@@ -110,6 +110,9 @@ func (r *ClusterResource) Create(ctx context.Context, req resource.CreateRequest
 	if !config.NetworkVolumeId.IsNull() && !config.NetworkVolumeId.IsUnknown() {
 		input["networkVolumeId"] = config.NetworkVolumeId.ValueString()
 	}
+	if !config.StartSsh.IsNull() && !config.StartSsh.IsUnknown() {
+		input["startSsh"] = config.StartSsh.ValueBool()
+	}
 	if !config.DataCenterIds.IsNull() && !config.DataCenterIds.IsUnknown() {
 		var dcs []string
 		if d := config.DataCenterIds.ElementsAs(ctx, &dcs, false); d.HasError() {

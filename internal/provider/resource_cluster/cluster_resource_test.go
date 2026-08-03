@@ -80,6 +80,7 @@ func TestClusterCreate_SendsMutationAndSetsID(t *testing.T) {
 	m.GpuCountPerPod = types.Int64Value(8)
 	m.Type = types.StringValue("SLURM")
 	m.DeployCost = types.Float64Value(80.0)
+	m.StartSsh = types.BoolValue(true)
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: ClusterResourceSchema(context.Background())}}
 	r.Create(context.Background(), resource.CreateRequest{Config: clusterConfig(t, m)}, resp)
@@ -105,6 +106,9 @@ func TestClusterCreate_SendsMutationAndSetsID(t *testing.T) {
 	// clusterName should be absent when unset, not an empty string.
 	if _, present := input["clusterName"]; present {
 		t.Fatalf("clusterName present when null: %v", input["clusterName"])
+	}
+	if input["startSsh"] != true {
+		t.Fatalf("startSsh = %v, want true", input["startSsh"])
 	}
 
 	var got ClusterModel

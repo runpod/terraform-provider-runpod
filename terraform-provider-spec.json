@@ -1318,6 +1318,13 @@
          }
        },
        {
+         "name": "start_ssh",
+         "bool": {
+           "computed_optional_required": "optional",
+           "description": "Expose SSH (dockssh proxy) for cluster pods"
+         }
+       },
+       {
          "name": "env",
          "map": {
            "element_type": "string",

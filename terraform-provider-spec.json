@@ -1221,6 +1221,166 @@
     }
   ],
   "resources": [
+ {
+   "name": "cluster",
+   "schema": {
+     "attributes": [
+       {
+         "name": "id",
+         "string": {
+           "computed_optional_required": "computed",
+           "description": "Cluster ID"
+         }
+       },
+       {
+         "name": "name",
+         "string": {
+           "computed_optional_required": "computed_optional",
+           "description": "Cluster name (auto-generated when omitted)"
+         }
+       },
+       {
+         "name": "type",
+         "string": {
+           "computed_optional_required": "required",
+           "description": "Cluster type, e.g. SLURM, TRAINING, APPLICATION, RAY (passed through unvalidated)"
+         }
+       },
+       {
+         "name": "gpu_type_id",
+         "string": {
+           "computed_optional_required": "required",
+           "description": "GPU type ID, e.g. \"NVIDIA H100 80GB HBM3\""
+         }
+       },
+       {
+         "name": "pod_count",
+         "int64": {
+           "computed_optional_required": "required",
+           "description": "Number of pods in the cluster"
+         }
+       },
+       {
+         "name": "gpu_count_per_pod",
+         "int64": {
+           "computed_optional_required": "required",
+           "description": "GPUs per pod"
+         }
+       },
+       {
+         "name": "deploy_cost",
+         "float64": {
+           "computed_optional_required": "optional",
+           "description": "Price basis; validated per GPU unit against minimum bid"
+         }
+       },
+       {
+         "name": "data_center_ids",
+         "list": {
+           "element_type": "string",
+           "computed_optional_required": "optional",
+           "description": "Restrict placement to these data centers"
+         }
+       },
+       {
+         "name": "template_id",
+         "string": {
+           "computed_optional_required": "optional",
+           "description": "Template ID to base cluster pods on"
+         }
+       },
+       {
+         "name": "image_name",
+         "string": {
+           "computed_optional_required": "optional",
+           "description": "Container image name"
+         }
+       },
+       {
+         "name": "container_disk_in_gb",
+         "int64": {
+           "computed_optional_required": "optional",
+           "description": "Container disk size in GB"
+         }
+       },
+       {
+         "name": "ports",
+         "string": {
+           "computed_optional_required": "optional",
+           "description": "Ports string, e.g. \"8888/http,22/tcp\""
+         }
+       },
+       {
+         "name": "network_volume_id",
+         "string": {
+           "computed_optional_required": "optional",
+           "description": "Network volume to mount"
+         }
+       },
+       {
+         "name": "env",
+         "map": {
+           "element_type": "string",
+           "computed_optional_required": "optional",
+           "description": "Environment variables for cluster pods"
+         }
+       },
+       {
+         "name": "pods",
+         "list_nested": {
+           "computed_optional_required": "computed",
+           "description": "Cluster pods as reported by the API on read",
+           "nested_object": {
+             "attributes": [
+               {
+                 "name": "id",
+                 "string": {
+                   "computed_optional_required": "computed",
+                   "description": "Pod ID"
+                 }
+               },
+               {
+                 "name": "name",
+                 "string": {
+                   "computed_optional_required": "computed",
+                   "description": "Pod name"
+                 }
+               },
+               {
+                 "name": "cluster_idx",
+                 "int64": {
+                   "computed_optional_required": "computed",
+                   "description": "Pod index within the cluster"
+                 }
+               },
+               {
+                 "name": "cluster_role",
+                 "string": {
+                   "computed_optional_required": "computed",
+                   "description": "Cluster role"
+                 }
+               },
+               {
+                 "name": "cluster_ip",
+                 "string": {
+                   "computed_optional_required": "computed",
+                   "description": "Interconnect IP inside the cluster network"
+                 }
+               },
+               {
+                 "name": "desired_status",
+                 "string": {
+                   "computed_optional_required": "computed",
+                   "description": "Pod lifecycle status"
+                 }
+               }
+             ]
+           }
+         }
+       }
+     ]
+   }
+ },
     {
       "name": "container_registry_auth",
       "schema": {

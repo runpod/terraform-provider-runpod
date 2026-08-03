@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	resource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/resource_container_registry_auth"
+	resource_cluster "github.com/runpod/terraform-provider-runpod/internal/provider/resource_cluster"
 	resource_ecr_delegation "github.com/runpod/terraform-provider-runpod/internal/provider/resource_ecr_delegation"
 	resource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint"
 	resource_endpoint_job "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint_job"
@@ -177,6 +178,7 @@ func (p *runpodProvider) Resources(ctx context.Context) []func() resource.Resour
 		resource_pod.NewPodResource,
 		resource_pod_action.NewPodActionResource,
 		resource_machine.NewMachineResource,
+		resource_cluster.NewClusterResource,
 		resource_network_volume.NewNetworkVolumeResource,
 		resource_endpoint.NewEndpointResource,
 		resource_endpoint_job.NewEndpointJobResource,

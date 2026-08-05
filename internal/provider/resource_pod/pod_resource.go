@@ -9,6 +9,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -22,42 +25,83 @@ func NewPodResource() resource.Resource {
 }
 
 type PodResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *PodResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.rlClient = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.rlClient = client
+		}
 	}
 }
 
 func (r *PodResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
-	var apiKey string
-	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
-	} else {
-		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
-	}
+	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
 	restBaseURL := os.Getenv("RUNPOD_BASE_URL")
 	if restBaseURL == "" {
-		restBaseURL = "https://rest.runpod.io/v1"
+		restBaseURL = "https://api.runpod.io"
 	}
-	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
-	return r.client
+	
+	r.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
+	return r.rlClient
+}
+
+func (r *PodResource) fetchTemplate(ctx context.Context, templateId string, c *client.RunPodClient) (map[string]interface{}, error) {
+	url := c.GetTemplateURL(templateId)
+	
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %v", err)
+	}
+	
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
+	
+	httpClient := client.DefaultHTTPClient
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to make API call: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+	
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("template fetch failed (status %d): %s", resp.StatusCode, string(respBody))
+	}
+	
+	var envelope map[string]interface{}
+	if err := json.Unmarshal(respBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+	
+	var template map[string]interface{}
+	if data, ok := envelope["data"].(map[string]interface{}); ok {
+		template = data
+	} else {
+		template = envelope
+	}
+	
+	return template, nil
 }
 
 func (r *PodResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -95,18 +139,28 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// The v2 API requires a pod name
+	if config.Name.IsNull() || config.Name.ValueString() == "" {
+		resp.Diagnostics.AddError("Missing Required Field", "name is required by the v2 pod create API.")
+		return
+	}
+
+	// v2 GPU config requires the type id; count alone is rejected
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 &&
+		(config.GpuTypeId.IsNull() || config.GpuTypeId.ValueString() == "") {
+		resp.Diagnostics.AddError("Invalid Configuration", "gpu_count requires gpu_type_id in the v2 API.")
+		return
+	}
+
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	
 	if apiKey == "" {
@@ -123,17 +177,52 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	if hasTemplateId {
-		body["templateId"] = config.TemplateId.ValueString()
+		template, err := r.fetchTemplate(ctx, config.TemplateId.ValueString(), r.getClient())
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch template: %v", err))
+			return
+		}
+		
+		if templateImage, ok := template["image"].(string); ok {
+			body["image"] = templateImage
+		} else {
+			resp.Diagnostics.AddError("API Error", "Template response missing 'image' field")
+			return
+		}
+		
+		if templateArgs, ok := template["args"].(string); ok {
+			body["args"] = templateArgs
+		}
+		
+		if templatePorts, ok := template["ports"].([]interface{}); ok {
+			portsArray := make([]string, len(templatePorts))
+			for i, p := range templatePorts {
+				if portStr, ok := p.(string); ok {
+					portsArray[i] = portStr
+				}
+			}
+			if len(portsArray) > 0 {
+				body["ports"] = portsArray
+			}
+		}
+		
+		if templateEnv, ok := template["env"].(map[string]interface{}); ok {
+			body["env"] = templateEnv
+		}
+		
+		if templateDisk, ok := template["disk"].(float64); ok {
+			body["disk"] = int64(templateDisk)
+		}
+		
+		if templateMounts, ok := template["mounts"].(map[string]interface{}); ok {
+			body["mounts"] = templateMounts
+		}
+		
+		if templateRegistry, ok := template["registry"].(interface{}); ok {
+			body["registry"] = templateRegistry
+		}
 	} else if hasImageName {
 		body["image"] = config.ImageName.ValueString()
-	}
-
-	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
-		if _, ok := body["gpu"]; !ok {
-			body["gpu"] = make(map[string]interface{})
-		}
-		gpuObj := body["gpu"].(map[string]interface{})
-		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
 	}
 
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
@@ -144,58 +233,66 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		gpuObj["id"] = config.GpuTypeId.ValueString()
 	}
 
+	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
+		if _, ok := body["gpu"]; !ok {
+			body["gpu"] = make(map[string]interface{})
+		}
+		gpuObj := body["gpu"].(map[string]interface{})
+		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
+	}
+
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
 		body["cloud"] = config.CloudType.ValueString()
 	}
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
-		body["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
+		resp.Diagnostics.AddError("Unsupported in v2", "bid_per_gpu is not accepted by the v2 pod create API; use type = \"SPOT\" for interruptible pods")
+		return
 	}
 
-	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.VolumeMountPath.IsNull() {
-		if _, ok := body["mounts"]; !ok {
-			body["mounts"] = make([]map[string]interface{}, 0)
-		}
-		mounts := body["mounts"].([]map[string]interface{})
-		
-		if config.VolumeInGb.ValueFloat64() > 0 {
-			mount := map[string]interface{}{
-				"volumeInGb": int64(config.VolumeInGb.ValueFloat64()),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			if !config.VolumeEncrypted.IsNull() {
-				mount["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
-			}
-			mounts = append(mounts, mount)
-		}
+	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.NetworkVolumeIds.IsNull() {
+		// v2 Mounts: { persistent: {size, path} } XOR { network: [{volumeId, path}] }
+		mounts := make(map[string]interface{})
 
+		networkIds := make([]string, 0)
 		if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-			mount := map[string]interface{}{
-				"networkVolumeId": config.NetworkVolumeId.ValueString(),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			mounts = append(mounts, mount)
+			networkIds = append(networkIds, config.NetworkVolumeId.ValueString())
 		}
-
-		if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
+		if !config.NetworkVolumeIds.IsNull() {
 			for _, id := range config.NetworkVolumeIds.Elements() {
-				if strVal, ok := id.(types.String); ok {
-					mount := map[string]interface{}{
-						"networkVolumeId": strVal.ValueString(),
-					}
-					if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-						mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-					}
-					mounts = append(mounts, mount)
+				if strVal, ok := id.(types.String); ok && strVal.ValueString() != "" {
+					networkIds = append(networkIds, strVal.ValueString())
 				}
 			}
 		}
-		
-		body["mounts"] = mounts
+
+		path := "/workspace"
+		if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+			path = config.VolumeMountPath.ValueString()
+		}
+
+		switch {
+		case len(networkIds) > 0 && config.VolumeInGb.ValueFloat64() > 0:
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 allows at most one of volume_in_gb (persistent mount) or network volumes (network mount), not both")
+			return
+		case len(networkIds) > 1:
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 supports at most one network volume per pod today")
+			return
+		case len(networkIds) > 0:
+			mounts["network"] = []map[string]interface{}{{
+				"volumeId": networkIds[0], // v2 network mounts are maxItems 1 today
+				"path":     path,
+			}}
+		case config.VolumeInGb.ValueFloat64() > 0:
+			mounts["persistent"] = map[string]interface{}{
+				"size": int64(config.VolumeInGb.ValueFloat64()),
+				"path": path,
+			}
+		}
+
+		if len(mounts) > 0 {
+			body["mounts"] = mounts
+		}
 	}
 
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
@@ -232,12 +329,9 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 	}
 
-	if !config.StartSsh.IsNull() {
-		body["startSsh"] = config.StartSsh.ValueBool()
-	}
-
-	if !config.StartJupyter.IsNull() {
-		body["startJupyter"] = config.StartJupyter.ValueBool()
+	if (!config.StartSsh.IsNull() && config.StartSsh.ValueBool()) || (!config.StartJupyter.IsNull() && config.StartJupyter.ValueBool()) {
+		resp.Diagnostics.AddError("Unsupported in v2", "start_ssh and start_jupyter are not supported by the v2 API; bake these into the Docker image instead")
+		return
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -245,6 +339,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to marshal request body: %v", err))
 		return
 	}
+	tflog.Debug(ctx, "Request body: "+redactRequestBody(jsonBody))
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -292,7 +387,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	if podID, ok := result["id"].(string); ok {
 		config.Id = types.StringValue(podID)
 	} else {
-		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from response: %v", result))
+		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from response. Status: %d, Body: %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
@@ -443,15 +538,12 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	
 	if apiKey == "" {
@@ -658,15 +750,12 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
@@ -714,27 +803,51 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 
 	if !config.VolumeInGb.IsNull() && config.VolumeInGb.ValueFloat64() != state.VolumeInGb.ValueFloat64() {
-		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
+		// v2 Mounts: persistent = {size, path}; immutable mount kind post-create
+		path := state.VolumeMountPath.ValueString()
+		if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+			path = config.VolumeMountPath.ValueString()
+		}
+		if path == "" {
+			path = "/workspace"
+		}
+		body["mounts"] = map[string]interface{}{
+			"persistent": map[string]interface{}{
+				"size": int64(config.VolumeInGb.ValueFloat64()),
+				"path": path,
+			},
+		}
 	}
 
 	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != state.VolumeMountPath.ValueString() {
-		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
+		// path changes go through mounts; folded into the persistent/network entry above
+		if _, ok := body["mounts"]; !ok && !state.NetworkVolumeIds.IsNull() && len(state.NetworkVolumeIds.Elements()) > 0 {
+			if id, ok := state.NetworkVolumeIds.Elements()[0].(types.String); ok {
+				body["mounts"] = map[string]interface{}{
+					"network": []map[string]interface{}{{"volumeId": id.ValueString(), "path": config.VolumeMountPath.ValueString()}},
+				}
+			}
+		}
 	}
 
 	if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
-		networkVolumeIds := make([]string, 0)
-		for _, id := range config.NetworkVolumeIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				networkVolumeIds = append(networkVolumeIds, strVal.ValueString())
-			}
+		if len(config.NetworkVolumeIds.Elements()) > 1 {
+			resp.Diagnostics.AddError("Invalid Configuration", "v2 supports at most one network volume per pod today")
+			return
 		}
-		if len(networkVolumeIds) > 0 {
-			body["networkVolumeIds"] = networkVolumeIds
+		if strVal, ok := config.NetworkVolumeIds.Elements()[0].(types.String); ok {
+			path := config.VolumeMountPath.ValueString()
+			if path == "" {
+				path = "/workspace"
+			}
+			body["mounts"] = map[string]interface{}{
+				"network": []map[string]interface{}{{"volumeId": strVal.ValueString(), "path": path}},
+			}
 		}
 	}
 
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() != state.ContainerDiskInGb.ValueInt64() {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
+		body["disk"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 
 	if len(body) == 0 {
@@ -822,15 +935,12 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 	var apiKey string
 	var endpoint string
 	
-	if r.client != nil {
-		apiKey = r.client.APIKey
-		endpoint = r.client.RestBaseURL
+	if r.rlClient != nil {
+		apiKey = r.rlClient.APIKey
+		endpoint = r.rlClient.BaseURL()
 	} else {
 		apiKey = os.Getenv("RUNPOD_API_KEY")
-		endpoint = os.Getenv("RUNPOD_BASE_URL")
-		if endpoint == "" {
-			endpoint = "https://rest.runpod.io/v1"
-		}
+		endpoint = client.GetRestBaseURL()
 	}
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
@@ -866,4 +976,58 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to delete pod (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
+}
+
+var defaultSensitiveKeys = []string{
+	"env",
+	"REGISTRY_USER",
+	"REGISTRY_PASS",
+	"API_KEY",
+	"API_SECRET",
+	"SECRET",
+	"TOKEN",
+	"PASSWORD",
+	"passwd",
+	"ssh_key",
+	"private_key",
+	"certificate",
+}
+
+func redactRequestBody(body []byte) string {
+	return redactSensitiveFields(body, defaultSensitiveKeys)
+}
+
+func redactSensitiveFields(body []byte, sensitiveKeys []string) string {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(body, &obj); err != nil {
+		return "<failed to unmarshal body>"
+	}
+
+	for key := range obj {
+		if containsString(sensitiveKeys, key) {
+			if _, ok := obj[key].(string); ok {
+				obj[key] = "***REDACTED***"
+			} else if val, ok := obj[key].(map[string]interface{}); ok {
+				for k := range val {
+					val[k] = "***REDACTED***"
+				}
+				obj[key] = val
+			}
+		}
+	}
+
+	redacted, err := json.Marshal(obj)
+	if err != nil {
+		return "<failed to marshal redacted body>"
+	}
+	return string(redacted)
+}
+
+func containsString(slice []string, str string) bool {
+	for _, s := range slice {
+		if s == str {
+			return true
+		}
+	}
+	return false
 }

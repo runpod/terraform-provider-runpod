@@ -102,6 +102,7 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	m.Name = types.StringValue("my-pod")
 	m.ImageName = types.StringValue("img:latest")
 	m.GpuCount = types.Int64Value(2)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 	m.Interruptible = types.BoolValue(false)
 
 	sch := PodResourceSchema(context.Background())
@@ -111,8 +112,8 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotMethod != "POST" || gotPath != "/pods" {
-		t.Errorf("request = %s %s, want POST /pods", gotMethod, gotPath)
+	if gotMethod != "POST" || gotPath != "/v2/pods" {
+		t.Errorf("request = %s %s, want POST /v2/pods", gotMethod, gotPath)
 	}
 	// v2 format: flat fields with v2 names
 	if gotBody["image"] != "img:latest" {
@@ -137,11 +138,17 @@ func TestPodCreate_ImageName_BuildsBodyAndSetsID(t *testing.T) {
 }
 
 func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
-	var gotBody map[string]interface{}
+	var gotPodBody map[string]interface{}
+	
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/templates/tmpl-1" {
+			_, _ = w.Write([]byte(`{"image":"runpod/pytorch:2.1.1","args":"","ports":["8888/http","22/tcp"],"env":{"JUPYTER_PASSWORD":"test"},"disk":50,"mounts":{}}`))
+			return
+		}
+		
 		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &gotBody)
-			_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-tmpl"}},"meta":{"requestId":"test"},"error":null}`))
+		_ = json.Unmarshal(b, &gotPodBody)
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-tmpl"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -151,25 +158,31 @@ func TestPodCreate_TemplateID_BuildsBody(t *testing.T) {
 	m.Name = types.StringValue("tmpl-pod")
 	m.TemplateId = types.StringValue("tmpl-1")
 	m.GpuCount = types.Int64Value(1)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 
+	r := &PodResource{}
+	configureResourceWithTestClient(t, r, srv)
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
-	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	r.Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotBody["name"] != "tmpl-pod" {
-		t.Errorf("name = %v, want tmpl-pod", gotBody["name"])
+	if gotPodBody["name"] != "tmpl-pod" {
+		t.Errorf("name = %v, want tmpl-pod", gotPodBody["name"])
 	}
-	if gotBody["templateId"] != "tmpl-1" {
-		t.Errorf("templateId = %v, want tmpl-1", gotBody["templateId"])
+	if _, ok := gotPodBody["templateId"]; ok {
+		t.Errorf("templateId should not be present, got %v", gotPodBody["templateId"])
 	}
-	if gpu, ok := gotBody["gpu"].(map[string]interface{}); ok {
+	if gotPodBody["image"] != "runpod/pytorch:2.1.1" {
+		t.Errorf("image = %v, want runpod/pytorch:2.1.1", gotPodBody["image"])
+	}
+	if gpu, ok := gotPodBody["gpu"].(map[string]interface{}); ok {
 		if gpu["count"] != float64(1) {
 			t.Errorf("gpu.count = %v, want 1", gpu["count"])
 		}
 	} else {
-		t.Errorf("gpu object not found or not a map: %v", gotBody["gpu"])
+		t.Errorf("gpu object not found or not a map: %v", gotPodBody["gpu"])
 	}
 }
 
@@ -196,8 +209,8 @@ func TestPodRead_UsesConfiguredBaseURL(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotPath != "/pods/pod-1" {
-		t.Errorf("Read hit path %q, want /pods/pod-1 (CE-1650: must honor RUNPOD_BASE_URL)", gotPath)
+	if gotPath != "/v2/pods/pod-1" {
+		t.Errorf("Read hit path %q, want /v2/pods/pod-1 (CE-1650: must honor RUNPOD_BASE_URL)", gotPath)
 	}
 	var out PodModel
 	resp.State.Get(context.Background(), &out)
@@ -323,8 +336,8 @@ func TestPodUpdate_AppliesChanges(t *testing.T) {
 	if method != "PATCH" {
 		t.Errorf("expected PATCH, got %s", method)
 	}
-	if path != "/pods/pod-1" {
-		t.Errorf("expected /pods/pod-1, got %s", path)
+	if path != "/v2/pods/pod-1" {
+		t.Errorf("expected /v2/pods/pod-1, got %s", path)
 	}
 	if body["name"] != "changed-name" {
 		t.Errorf("expected name=changed-name in PATCH body, got %v", body)
@@ -479,9 +492,9 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 	m.Name = types.StringValue("p")
 	m.ImageName = types.StringValue("img")
 	m.GpuCount = types.Int64Value(1)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 	m.CloudType = types.StringValue("SECURE")
 	m.VolumeInGb = types.Float64Value(50)
-	m.NetworkVolumeId = types.StringValue("nv-1")
 	m.ContainerDiskInGb = types.Int64Value(20)
 	m.VolumeMountPath = types.StringValue("/data")
 	m.Interruptible = types.BoolValue(false)
@@ -515,28 +528,19 @@ func TestPodCreate_ValidAttributes(t *testing.T) {
 	if body["cloud"] != "SECURE" {
 		t.Errorf("cloud = %v, want SECURE", body["cloud"])
 	}
-	if mounts, ok := body["mounts"].([]interface{}); ok && len(mounts) > 0 {
-		if len(mounts) != 2 {
-			t.Errorf("mounts array length = %d, want 2", len(mounts))
-		}
-		// First mount is volumeInGb
-		mount0 := mounts[0].(map[string]interface{})
-		if mount0["volumeInGb"] != float64(50) {
-			t.Errorf("mounts[0].volumeInGb = %v, want 50", mount0["volumeInGb"])
-		}
-		if mount0["volumeMountPath"] != "/data" {
-			t.Errorf("mounts[0].volumeMountPath = %v, want /data", mount0["volumeMountPath"])
-		}
-		// Second mount is networkVolumeId
-		mount1 := mounts[1].(map[string]interface{})
-		if mount1["networkVolumeId"] != "nv-1" {
-			t.Errorf("mounts[1].networkVolumeId = %v, want nv-1", mount1["networkVolumeId"])
-		}
-		if mount1["volumeMountPath"] != "/data" {
-			t.Errorf("mounts[1].volumeMountPath = %v, want /data", mount1["volumeMountPath"])
-		}
-	} else {
-		t.Errorf("mounts array not found or not correct type: %v", body["mounts"])
+	mounts, ok := body["mounts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mounts object not found or not correct type: %v", body["mounts"])
+	}
+	pers, ok := mounts["persistent"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mounts.persistent not found: %v", mounts)
+	}
+	if pers["size"] != float64(50) {
+		t.Errorf("mounts.persistent.size = %v, want 50", pers["size"])
+	}
+	if pers["path"] != "/data" {
+		t.Errorf("mounts.persistent.path = %v, want /data", pers["path"])
 	}
 	if body["disk"] != float64(20) {
 		t.Errorf("disk = %v, want 20", body["disk"])
@@ -601,8 +605,10 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		defer srv.Close()
 		t.Setenv("RUNPOD_API_KEY", "testkey123")
 		t.Setenv("RUNPOD_BASE_URL", srv.URL)
-		resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
-		(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	r := &PodResource{}
+	configureResourceWithTestClient(t, r, srv)
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	r.Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 		if resp.Diagnostics.HasError() {
 			t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 		}
@@ -622,14 +628,15 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 			t.Errorf("cloud = %v, want SECURE", body["cloud"])
 		}
 		
-		if mounts, ok := body["mounts"].([]interface{}); ok && len(mounts) > 0 {
-			mount := mounts[0].(map[string]interface{})
-			if mount["volumeInGb"] != float64(50) {
-				t.Errorf("mounts[0].volumeInGb = %v, want 50", mount["volumeInGb"])
-			}
-		} else {
-			t.Errorf("mounts array not found or not correct type: %v", body["mounts"])
+		mounts, ok := body["mounts"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("mounts object not found: %v", body["mounts"])
 		}
+		pers, ok := mounts["persistent"].(map[string]interface{})
+		if !ok || pers["size"] != float64(50) {
+			t.Errorf("mounts.persistent = %v, want size=50", mounts["persistent"])
+		}
+
 	})
 
 	t.Run("cloud_type and volume absent when unset/zero", func(t *testing.T) {
@@ -666,8 +673,8 @@ func TestPodDelete_Success(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
-	if gotMethod != "DELETE" || gotPath != "/pods/pod-1" {
-		t.Errorf("request = %s %s, want DELETE /pods/pod-1", gotMethod, gotPath)
+	if gotMethod != "DELETE" || gotPath != "/v2/pods/pod-1" {
+		t.Errorf("request = %s %s, want DELETE /v2/pods/pod-1", gotMethod, gotPath)
 	}
 }
 
@@ -694,6 +701,11 @@ func TestPodDelete_Non204_Errors(t *testing.T) {
 func TestPodCreate_OmittedStartSshStartJupyter_DefaultsToFalse(t *testing.T) {
 	var gotBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/templates/tmpl-1" {
+			_, _ = w.Write([]byte(`{"image":"runpod/pytorch:2.1.1","args":"","ports":["8888/http","22/tcp"],"env":{},"disk":50,"mounts":{}}`))
+			return
+		}
+		
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
 		_, _ = w.Write([]byte(`{"id":"pod-1"}`))
@@ -706,6 +718,7 @@ func TestPodCreate_OmittedStartSshStartJupyter_DefaultsToFalse(t *testing.T) {
 	m.Name = types.StringValue("test-pod")
 	m.TemplateId = types.StringValue("tmpl-1")
 	m.GpuCount = types.Int64Value(1)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
 	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
@@ -731,37 +744,26 @@ func TestPodCreate_OmittedStartSshStartJupyter_DefaultsToFalse(t *testing.T) {
 	}
 }
 
-// TestPodCreate_MultipleNetworkVolumes verifies that Create properly handles
-// the network_volume_ids list field (multi-network volume support).
-func TestPodCreate_MultipleNetworkVolumes(t *testing.T) {
+// TestPodCreate_NetworkVolumeMount verifies the v2 network mount shape:
+// mounts = { network: [ { volumeId, path } ] } (maxItems 1 in v2 today).
+func TestPodCreate_NetworkVolumeMount(t *testing.T) {
 	var gotBody map[string]interface{}
-	var gotMounts []map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
-		if mounts, ok := gotBody["mounts"].([]interface{}); ok {
-			gotMounts = make([]map[string]interface{}, len(mounts))
-			for i, m := range mounts {
-				if mMap, ok := m.(map[string]interface{}); ok {
-					gotMounts[i] = mMap
-				}
-			}
-		}
-		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-multi-nv"}},"meta":{"requestId":"test"},"error":null}`))
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-nv"}},"meta":{"requestId":"test"},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
 
 	m := baseModelWithListTypes()
-	m.Name = types.StringValue("multi-nv-pod")
+	m.Name = types.StringValue("nv-pod")
 	m.ImageName = types.StringValue("img:latest")
 	m.GpuCount = types.Int64Value(1)
-	m.VolumeInGb = types.Float64Value(50)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
+	m.NetworkVolumeIds = strList("nv-1")
 	m.VolumeMountPath = types.StringValue("/data")
-
-	nvIds := strList("nv-1", "nv-2", "nv-3")
-	m.NetworkVolumeIds = nvIds
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
 	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
@@ -770,92 +772,49 @@ func TestPodCreate_MultipleNetworkVolumes(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// Verify mounts array contains both volumeInGb and all network volumes
-	if gotMounts == nil || len(gotMounts) != 4 {
-		t.Errorf("mounts array length = %d, want 4 (1 volumeInGb + 3 networkVolumeIds)", len(gotMounts))
+	mounts, ok := gotBody["mounts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mounts object not found: %v", gotBody["mounts"])
 	}
-
-	// First mount should be volumeInGb
-	mount0 := gotMounts[0]
-	if mount0["volumeInGb"] != float64(50) {
-		t.Errorf("mounts[0].volumeInGb = %v, want 50", mount0["volumeInGb"])
+	network, ok := mounts["network"].([]interface{})
+	if !ok || len(network) != 1 {
+		t.Fatalf("mounts.network = %v, want one entry", mounts)
 	}
-
-	// Next three mounts should be networkVolumeIds
-	if mount1 := gotMounts[1]; mount1["networkVolumeId"] != "nv-1" {
-		t.Errorf("mounts[1].networkVolumeId = %v, want nv-1", mount1["networkVolumeId"])
+	nm := network[0].(map[string]interface{})
+	if nm["volumeId"] != "nv-1" {
+		t.Errorf("mounts.network[0].volumeId = %v, want nv-1", nm["volumeId"])
 	}
-	if mount2 := gotMounts[2]; mount2["networkVolumeId"] != "nv-2" {
-		t.Errorf("mounts[2].networkVolumeId = %v, want nv-2", mount2["networkVolumeId"])
-	}
-	if mount3 := gotMounts[3]; mount3["networkVolumeId"] != "nv-3" {
-		t.Errorf("mounts[3].networkVolumeId = %v, want nv-3", mount3["networkVolumeId"])
-	}
-
-	// All mounts should share the same volumeMountPath
-	for i, m := range gotMounts {
-		if m["volumeMountPath"] != "/data" {
-			t.Errorf("mounts[%d].volumeMountPath = %v, want /data", i, m["volumeMountPath"])
-		}
+	if nm["path"] != "/data" {
+		t.Errorf("mounts.network[0].path = %v, want /data", nm["path"])
 	}
 }
 
-// TestPodRead_MultipleNetworkVolumes verifies that Read properly parses
-// the networkVolumeIds array from the API response.
-func TestPodRead_MultipleNetworkVolumes(t *testing.T) {
+// TestPodCreate_SecondNetworkVolumeRejected documents v2's maxItems-1 network mount.
+func TestPodCreate_SecondNetworkVolumeRejected(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{
-			"id":"pod-multi-nv","desiredStatus":"RUNNING",
-			"networkVolumeIds":[{"id":"nv-1"},{"id":"nv-2"},{"id":"nv-3"}]
-		}`))
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-nv-err"}},"meta":{},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
 
 	m := baseModelWithListTypes()
-	m.Id = types.StringValue("pod-multi-nv")
+	m.Name = types.StringValue("nv-err")
+	m.ImageName = types.StringValue("img:latest")
+	m.GpuCount = types.Int64Value(1)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
+	m.NetworkVolumeIds = strList("nv-1", "nv-2")
 
-	sch := PodResourceSchema(context.Background())
-	resp := &resource.ReadResponse{State: tfsdk.State{Schema: sch}}
-	(&PodResource{}).Read(context.Background(), resource.ReadRequest{State: podState(t, m)}, resp)
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
-	}
-
-	var out PodModel
-	resp.State.Get(context.Background(), &out)
-	if out.NetworkVolumeIds.IsNull() || len(out.NetworkVolumeIds.Elements()) != 3 {
-		t.Errorf("networkVolumeIds = %v, want 3 elements", out.NetworkVolumeIds)
-	}
-
-	// Extract values from elements map
-	var nvIds []string
-	for _, elem := range out.NetworkVolumeIds.Elements() {
-		if strVal, ok := elem.(types.String); ok {
-			nvIds = append(nvIds, strVal.ValueString())
-		}
-	}
-	
-	// Check that all expected IDs are present (order may vary)
-	expected := []string{"nv-1", "nv-2", "nv-3"}
-	for _, exp := range expected {
-		found := false
-		for _, got := range nvIds {
-			if got == exp {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("networkVolumeIds missing %s, got %v", exp, nvIds)
-		}
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected Invalid Configuration for 2 network volumes")
 	}
 }
 
-// TestPodCreate_WithSingleNetworkVolume verifies backward compatibility with
-// the deprecated network_volume_id field (single volume).
+// TestPodCreate_WithSingleNetworkVolume verifies the deprecated scalar maps to
+// the v2 network mount (mutex with volume_in_gb).
 func TestPodCreate_WithSingleNetworkVolume(t *testing.T) {
 	var gotBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -871,9 +830,7 @@ func TestPodCreate_WithSingleNetworkVolume(t *testing.T) {
 	m.Name = types.StringValue("single-nv-pod")
 	m.ImageName = types.StringValue("img:latest")
 	m.GpuCount = types.Int64Value(1)
-	m.VolumeInGb = types.Float64Value(50)
-
-	// Use the deprecated network_volume_id field
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 	m.NetworkVolumeId = types.StringValue("nv-single")
 	m.VolumeMountPath = types.StringValue("/data")
 
@@ -884,33 +841,24 @@ func TestPodCreate_WithSingleNetworkVolume(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// Verify mounts array contains both volume and network volume
-	if mounts, ok := gotBody["mounts"].([]interface{}); ok {
-		if len(mounts) != 2 {
-			t.Errorf("mounts array length = %d, want 2 (1 volumeInGb + 1 networkVolumeId)", len(mounts))
-		}
-
-		// Second mount should be networkVolumeId
-		mount1 := mounts[1].(map[string]interface{})
-		if mount1["networkVolumeId"] != "nv-single" {
-			t.Errorf("mounts[1].networkVolumeId = %v, want nv-single", mount1["networkVolumeId"])
-		}
-		if mount1["volumeMountPath"] != "/data" {
-			t.Errorf("mounts[1].volumeMountPath = %v, want /data", mount1["volumeMountPath"])
-		}
-	} else {
-		t.Errorf("mounts array not found or not correct type: %v", gotBody["mounts"])
+	mounts, ok := gotBody["mounts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mounts object not found: %v", gotBody["mounts"])
+	}
+	network, ok := mounts["network"].([]interface{})
+	if !ok || len(network) != 1 {
+		t.Fatalf("mounts.network = %v, want one entry", mounts)
+	}
+	if nm := network[0].(map[string]interface{}); nm["volumeId"] != "nv-single" {
+		t.Errorf("mounts.network[0].volumeId = %v, want nv-single", nm["volumeId"])
 	}
 }
 
-// TestPodCreate_MixedNetworkVolumeFields verifies that when both network_volume_id
-// and network_volume_ids are provided, both are included in the request.
+// TestPodCreate_MixedNetworkVolumeFields documents that combining the
+// deprecated scalar network_volume_id with the list exceeds v2's limit.
 func TestPodCreate_MixedNetworkVolumeFields(t *testing.T) {
-	var gotBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(b, &gotBody)
-		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-mixed-nv"}},"meta":{"requestId":"test"},"error":null}`))
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-mixed-nv"}},"meta":{},"error":null}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
@@ -920,65 +868,37 @@ func TestPodCreate_MixedNetworkVolumeFields(t *testing.T) {
 	m.Name = types.StringValue("mixed-nv-pod")
 	m.ImageName = types.StringValue("img:latest")
 	m.GpuCount = types.Int64Value(1)
+	m.GpuTypeId = types.StringValue("NVIDIA A100 80GB")
 
-	// Use both fields
 	m.NetworkVolumeId = types.StringValue("nv-old")
-	m.NetworkVolumeIds = strList("nv-new-1", "nv-new-2")
+	m.NetworkVolumeIds = strList("nv-new-1")
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
 	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
 
-	if resp.Diagnostics.HasError() {
-		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
-	}
-
-	// Verify mounts array contains both single and multiple network volumes
-	if mounts, ok := gotBody["mounts"].([]interface{}); ok {
-		if len(mounts) != 3 {
-			t.Errorf("mounts array length = %d, want 3 (1 volumeInGb + 3 networkVolumeIds)", len(mounts))
-		}
-
-		// First network volume (deprecated field)
-		mount0 := mounts[0].(map[string]interface{})
-		if mount0["networkVolumeId"] != "nv-old" {
-			t.Errorf("mounts[0].networkVolumeId = %v, want nv-old", mount0["networkVolumeId"])
-		}
-
-		// Second and third network volumes (list field)
-		mount1 := mounts[1].(map[string]interface{})
-		if mount1["networkVolumeId"] != "nv-new-1" {
-			t.Errorf("mounts[1].networkVolumeId = %v, want nv-new-1", mount1["networkVolumeId"])
-		}
-		mount2 := mounts[2].(map[string]interface{})
-		if mount2["networkVolumeId"] != "nv-new-2" {
-			t.Errorf("mounts[2].networkVolumeId = %v, want nv-new-2", mount2["networkVolumeId"])
-		}
-	} else {
-		t.Errorf("mounts array not found or not correct type: %v", gotBody["mounts"])
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected Invalid Configuration: combined fields exceed v2's one-network-volume limit")
 	}
 }
 
-// TestPodUpdate_MultipleNetworkVolumes verifies that Update properly handles
-// the network_volume_ids list field.
-func TestPodUpdate_MultipleNetworkVolumes(t *testing.T) {
+// TestPodUpdate_NetworkVolume verifies Update builds the v2 network mount.
+func TestPodUpdate_NetworkVolume(t *testing.T) {
 	var gotBody map[string]interface{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(b, &gotBody)
-		_, _ = w.Write([]byte(`{"id":"pod-multi-nv"}`))
+		_, _ = w.Write([]byte(`{"id":"pod-single-nv"}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
 	t.Setenv("RUNPOD_BASE_URL", srv.URL)
 
 	prior := baseModelWithListTypes()
-	prior.Id = types.StringValue("pod-multi-nv")
+	prior.Id = types.StringValue("pod-single-nv")
 
 	desired := baseModelWithListTypes()
-	desired.Id = types.StringValue("pod-multi-nv")
-
-	// Set network_volume_ids in desired config
-	desired.NetworkVolumeIds = strList("nv-1", "nv-2")
+	desired.Id = types.StringValue("pod-single-nv")
+	desired.NetworkVolumeIds = strList("nv-1")
 
 	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
 	(&PodResource{}).Update(context.Background(), resource.UpdateRequest{
@@ -990,9 +910,16 @@ func TestPodUpdate_MultipleNetworkVolumes(t *testing.T) {
 		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
 	}
 
-	// Verify networkVolumeIds is in PATCH body
-	if nvIds, ok := gotBody["networkVolumeIds"].([]interface{}); !ok || len(nvIds) != 2 {
-		t.Errorf("networkVolumeIds in PATCH body = %v, want 2 elements", gotBody["networkVolumeIds"])
+	mounts, ok := gotBody["mounts"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("mounts not in PATCH body: %v", gotBody)
+	}
+	network, ok := mounts["network"].([]interface{})
+	if !ok || len(network) != 1 {
+		t.Fatalf("mounts.network = %v, want one entry", mounts)
+	}
+	if nm := network[0].(map[string]interface{}); nm["volumeId"] != "nv-1" {
+		t.Errorf("mounts.network[0].volumeId = %v, want nv-1", nm["volumeId"])
 	}
 }
 

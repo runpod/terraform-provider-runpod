@@ -14,8 +14,8 @@ func PodActionResourceSchema(ctx context.Context) schema.Schema {
 		Attributes: map[string]schema.Attribute{
 			"action": schema.StringAttribute{
 				Required:            true,
-				Description:         "Action to perform: stop, resume, terminate, reset",
-				MarkdownDescription: "Action to perform: stop, resume, terminate, reset",
+				Description:         "Action to perform: start, stop, restart, terminate",
+				MarkdownDescription: "Action to perform: start, stop, restart, terminate",
 			},
 			"pod_id": schema.StringAttribute{
 				Required:            true,

@@ -55,17 +55,16 @@ func createForAction(t *testing.T, action, status string) (PodActionModel, resou
 }
 
 // TestPodActionCreate_AllActionsSetStatus exercises the success-path status
-// extraction for every action variant. Each asserts Status is populated from
+// extraction for every v2 action variant. Each asserts Status is populated from
 // the REST response's status field.
 func TestPodActionCreate_AllActionsSetStatus(t *testing.T) {
 	cases := []struct {
 		action string
 		status string
 	}{
+		{"start", "RUNNING"},
 		{"stop", "STOPPED"},
-		{"resume", "RUNNING"},
 		{"restart", "RESTARTING"},
-		{"reset", "RESET"},
 		{"terminate", "TERMINATED"},
 	}
 	for _, tc := range cases {

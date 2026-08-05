@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -43,7 +42,7 @@ func (r *PodActionResource) Configure(ctx context.Context, req resource.Configur
 		r.baseURL = os.Getenv("RUNPOD_BASE_URL")
 	}
 	if r.baseURL == "" {
-		r.baseURL = "https://api.runpod.io/v2"
+		r.baseURL = client.GetRestBaseURL()
 	}
 	
 	// Initialize httpClient if not already set
@@ -71,17 +70,17 @@ func (r *PodActionResource) Create(ctx context.Context, req resource.CreateReque
 	action := config.Action.ValueString()
 	podID := config.PodId.ValueString()
 
-	// Validate action
+	// Validate action (POST /v2/pods/{id}/action accepts exactly these)
 	validActions := map[string]bool{
-		"stop": true, "resume": true, "restart": true, "reset": true, "terminate": true,
+		"start": true, "stop": true, "restart": true, "terminate": true,
 	}
 	if !validActions[action] {
-		resp.Diagnostics.AddError("Invalid Action", "Action must be one of: stop, resume, restart, reset, terminate")
+		resp.Diagnostics.AddError("Invalid Action", "Action must be one of: start, stop, restart, terminate")
 		return
 	}
 
 	// Build REST API URL for pod actions
-	url := strings.TrimSuffix(r.baseURL, "/") + "/pods/" + podID + "/actions"
+	url := client.NormalizeRestBaseURL(r.baseURL) + "/pods/" + podID + "/action"
 
 	// Build request body with action
 	body := map[string]interface{}{

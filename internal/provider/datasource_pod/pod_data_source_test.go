@@ -12,25 +12,20 @@ import (
 )
 
 // Correct behavior for the pod data source Read: given a valid response, it
-// populates state (e.g. name) with no diagnostics error.
-//
-// Currently blocked by a pre-existing defect: Read sets Env to an uninitialized
-// types.List{} (nil element type) before State.Set (pod_data_source.go). The
-// framework rejects that — it panicked under terraform-plugin-framework v1.2 and
-// returns a diagnostics error under v1.19 — so a clean Read is impossible until
-// the source is fixed (e.g. types.ListNull(types.StringType)). Skipped (asserts
-// the correct outcome, framework-version agnostic); un-skip when fixed.
+// TestPodDataSourceRead_PopulatesState stubs the GraphQL pod endpoint and
+// asserts a clean Read. The query uses the fields the live schema actually has:
+// status comes from desiredStatus, created_at from lastStatusChange, and
+// gpu_type_id from machine.gpuType.id (null-safe while transitioning).
 func TestPodDataSourceRead_PopulatesState(t *testing.T) {
-	t.Skip("pod data source Read sets Env to an uninitialized types.List{} (nil element type), which State.Set rejects — un-skip when fixed")
-
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"data":{"pod":{
-			"id":"p1","name":"my-pod","status":"RUNNING","desiredStatus":"RUNNING",
+			"id":"p1","name":"my-pod","desiredStatus":"RUNNING",
 			"imageName":"runpod/base:latest","machineId":"m1","machineType":"NVIDIA",
-			"gpuTypeId":"NVIDIA A100 80GB","gpuCount":2,"costPerHr":1.89,"memoryInGb":128,
+			"machine":{"gpuType":{"id":"NVIDIA A100 80GB"}},
+			"gpuCount":2,"costPerHr":1.89,"memoryInGb":128,
 			"volumeInGb":50,"volumeMountPath":"/workspace","volumeKey":"vk1",
-			"ports":"8888/http","created_at":"2024-01-01T00:00:00Z","dockerArgs":"",
-			"env":[],"templateId":"t1","containerDiskInGb":20
+			"ports":"8888/http","lastStatusChange":"Rented by User: Mon Jan 1 2024",
+			"dockerArgs":"","env":[],"templateId":"t1","containerDiskInGb":20
 		}}}`))
 	}))
 	defer srv.Close()
@@ -55,5 +50,14 @@ func TestPodDataSourceRead_PopulatesState(t *testing.T) {
 	}
 	if m.Name.ValueString() != "my-pod" {
 		t.Errorf("state Name = %q, want my-pod", m.Name.ValueString())
+	}
+	if m.Status.ValueString() != "RUNNING" {
+		t.Errorf("state Status = %q, want RUNNING (mapped from desiredStatus)", m.Status.ValueString())
+	}
+	if m.GpuTypeId.ValueString() != "NVIDIA A100 80GB" {
+		t.Errorf("state GpuTypeId = %q, want NVIDIA A100 80GB (mapped from machine.gpuType.id)", m.GpuTypeId.ValueString())
+	}
+	if m.CreatedAt.ValueString() != "Rented by User: Mon Jan 1 2024" {
+		t.Errorf("state CreatedAt = %q, want lastStatusChange value", m.CreatedAt.ValueString())
 	}
 }

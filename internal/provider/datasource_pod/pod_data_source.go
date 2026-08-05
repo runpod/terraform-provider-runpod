@@ -2,6 +2,9 @@ package datasource_pod
 
 import (
 	"context"
+	"os"
+
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/runpod/terraform-provider-runpod/internal/provider/client"
@@ -12,13 +15,26 @@ func NewPodDataSource() datasource.DataSource {
 }
 
 type PodDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *PodDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
+}
+
+func (d *PodDataSource) getClient() *client.RunPodClient {
+	if d.rlClient != nil {
+		return d.rlClient
+	}
+	apiKey := os.Getenv("RUNPOD_API_KEY")
+	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
+	if endpoint == "" {
+		endpoint = "https://api.runpod.io/graphql"
+	}
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, "")
+	return d.rlClient
 }
 
 func (d *PodDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -42,12 +58,10 @@ func (d *PodDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 			pod(input: { podId: $podId }) {
 				id
 				name
-				status
 				desiredStatus
 				imageName
 				machineId
 				machineType
-				gpuTypeId
 				gpuCount
 				costPerHr
 				memoryInGb
@@ -55,11 +69,12 @@ func (d *PodDataSource) Read(ctx context.Context, req datasource.ReadRequest, re
 				volumeMountPath
 				volumeKey
 				ports
-				created_at
+				lastStatusChange
 				dockerArgs
 				env
 				templateId
 				containerDiskInGb
+				machine { gpuType { id } }
 			}
 		}
 	`
@@ -68,145 +83,81 @@ variables := map[string]interface{}{
 		"podId": config.Id.ValueString(),
 	}
 
-	if d.client == nil {
-		resp.Diagnostics.AddError("Client not configured", "RunPod client is not configured")
-		return
+	if d.rlClient == nil {
+		d.rlClient = d.getClient()
 	}
-	result, err := d.client.Query(ctx, query, variables)
+	result, err := d.rlClient.Query(ctx, query, variables)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return
 	}
 
 	if pod, ok := result["pod"].(map[string]interface{}); ok {
-		envListValue := types.List{}
-		if diags.HasError() {
-			resp.Diagnostics.Append(diags...)
-			return
+		envListValue := types.ListNull(types.StringType)
+		if envArr, ok := pod["env"].([]interface{}); ok && len(envArr) > 0 {
+			elements := make([]attr.Value, 0, len(envArr))
+			for _, e := range envArr {
+				if s, ok := e.(string); ok {
+					elements = append(elements, types.StringValue(s))
+				}
+			}
+			if len(elements) > 0 {
+				if lv, d := types.ListValue(types.StringType, elements); !d.HasError() {
+					envListValue = lv
+				} else {
+					resp.Diagnostics.Append(d...)
+					return
+				}
+			}
 		}
-		
-		var name, status, desiredStatus, imageName, machineId, machineType, gpuTypeId, ports, createdAt, dockerArgs, templateId, volumeMountPath string
-		var gpuCount, costPerHr, memoryInGb, volumeInGb, containerDiskInGb float64
-		
-		if v, ok := pod["name"].(string); ok {
-			name = v
-		} else {
+		// Only 'name' is guaranteed on a pod; all other fields may be null
+		// (e.g. no machine while transitioning, no volume attached, no template).
+		strOr := func(key string) string {
+			if v, ok := pod[key].(string); ok {
+				return v
+			}
+			return ""
+		}
+		f64Or := func(key string) float64 {
+			if v, ok := pod[key].(float64); ok {
+				return v
+			}
+			return 0
+		}
+
+		if strOr("name") == "" {
 			resp.Diagnostics.AddError("API Error", "Field 'name' is missing or not a string in pod response")
 			return
 		}
-		
-		if v, ok := pod["status"].(string); ok {
-			status = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'status' is missing or not a string in pod response")
-			return
+
+		// v2 pods report GPU type on the owning machine; null while pod is transitioning
+		gpuTypeId := ""
+		if m, ok := pod["machine"].(map[string]interface{}); ok {
+			if gt, ok := m["gpuType"].(map[string]interface{}); ok {
+				if v, ok := gt["id"].(string); ok {
+					gpuTypeId = v
+				}
+			}
 		}
-		
-		if v, ok := pod["desiredStatus"].(string); ok {
-			desiredStatus = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'desiredStatus' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["imageName"].(string); ok {
-			imageName = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'imageName' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["machineId"].(string); ok {
-			machineId = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'machineId' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["machineType"].(string); ok {
-			machineType = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'machineType' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["gpuTypeId"].(string); ok {
-			gpuTypeId = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'gpuTypeId' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["gpuCount"].(float64); ok {
-			gpuCount = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'gpuCount' is missing or not a float64 in pod response")
-			return
-		}
-		
-		if v, ok := pod["costPerHr"].(float64); ok {
-			costPerHr = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'costPerHr' is missing or not a float64 in pod response")
-			return
-		}
-		
-		if v, ok := pod["memoryInGb"].(float64); ok {
-			memoryInGb = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'memoryInGb' is missing or not a float64 in pod response")
-			return
-		}
-		
-		if v, ok := pod["volumeInGb"].(float64); ok {
-			volumeInGb = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'volumeInGb' is missing or not a float64 in pod response")
-			return
-		}
-		
-		if v, ok := pod["volumeMountPath"].(string); ok {
-			volumeMountPath = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'volumeMountPath' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["ports"].(string); ok {
-			ports = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'ports' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["created_at"].(string); ok {
-			createdAt = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'created_at' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["dockerArgs"].(string); ok {
-			dockerArgs = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'dockerArgs' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["templateId"].(string); ok {
-			templateId = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'templateId' is missing or not a string in pod response")
-			return
-		}
-		
-		if v, ok := pod["containerDiskInGb"].(float64); ok {
-			containerDiskInGb = v
-		} else {
-			resp.Diagnostics.AddError("API Error", "Field 'containerDiskInGb' is missing or not a float64 in pod response")
-			return
-		}
-		
+
+		name := strOr("name")
+		status := strOr("desiredStatus")     // GraphQL has no 'status'; desiredStatus is closest
+		desiredStatus := strOr("desiredStatus")
+		imageName := strOr("imageName")
+		machineId := strOr("machineId")
+		machineType := strOr("machineType")
+		ports := strOr("ports")
+		createdAt := strOr("lastStatusChange") // GraphQL has no created_at; nearest lifecycle stamp
+		dockerArgs := strOr("dockerArgs")
+		templateId := strOr("templateId")
+		volumeMountPath := strOr("volumeMountPath")
+		gpuCount := f64Or("gpuCount")
+		costPerHr := f64Or("costPerHr")
+		memoryInGb := f64Or("memoryInGb")
+		volumeInGb := f64Or("volumeInGb")
+		containerDiskInGb := f64Or("containerDiskInGb")
+
+
 		model := PodModel{
 			Id:                config.Id,
 			Name:              types.StringValue(name),

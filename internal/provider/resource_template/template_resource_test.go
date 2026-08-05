@@ -133,7 +133,7 @@ func TestTemplateResource_Create_Success(t *testing.T) {
 	if gotMethod != "POST" {
 		t.Errorf("method = %q, want POST", gotMethod)
 	}
-	if gotPath != "/templates" {
+	if gotPath != "/v2/templates" {
 		t.Errorf("path = %q, want /templates", gotPath)
 	}
 	if gotAuth != "Bearer testkey123" {
@@ -370,8 +370,8 @@ func TestTemplateResource_Read_Success(t *testing.T) {
 	if gotMethod != "GET" {
 		t.Errorf("method = %q, want GET", gotMethod)
 	}
-	if gotPath != "/templates/tpl-1" {
-		t.Errorf("path = %q, want /templates/tpl-1", gotPath)
+	if gotPath != "/v2/templates/tpl-1" {
+		t.Errorf("path = %q, want /v2/v2/templates/tpl-1", gotPath)
 	}
 
 	var state TemplateModel
@@ -445,8 +445,8 @@ func TestTemplateResource_Update_RetainsApiComputedFields(t *testing.T) {
 	if gotMethod != "PATCH" {
 		t.Errorf("method = %q, want PATCH", gotMethod)
 	}
-	if gotPath != "/templates/tpl-1" {
-		t.Errorf("path = %q, want /templates/tpl-1", gotPath)
+	if gotPath != "/v2/templates/tpl-1" {
+		t.Errorf("path = %q, want /v2/v2/templates/tpl-1", gotPath)
 	}
 	if gotBody["name"] != "updated-name" {
 		t.Errorf("body name = %v, want updated-name", gotBody["name"])
@@ -546,8 +546,8 @@ func TestTemplateResource_Delete_Success(t *testing.T) {
 	if gotMethod != "DELETE" {
 		t.Errorf("method = %q, want DELETE", gotMethod)
 	}
-	if gotPath != "/templates/tpl-1" {
-		t.Errorf("path = %q, want /templates/tpl-1", gotPath)
+	if gotPath != "/v2/templates/tpl-1" {
+		t.Errorf("path = %q, want /v2/v2/templates/tpl-1", gotPath)
 	}
 }
 

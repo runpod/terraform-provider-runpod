@@ -19,18 +19,18 @@ func NewEcrDelegationsDataSource() datasource.DataSource {
 }
 
 type EcrDelegationsDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *EcrDelegationsDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *EcrDelegationsDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -41,8 +41,8 @@ func (d *EcrDelegationsDataSource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	d.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return d.rlClient
 }
 
 func (d *EcrDelegationsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -60,7 +60,7 @@ func (d *EcrDelegationsDataSource) Read(ctx context.Context, req datasource.Read
 		return
 	}
 
-	url := d.getClient().RestBaseURL + "/registries/delegations"
+	url := d.getClient().BaseURL() + "/registries/delegations"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -102,12 +102,16 @@ func (d *EcrDelegationsDataSource) Read(ctx context.Context, req datasource.Read
 	}
 
 	var delegations []map[string]interface{}
+	// v2 returns the list at the top level: {"delegations": [...]}; tolerate a
+	// {data: {...}} envelope too
+	source := envelope
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
-		if delegationsList, ok := data["delegations"].([]interface{}); ok {
-			for _, d := range delegationsList {
-				if delegation, ok := d.(map[string]interface{}); ok {
-					delegations = append(delegations, delegation)
-				}
+		source = data
+	}
+	if delegationsList, ok := source["delegations"].([]interface{}); ok {
+		for _, d := range delegationsList {
+			if delegation, ok := d.(map[string]interface{}); ok {
+				delegations = append(delegations, delegation)
 			}
 		}
 	} else {

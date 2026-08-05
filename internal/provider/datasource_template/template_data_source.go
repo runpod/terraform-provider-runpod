@@ -18,18 +18,18 @@ func NewTemplateDataSource() datasource.DataSource {
 }
 
 type TemplateDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *TemplateDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *TemplateDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -40,8 +40,8 @@ func (d *TemplateDataSource) getClient() *client.RunPodClient {
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	d.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return d.rlClient
 }
 
 func (d *TemplateDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -60,10 +60,10 @@ func (d *TemplateDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	client := d.getClient()
+	rlClient := d.getClient()
 
 	// Use v2 REST endpoint: GET /v2/templates/{templateId}
-	url := client.RestBaseURL + "/templates/" + config.Id.ValueString()
+	url := rlClient.GetTemplateURL(config.Id.ValueString())
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -72,7 +72,7 @@ func (d *TemplateDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

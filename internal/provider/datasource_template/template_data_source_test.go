@@ -28,8 +28,8 @@ func TestTemplateDataSourceRead_PopulatesState(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("method: got %q, want GET", r.Method)
 		}
-		if r.URL.Path != "/templates/tmpl-123" {
-			t.Errorf("path: got %q, want /templates/tmpl-123", r.URL.Path)
+		if r.URL.Path != "/v2/templates/tmpl-123" {
+			t.Errorf("path: got %q, want /v2/templates/tmpl-123", r.URL.Path)
 		}
 
 		// Check Authorization header

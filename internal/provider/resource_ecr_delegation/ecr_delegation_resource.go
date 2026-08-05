@@ -20,18 +20,25 @@ func NewEcrDelegationResource() resource.Resource {
 }
 
 type EcrDelegationResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EcrDelegationResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.rlClient = &client.RunPodClient{
+				APIKey:     clientWrapper.APIKey,
+				RestBaseURL: clientWrapper.RestBaseURL,
+			}
+		} else if rlClient, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.rlClient = rlClient
+		}
 	}
 }
 
 func (r *EcrDelegationResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -40,10 +47,10 @@ func (r *EcrDelegationResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = client.GetRestBaseURL()
 	}
-	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return r.rlClient
 }
 
 func (r *EcrDelegationResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -68,7 +75,7 @@ func (r *EcrDelegationResource) Create(ctx context.Context, req resource.CreateR
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations"
+	url := r.getClient().BaseURL() + "/registries/delegations"
 
 	body := map[string]interface{}{
 		"resource": config.Resource.ValueString(),
@@ -192,7 +199,7 @@ func (r *EcrDelegationResource) Read(ctx context.Context, req resource.ReadReque
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations"
+	url := r.getClient().BaseURL() + "/registries/delegations"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -229,12 +236,16 @@ func (r *EcrDelegationResource) Read(ctx context.Context, req resource.ReadReque
 	}
 
 	var delegations []map[string]interface{}
+	// v2 returns the list at the top level: {"delegations": [...]}; tolerate a
+	// {data: {...}} envelope too
+	source := envelope
 	if data, ok := envelope["data"].(map[string]interface{}); ok {
-		if delegationsList, ok := data["delegations"].([]interface{}); ok {
-			for _, d := range delegationsList {
-				if delegation, ok := d.(map[string]interface{}); ok {
-					delegations = append(delegations, delegation)
-				}
+		source = data
+	}
+	if delegationsList, ok := source["delegations"].([]interface{}); ok {
+		for _, d := range delegationsList {
+			if delegation, ok := d.(map[string]interface{}); ok {
+				delegations = append(delegations, delegation)
 			}
 		}
 	} else {
@@ -306,7 +317,7 @@ func (r *EcrDelegationResource) Delete(ctx context.Context, req resource.DeleteR
 		return
 	}
 
-	url := r.getClient().RestBaseURL + "/registries/delegations/" + state.Id.ValueString()
+	url := r.getClient().BaseURL() + "/registries/delegations/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {

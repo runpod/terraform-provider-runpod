@@ -5,42 +5,42 @@ import (
 	"log"
 	"os"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
-	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 
-	resource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod"
-	resource_pod_action "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod_action"
-	resource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/resource_machine"
-	resource_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/resource_network_volume"
+	resource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/resource_container_registry_auth"
+	resource_ecr_delegation "github.com/runpod/terraform-provider-runpod/internal/provider/resource_ecr_delegation"
 	resource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint"
 	resource_endpoint_job "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint_job"
 	resource_endpoint_worker "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint_worker"
+	resource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/resource_machine"
+	resource_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/resource_network_volume"
+	resource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod"
+	resource_pod_action "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod_action"
 	resource_template "github.com/runpod/terraform-provider-runpod/internal/provider/resource_template"
-	resource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/resource_container_registry_auth"
-	resource_ecr_delegation "github.com/runpod/terraform-provider-runpod/internal/provider/resource_ecr_delegation"
 
-	datasource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_pod"
+	datasource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_container_registry_auth"
+	datasource_data_centers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_data_centers"
+	datasource_ecr_delegations "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_ecr_delegations"
+	datasource_gpu_types "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_gpu_types"
 	datasource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_machine"
 	datasource_machines "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_machines"
-	datasource_gpu_types "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_gpu_types"
-	datasource_data_centers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_data_centers"
-	datasource_user "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_user"
+	datasource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_pod"
 	datasource_template "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_template"
-	datasource_container_registry_auth "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_container_registry_auth"
-	datasource_ecr_delegations "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_ecr_delegations"
+	datasource_user "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_user"
 
+	datasource_endpoint_worker_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_worker_logs"
+	datasource_endpoint_workers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_workers"
 	datasource_endpoint_jobs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_jobs"
 	datasource_endpoint_job_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_job_logs"
-	datasource_endpoint_workers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_workers"
-	datasource_endpoint_worker_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_worker_logs"
 
-	datasource_billing_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_pod"
-	datasource_billing_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_network_volume"
 	datasource_billing_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_endpoint"
+	datasource_billing_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_network_volume"
+	datasource_billing_pod "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_pod"
 
 	client "github.com/runpod/terraform-provider-runpod/internal/provider/client"
 )
@@ -139,7 +139,7 @@ func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	}
 
 	p.client = client.NewRunPodClient(p.apiKey, p.graphqlUrl, p.baseUrl)
-	
+
 	// Pass client wrapper for pod_action resource (uses REST only)
 	clientWrapper := &client.RunPodClientWrapper{
 		APIKey:      p.apiKey,

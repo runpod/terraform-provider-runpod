@@ -19,8 +19,8 @@ func TestContainerRegistryAuthDataSourceRead_PopulatesState(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET method, got %q", r.Method)
 		}
-		if r.URL.Path != "/registries" {
-			t.Errorf("expected path /registries, got %q", r.URL.Path)
+		if r.URL.Path != "/v2/registries" {
+			t.Errorf("expected path /v2/registries, got %q", r.URL.Path)
 		}
 		// Verify Bearer token
 		auth := r.Header.Get("Authorization")

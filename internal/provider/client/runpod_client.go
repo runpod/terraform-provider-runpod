@@ -101,7 +101,7 @@ func (c *RunPodClient) QueryRaw(ctx context.Context, query string) (map[string]i
 }
 
 func (c *RunPodClient) RestQuery(ctx context.Context, method, path string, params map[string]string) (map[string]interface{}, error) {
-	url := GetRestBaseURL() + "/" + path
+	url := c.BaseURL() + "/" + strings.TrimPrefix(path, "/")
 	
 	if len(params) > 0 {
 		queryParts := make([]string, 0, len(params))
@@ -179,4 +179,8 @@ func formatHex(n int) string {
 		return "0" + result
 	}
 	return result
+}
+
+var DefaultHTTPClient = &http.Client{
+	Timeout: 60 * time.Second,
 }

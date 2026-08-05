@@ -652,6 +652,26 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 			t.Error("volumeInGb should be absent when zero")
 		}
 	})
+	t.Run("volumeEncrypted present when set", func(t *testing.T) {
+		m := baseModelWithListTypes()
+		m.Name = types.StringValue("p")
+		m.ImageName = types.StringValue("img")
+		m.VolumeEncrypted = types.BoolValue(true)
+		body := capture(t, m)
+		if body["volumeEncrypted"] != true {
+			t.Errorf("volumeEncrypted = %v, want true", body["volumeEncrypted"])
+		}
+	})
+
+	t.Run("volumeEncrypted absent when unset", func(t *testing.T) {
+		m := baseModelWithListTypes()
+		m.Name = types.StringValue("p")
+		m.ImageName = types.StringValue("img")
+		body := capture(t, m)
+		if _, ok := body["volumeEncrypted"]; ok {
+			t.Error("volumeEncrypted should be absent when not set")
+		}
+	})
 }
 
 func TestPodDelete_Success(t *testing.T) {

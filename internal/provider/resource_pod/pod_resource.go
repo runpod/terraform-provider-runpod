@@ -295,6 +295,10 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 	}
 
+	if !config.VolumeEncrypted.IsNull() {
+		body["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
+	}
+
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
 		body["disk"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}

@@ -79,7 +79,6 @@ func TestEndpointCreate_AllScalars(t *testing.T) {
 	m.ScalerValue = types.Int64Value(4)
 	m.ExecutionTimeoutMs = types.Int64Value(600000)
 	m.Flashboot = types.BoolValue(true)
-	m.MinCudaVersion = types.StringValue("12.0")
 	m.GpuTypePriority = types.StringValue("availability")
 	m.CpuFlavorPriority = types.StringValue("cost")
 	m.NetworkVolumeId = types.StringValue("nv-1")
@@ -100,7 +99,7 @@ func TestEndpointCreate_AllScalars(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Create errored: %v", resp.Diagnostics.Errors())
 	}
-	for _, k := range []string{"computeType", "gpu", "vcpuCount", "workersMin", "workersMax", "idleTimeout", "scalerType", "scalerValue", "executionTimeoutMs", "flashboot", "minCudaVersion", "networkVolumeId"} {
+	for _, k := range []string{"gpu", "workers", "scaling", "timeout", "flashboot", "networkVolumes", "type"} {
 		if _, ok := body[k]; !ok {
 			t.Errorf("POST body missing %q; got %v", k, body)
 		}

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -21,18 +22,27 @@ func NewEndpointResource() resource.Resource {
 }
 
 type EndpointResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.rlClient = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.rlClient = client
+		}
 	}
 }
 
 func (r *EndpointResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	endpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
@@ -41,14 +51,98 @@ func (r *EndpointResource) getClient() *client.RunPodClient {
 	}
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
-		baseURL = "https://api.runpod.io/v2"
+		baseURL = "https://api.runpod.io"
 	}
-	r.client = client.NewRunPodClient(apiKey, endpoint, baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, endpoint, baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = "runpod_endpoint"
+}
+
+// resolveGpuPool maps a GPU type id (e.g. "NVIDIA A100-SXM-80GB") to the
+// serverless GPU pool id the v2 endpoint API expects (e.g. "AMPERE_80"),
+// via GET /v2/catalog/gpus. If the input is already a pool id it passes through.
+func resolveGpuPool(ctx context.Context, c *client.RunPodClient, gpuTypeId string) (string, error) {
+	url := c.BaseURL() + "/catalog/gpus"
+	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create catalog request: %v", err)
+	}
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.APIKey))
+	respHTTP, err := client.DefaultHTTPClient.Do(reqHTTP)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch GPU catalog: %v", err)
+	}
+	defer respHTTP.Body.Close()
+	if respHTTP.StatusCode != 200 {
+		return "", fmt.Errorf("GPU catalog fetch failed (status %d)", respHTTP.StatusCode)
+	}
+	var envelope struct {
+		Gpus []struct {
+			Id   string  `json:"id"`
+			Pool *string `json:"pool"`
+		} `json:"gpus"`
+	}
+	if err := json.NewDecoder(respHTTP.Body).Decode(&envelope); err != nil {
+		return "", fmt.Errorf("failed to parse GPU catalog: %v", err)
+	}
+	for _, g := range envelope.Gpus {
+		if g.Id == gpuTypeId {
+			if g.Pool != nil && *g.Pool != "" {
+				return *g.Pool, nil
+			}
+			return "", fmt.Errorf("GPU type %q has no serverless pool; it cannot back an endpoint", gpuTypeId)
+		}
+	}
+	// Not a GPU type id: assume caller passed a pool id directly
+	return gpuTypeId, nil
+}
+
+// flattenEndpointResponse rewrites the nested v2 endpoint object into the flat
+// keys the state-mapping code below was written against (gpuCount, workersMin,
+// scalerType, ...). No-op keys already flat.
+func flattenEndpointResponse(result map[string]interface{}) {
+	if gpu, ok := result["gpu"].(map[string]interface{}); ok {
+		if c, ok := gpu["count"].(float64); ok {
+			result["gpuCount"] = c
+		}
+	}
+	if workers, ok := result["workers"].(map[string]interface{}); ok {
+		if v, ok := workers["min"].(float64); ok {
+			result["workersMin"] = v
+		}
+		if v, ok := workers["max"].(float64); ok {
+			result["workersMax"] = v
+		}
+	}
+	if scaling, ok := result["scaling"].(map[string]interface{}); ok {
+		if t, ok := scaling["type"].(string); ok {
+			result["scalerType"] = t
+		}
+		if v, ok := scaling["queueDelay"].(float64); ok {
+			result["scalerValue"] = v
+		} else if v, ok := scaling["requestCount"].(float64); ok {
+			result["scalerValue"] = v
+		}
+	}
+	if d, ok := result["disk"].(float64); ok {
+		result["containerDiskInGb"] = d
+	}
+	if t, ok := result["timeout"].(float64); ok {
+		result["executionTimeoutMs"] = t
+	}
+	if nvs, ok := result["networkVolumes"].([]interface{}); ok {
+		if _, exists := result["networkVolumeIds"]; !exists && len(nvs) > 0 {
+			result["networkVolumeIds"] = nvs
+		}
+		if _, exists := result["networkVolumeId"]; !exists && len(nvs) > 0 {
+			if s, ok := nvs[0].(string); ok {
+				result["networkVolumeId"] = s
+			}
+		}
+	}
 }
 
 func (r *EndpointResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -63,76 +157,130 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints"
+	// If template_id is provided, fetch the template to get the image
+	var image string
+	if !config.TemplateId.IsNull() && config.TemplateId.ValueString() != "" {
+		templateId := config.TemplateId.ValueString()
+		templateUrl := rlClient.GetTemplateURL(templateId)
+
+		reqHTTP, err := http.NewRequestWithContext(ctx, "GET", templateUrl, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create request: %v", err))
+			return
+		}
+
+		reqHTTP.Header.Set("Content-Type", "application/json")
+		reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
+
+		httpClient := &http.Client{}
+		respHTTP, err := httpClient.Do(reqHTTP)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to make API call: %v", err))
+			return
+		}
+		defer respHTTP.Body.Close()
+
+		respBody, err := io.ReadAll(respHTTP.Body)
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to read response: %v", err))
+			return
+		}
+
+		if respHTTP.StatusCode != 200 {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to fetch template (status: %d): %s", respHTTP.StatusCode, string(respBody)))
+			return
+		}
+
+		var templateResult map[string]interface{}
+		if err := json.Unmarshal(respBody, &templateResult); err != nil {
+			resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse template response: %v", err))
+			return
+		}
+
+		if img, ok := templateResult["image"].(string); ok {
+			image = img
+		} else {
+			resp.Diagnostics.AddError("API Error", "Template response missing image field")
+			return
+		}
+	} else {
+		image = config.ImageName.ValueString()
+	}
+
+	url := rlClient.BaseURL() + "/serverless"
+
+	// v2 requires the endpoint discriminator and a GPU pool (not a GPU type id).
+	gpuPools := make([]string, 0)
+	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		pool, err := resolveGpuPool(ctx, rlClient, config.GpuTypeId.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", err.Error())
+			return
+		}
+		gpuPools = append(gpuPools, pool)
+	}
 
 	body := map[string]interface{}{
-		"image": config.ImageName.ValueString(),
+		"name":  config.Name.ValueString(),
+		"image": image,
+		"type":  "QUEUE",
 		"gpu": map[string]interface{}{
-			"id":    config.GpuTypeId.ValueString(),
+			"pools": gpuPools,
 			"count": config.GpuCount.ValueInt64(),
 		},
 	}
 
-	if !config.Name.IsNull() && config.Name.ValueString() != "" {
-		body["name"] = config.Name.ValueString()
+	// workers configuration
+	workers := make(map[string]interface{})
+	if !config.WorkersMin.IsNull() {
+		workers["min"] = int64(config.WorkersMin.ValueInt64())
+	}
+	if !config.WorkersMax.IsNull() {
+		workers["max"] = int64(config.WorkersMax.ValueInt64())
+	}
+	if len(workers) > 0 {
+		body["workers"] = workers
 	}
 
+	// scaling is required in v2 and is a discriminated union on type:
+	// QUEUE_DELAY wants queueDelay, REQUEST_COUNT wants requestCount.
+	// idleTimeout is not accepted at create time.
+	scalerType := "QUEUE_DELAY"
+	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
+		scalerType = config.ScalerType.ValueString()
+	}
+	scalerValue := float64(5)
+	if !config.ScalerValue.IsNull() {
+		scalerValue = float64(config.ScalerValue.ValueInt64())
+	}
+	scaling := map[string]interface{}{"type": scalerType}
+	switch scalerType {
+	case "QUEUE_DELAY":
+		scaling["queueDelay"] = scalerValue
+	case "REQUEST_COUNT":
+		scaling["requestCount"] = scalerValue
+	default:
+		resp.Diagnostics.AddError("Invalid Configuration", fmt.Sprintf("scaler_type must be QUEUE_DELAY or REQUEST_COUNT, got %q", scalerType))
+		return
+	}
+	body["scaling"] = scaling
+
+	// v2 takes a single networkVolumes array
+	networkVolumes := make([]string, 0)
 	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+		networkVolumes = append(networkVolumes, config.NetworkVolumeId.ValueString())
 	}
-
-	if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
-		networkVolumeIds := make([]string, 0)
+	if !config.NetworkVolumeIds.IsNull() {
 		for _, id := range config.NetworkVolumeIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				networkVolumeIds = append(networkVolumeIds, strVal.ValueString())
+			if strVal, ok := id.(types.String); ok && strVal.ValueString() != "" {
+				networkVolumes = append(networkVolumes, strVal.ValueString())
 			}
 		}
-		if len(networkVolumeIds) > 0 {
-			body["networkVolumeIds"] = networkVolumeIds
-		}
 	}
-
-	if !config.WorkersMin.IsNull() {
-		body["workersMin"] = int64(config.WorkersMin.ValueInt64())
-	}
-
-	if !config.WorkersMax.IsNull() {
-		body["workersMax"] = int64(config.WorkersMax.ValueInt64())
-	}
-
-	if !config.IdleTimeout.IsNull() {
-		body["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
-	}
-
-	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
-		body["scalerType"] = config.ScalerType.ValueString()
-	}
-
-	if !config.ScalerValue.IsNull() {
-		body["scalerValue"] = int64(config.ScalerValue.ValueInt64())
-	}
-
-	if !config.ExecutionTimeoutMs.IsNull() {
-		body["executionTimeoutMs"] = int64(config.ExecutionTimeoutMs.ValueInt64())
-	}
-
-	if !config.ComputeType.IsNull() && config.ComputeType.ValueString() != "" {
-		body["computeType"] = config.ComputeType.ValueString()
-	}
-
-	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		body["cloudType"] = config.CloudType.ValueString()
-	}
-
-	if !config.ContainerDiskInGb.IsNull() {
-		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
-	}
-
-	if !config.VcpuCount.IsNull() {
-		body["vcpuCount"] = int64(config.VcpuCount.ValueInt64())
+	if len(networkVolumes) > 0 {
+		body["networkVolumes"] = networkVolumes
 	}
 
 	if !config.DataCenterIds.IsNull() && len(config.DataCenterIds.Elements()) > 0 {
@@ -160,35 +308,17 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	if !config.AllowedCudaVersions.IsNull() && len(config.AllowedCudaVersions.Elements()) > 0 {
-		allowedCudaVersions := make([]interface{}, 0)
-		for _, id := range config.AllowedCudaVersions.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				allowedCudaVersions = append(allowedCudaVersions, strVal.ValueString())
-			}
-		}
-		if len(allowedCudaVersions) > 0 {
-			body["allowedCudaVersions"] = allowedCudaVersions
-		}
+		resp.Diagnostics.AddError("Unsupported in v2", "allowed_cuda_versions is not accepted by the v2 endpoint create API")
+		return
 	}
 
 	if !config.MinCudaVersion.IsNull() && config.MinCudaVersion.ValueString() != "" {
-		body["minCudaVersion"] = config.MinCudaVersion.ValueString()
+		resp.Diagnostics.AddError("Unsupported in v2", "min_cuda_version is not accepted by the v2 endpoint create API")
+		return
 	}
 
-	if !config.CpuFlavorIds.IsNull() && len(config.CpuFlavorIds.Elements()) > 0 {
-		cpuFlavorIds := make([]interface{}, 0)
-		for _, id := range config.CpuFlavorIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				cpuFlavorIds = append(cpuFlavorIds, strVal.ValueString())
-			}
-		}
-		if len(cpuFlavorIds) > 0 {
-			body["cpuFlavorIds"] = cpuFlavorIds
-		}
-	}
-
-	if !config.CpuFlavorPriority.IsNull() && config.CpuFlavorPriority.ValueString() != "" {
-		body["cpuFlavorPriority"] = config.CpuFlavorPriority.ValueString()
+	if !config.ExecutionTimeoutMs.IsNull() {
+		body["timeout"] = int64(config.ExecutionTimeoutMs.ValueInt64())
 	}
 
 	if !config.Flashboot.IsNull() {
@@ -208,7 +338,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -229,6 +359,7 @@ func (r *EndpointResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
+	flattenEndpointResponse(result)
 
 	if respHTTP.StatusCode != 200 && respHTTP.StatusCode != 201 {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to create endpoint (status: %d): %s", respHTTP.StatusCode, string(respBody)))
@@ -456,9 +587,9 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -467,7 +598,7 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -493,6 +624,7 @@ func (r *EndpointResource) Read(ctx context.Context, req resource.ReadRequest, r
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
+	flattenEndpointResponse(result)
 
 	if result == nil {
 		resp.Diagnostics.AddError("API Error", "Empty response from API")
@@ -686,9 +818,9 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	body := map[string]interface{}{}
 
@@ -699,51 +831,72 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 	if !config.ImageName.IsNull() && config.ImageName.ValueString() != "" {
 		body["image"] = config.ImageName.ValueString()
 	}
+
+	// v2 takes a GPU pool (not a GPU type id)
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+		pool, err := resolveGpuPool(ctx, rlClient, config.GpuTypeId.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("API Error", err.Error())
+			return
+		}
 		body["gpu"] = map[string]interface{}{
-			"id":    config.GpuTypeId.ValueString(),
+			"pools": []string{pool},
 			"count": config.GpuCount.ValueInt64(),
 		}
 	}
 
+	// v2 takes a single networkVolumes array
+	networkVolumes := make([]string, 0)
 	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+		networkVolumes = append(networkVolumes, config.NetworkVolumeId.ValueString())
 	}
-
-	if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
-		networkVolumeIds := make([]string, 0)
+	if !config.NetworkVolumeIds.IsNull() {
 		for _, id := range config.NetworkVolumeIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				networkVolumeIds = append(networkVolumeIds, strVal.ValueString())
+			if strVal, ok := id.(types.String); ok && strVal.ValueString() != "" {
+				networkVolumes = append(networkVolumes, strVal.ValueString())
 			}
 		}
-		if len(networkVolumeIds) > 0 {
-			body["networkVolumeIds"] = networkVolumeIds
+	}
+	if len(networkVolumes) > 0 {
+		body["networkVolumes"] = networkVolumes
+	}
+
+	// workers configuration
+	if !config.WorkersMin.IsNull() || !config.WorkersMax.IsNull() {
+		workers := make(map[string]interface{})
+		if !config.WorkersMin.IsNull() {
+			workers["min"] = int64(config.WorkersMin.ValueInt64())
 		}
+		if !config.WorkersMax.IsNull() {
+			workers["max"] = int64(config.WorkersMax.ValueInt64())
+		}
+		body["workers"] = workers
 	}
 
-	if !config.WorkersMin.IsNull() {
-		body["workersMin"] = int64(config.WorkersMin.ValueInt64())
-	}
-
-	if !config.WorkersMax.IsNull() {
-		body["workersMax"] = int64(config.WorkersMax.ValueInt64())
-	}
-
-	if !config.IdleTimeout.IsNull() {
-		body["idleTimeout"] = int64(config.IdleTimeout.ValueInt64())
-	}
-
-	if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
-		body["scalerType"] = config.ScalerType.ValueString()
-	}
-
-	if !config.ScalerValue.IsNull() {
-		body["scalerValue"] = int64(config.ScalerValue.ValueInt64())
+	// scaling is a discriminated union on type in v2 (queueDelay/requestCount);
+	// idleTimeout is not accepted
+	if !config.ScalerType.IsNull() || !config.ScalerValue.IsNull() {
+		scalerType := "QUEUE_DELAY"
+		if !config.ScalerType.IsNull() && config.ScalerType.ValueString() != "" {
+			scalerType = config.ScalerType.ValueString()
+		}
+		scaling := map[string]interface{}{"type": scalerType}
+		if !config.ScalerValue.IsNull() {
+			switch scalerType {
+			case "QUEUE_DELAY":
+				scaling["queueDelay"] = config.ScalerValue.ValueInt64()
+			case "REQUEST_COUNT":
+				scaling["requestCount"] = config.ScalerValue.ValueInt64()
+			default:
+				resp.Diagnostics.AddError("Invalid Configuration", fmt.Sprintf("scaler_type must be QUEUE_DELAY or REQUEST_COUNT, got %q", scalerType))
+				return
+			}
+		}
+		body["scaling"] = scaling
 	}
 
 	if !config.ExecutionTimeoutMs.IsNull() {
-		body["executionTimeoutMs"] = int64(config.ExecutionTimeoutMs.ValueInt64())
+		body["timeout"] = int64(config.ExecutionTimeoutMs.ValueInt64())
 	}
 
 	if !config.ComputeType.IsNull() && config.ComputeType.ValueString() != "" {
@@ -787,42 +940,17 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	if !config.AllowedCudaVersions.IsNull() && len(config.AllowedCudaVersions.Elements()) > 0 {
-		allowedCudaVersions := make([]interface{}, 0)
-		for _, id := range config.AllowedCudaVersions.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				allowedCudaVersions = append(allowedCudaVersions, strVal.ValueString())
-			}
-		}
-		if len(allowedCudaVersions) > 0 {
-			body["allowedCudaVersions"] = allowedCudaVersions
-		}
+		resp.Diagnostics.AddError("Unsupported in v2", "allowed_cuda_versions is not accepted by the v2 endpoint update API")
+		return
 	}
 
 	if !config.MinCudaVersion.IsNull() && config.MinCudaVersion.ValueString() != "" {
-		body["minCudaVersion"] = config.MinCudaVersion.ValueString()
-	}
-
-	if !config.CpuFlavorIds.IsNull() && len(config.CpuFlavorIds.Elements()) > 0 {
-		cpuFlavorIds := make([]interface{}, 0)
-		for _, id := range config.CpuFlavorIds.Elements() {
-			if strVal, ok := id.(types.String); ok {
-				cpuFlavorIds = append(cpuFlavorIds, strVal.ValueString())
-			}
-		}
-		if len(cpuFlavorIds) > 0 {
-			body["cpuFlavorIds"] = cpuFlavorIds
-		}
-	}
-
-	if !config.CpuFlavorPriority.IsNull() && config.CpuFlavorPriority.ValueString() != "" {
-		body["cpuFlavorPriority"] = config.CpuFlavorPriority.ValueString()
+		resp.Diagnostics.AddError("Unsupported in v2", "min_cuda_version is not accepted by the v2 endpoint update API")
+		return
 	}
 
 	if !config.Flashboot.IsNull() {
 		body["flashboot"] = config.Flashboot.ValueBool()
-	}
-
-	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -838,7 +966,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -859,14 +987,18 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to parse response (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
+	flattenEndpointResponse(result)
 
 	if respHTTP.StatusCode != 200 && respHTTP.StatusCode != 201 {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to update endpoint (status: %d): %s", respHTTP.StatusCode, string(respBody)))
 		return
 	}
 
+	// Seed identity from prior state; v2 PATCH responses may omit fields
+	config.Id = state.Id
+
 	if val, ok := result["name"].(string); ok {
-		state.Name = types.StringValue(val)
+		config.Name = types.StringValue(val)
 	}
 
 	if val, ok := result["workers"].([]interface{}); ok {
@@ -922,7 +1054,7 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.Workers = workersList
+			config.Workers = workersList
 		}
 	}
 
@@ -939,44 +1071,44 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.DataCenterIds = dataCenterIdsList
+			config.DataCenterIds = dataCenterIdsList
 		}
 	}
 
 	if val, ok := result["computeType"].(string); ok {
-		state.ComputeType = types.StringValue(val)
+		config.ComputeType = types.StringValue(val)
 	}
 
 	if val, ok := result["gpuCount"].(float64); ok {
-		state.GpuCount = types.Int64Value(int64(val))
+		config.GpuCount = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["vcpuCount"].(float64); ok {
-		state.VcpuCount = types.Int64Value(int64(val))
+		config.VcpuCount = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["workersMin"].(float64); ok {
-		state.WorkersMin = types.Int64Value(int64(val))
+		config.WorkersMin = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["workersMax"].(float64); ok {
-		state.WorkersMax = types.Int64Value(int64(val))
+		config.WorkersMax = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["idleTimeout"].(float64); ok {
-		state.IdleTimeout = types.Int64Value(int64(val))
+		config.IdleTimeout = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["scalerType"].(string); ok {
-		state.ScalerType = types.StringValue(val)
+		config.ScalerType = types.StringValue(val)
 	}
 
 	if val, ok := result["scalerValue"].(float64); ok {
-		state.ScalerValue = types.Int64Value(int64(val))
+		config.ScalerValue = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["executionTimeoutMs"].(float64); ok {
-		state.ExecutionTimeoutMs = types.Int64Value(int64(val))
+		config.ExecutionTimeoutMs = types.Int64Value(int64(val))
 	}
 
 	if val, ok := result["env"].(map[string]interface{}); ok {
@@ -992,12 +1124,12 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.Env = envObj
+			config.Env = envObj
 		}
 	}
 
 	if val, ok := result["networkVolumeId"].(string); ok {
-		state.NetworkVolumeId = types.StringValue(val)
+		config.NetworkVolumeId = types.StringValue(val)
 	}
 
 	if val, ok := result["networkVolumeIds"].([]interface{}); ok {
@@ -1013,16 +1145,16 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.NetworkVolumeIds = networkVolumeIdsList
+			config.NetworkVolumeIds = networkVolumeIdsList
 		}
 	}
 
 	if val, ok := result["flashboot"].(bool); ok {
-		state.Flashboot = types.BoolValue(val)
+		config.Flashboot = types.BoolValue(val)
 	}
 
 	if val, ok := result["gpuTypePriority"].(string); ok {
-		state.GpuTypePriority = types.StringValue(val)
+		config.GpuTypePriority = types.StringValue(val)
 	}
 
 	if val, ok := result["cpuFlavorIds"].([]interface{}); ok {
@@ -1038,14 +1170,8 @@ func (r *EndpointResource) Update(ctx context.Context, req resource.UpdateReques
 				resp.Diagnostics.Append(diags...)
 				return
 			}
-			state.CpuFlavorIds = cpuFlavorIdsList
+			config.CpuFlavorIds = cpuFlavorIdsList
 		}
-	}
-
-	diags = resp.State.Set(ctx, &state)
-	if diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
 	}
 
 	diags = resp.State.Set(ctx, &config)
@@ -1063,9 +1189,9 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/endpoints/" + state.Id.ValueString()
+	url := rlClient.BaseURL() + "/serverless/" + state.Id.ValueString()
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
@@ -1074,7 +1200,7 @@ func (r *EndpointResource) Delete(ctx context.Context, req resource.DeleteReques
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)

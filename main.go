@@ -16,7 +16,6 @@ import (
 	resource_ecr_delegation "github.com/runpod/terraform-provider-runpod/internal/provider/resource_ecr_delegation"
 	resource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint"
 	resource_endpoint_job "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint_job"
-	resource_endpoint_worker "github.com/runpod/terraform-provider-runpod/internal/provider/resource_endpoint_worker"
 	resource_machine "github.com/runpod/terraform-provider-runpod/internal/provider/resource_machine"
 	resource_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/resource_network_volume"
 	resource_pod "github.com/runpod/terraform-provider-runpod/internal/provider/resource_pod"
@@ -35,8 +34,7 @@ import (
 
 	datasource_endpoint_worker_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_worker_logs"
 	datasource_endpoint_workers "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_workers"
-	datasource_endpoint_jobs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_jobs"
-	datasource_endpoint_job_logs "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint_job_logs"
+	datasource_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_endpoint"
 
 	datasource_billing_endpoint "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_endpoint"
 	datasource_billing_network_volume "github.com/runpod/terraform-provider-runpod/internal/provider/datasource_billing_network_volume"
@@ -164,8 +162,7 @@ func (p *runpodProvider) DataSources(ctx context.Context) []func() datasource.Da
 		datasource_template.NewTemplateDataSource,
 		datasource_container_registry_auth.NewContainerRegistryAuthDataSource,
 		datasource_ecr_delegations.NewEcrDelegationsDataSource,
-		datasource_endpoint_jobs.NewEndpointJobsDataSource,
-		datasource_endpoint_job_logs.NewEndpointJobLogsDataSource,
+		datasource_endpoint.NewEndpointDataSource,
 		datasource_endpoint_workers.NewEndpointWorkersDataSource,
 		datasource_endpoint_worker_logs.NewEndpointWorkerLogsDataSource,
 		datasource_billing_pod.NewBillingPodDataSource,
@@ -183,7 +180,6 @@ func (p *runpodProvider) Resources(ctx context.Context) []func() resource.Resour
 		resource_network_volume.NewNetworkVolumeResource,
 		resource_endpoint.NewEndpointResource,
 		resource_endpoint_job.NewEndpointJobResource,
-		resource_endpoint_worker.NewEndpointWorkerResource,
 		resource_template.NewTemplateResource,
 		resource_container_registry_auth.NewContainerRegistryAuthResource,
 		resource_ecr_delegation.NewEcrDelegationResource,

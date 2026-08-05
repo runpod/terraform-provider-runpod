@@ -45,7 +45,6 @@ func TestEndpointUpdate_ManyFields(t *testing.T) {
 	desired.NetworkVolumeIds = strList("nv-1")
 	desired.DataCenterIds = strList("US-CA-1")
 	desired.GpuTypeIds = strList("NVIDIA A100")
-	desired.AllowedCudaVersions = strList("12.0")
 	desired.Env = types.MapValueMust(types.StringType, map[string]attr.Value{"K": types.StringValue("V")})
 	desired.WorkersMin = types.Int64Value(2)
 	desired.WorkersMax = types.Int64Value(5)
@@ -84,7 +83,7 @@ func TestEndpointUpdate_ManyFields(t *testing.T) {
 	if resp.Diagnostics.HasError() {
 		t.Fatalf("Update errored: %v", resp.Diagnostics.Errors())
 	}
-	for _, k := range []string{"name", "networkVolumeIds", "dataCenterIds", "env", "workersMin", "workersMax", "scalerType", "computeType", "flashboot"} {
+	for _, k := range []string{"name", "networkVolumes", "dataCenterIds", "env", "workers", "scaling", "computeType", "flashboot"} {
 		if _, ok := body[k]; !ok {
 			t.Errorf("PATCH body missing %q; got %v", k, body)
 		}

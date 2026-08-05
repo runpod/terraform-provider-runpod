@@ -20,26 +20,26 @@ func NewEndpointWorkersDataSource() datasource.DataSource {
 }
 
 type EndpointWorkersDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *EndpointWorkersDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		r.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (r *EndpointWorkersDataSource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	baseURL := os.Getenv("RUNPOD_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://api.runpod.io/v2"
 	}
-	r.client = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
-	return r.client
+	r.rlClient = client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", baseURL)
+	return r.rlClient
 }
 
 func (r *EndpointWorkersDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -58,9 +58,9 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	client := r.getClient()
+	rlClient := r.getClient()
 
-	url := client.RestBaseURL + "/serverless/" + config.EndpointId.ValueString() + "/workers"
+	url := rlClient.BaseURL() + "/serverless/" + config.EndpointId.ValueString() + "/workers"
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -69,7 +69,7 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 	}
 
 	reqHTTP.Header.Set("Content-Type", "application/json")
-	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", client.APIKey))
+	reqHTTP.Header.Set("Authorization", fmt.Sprintf("Bearer %s", rlClient.APIKey))
 
 	httpClient := &http.Client{}
 	respHTTP, err := httpClient.Do(reqHTTP)
@@ -105,13 +105,28 @@ func (r *EndpointWorkersDataSource) Read(ctx context.Context, req datasource.Rea
 	workers := make([]attr.Value, 0)
 	for _, worker := range workersData {
 		if workerMap, ok := worker.(map[string]interface{}); ok {
+			// v2 worker shape: {id, status, startedAt, uptimeSeconds, ...};
+			// podId/lastBusyMs are v1-only and absent in v2
+			str := func(k string) string {
+				if v, ok := workerMap[k].(string); ok {
+					return v
+				}
+				return ""
+			}
+			uptimeMs := int64(0)
+			if v, ok := workerMap["uptimeSeconds"].(float64); ok {
+				uptimeMs = int64(v * 1000)
+			} else if v, ok := workerMap["uptimeMs"].(float64); ok {
+				uptimeMs = int64(v)
+			}
+
 			workerObj := map[string]attr.Value{
-				"id":           types.StringValue(workerMap["id"].(string)),
-				"pod_id":       types.StringValue(workerMap["podId"].(string)),
-				"status":       types.StringValue(workerMap["status"].(string)),
-				"uptime_ms":    types.Int64Value(int64(workerMap["uptimeMs"].(float64))),
-				"start_time":   types.StringValue(workerMap["startTime"].(string)),
-				"last_busy_ms": types.Int64Value(int64(workerMap["lastBusyMs"].(float64))),
+				"id":           types.StringValue(str("id")),
+				"pod_id":       types.StringNull(),
+				"status":       types.StringValue(str("status")),
+				"uptime_ms":    types.Int64Value(uptimeMs),
+				"start_time":   types.StringValue(str("startedAt")),
+				"last_busy_ms": types.Int64Null(),
 			}
 			workerVal, diags := types.ObjectValue(map[string]attr.Type{
 				"id":           types.StringType,

@@ -8,11 +8,13 @@ variable "runpod_api_key" {
 variable "template_name" {
   type        = string
   description = "Template name (must be unique)"
+  default     = "my-template"
 }
 
 variable "image_name" {
   type        = string
   description = "Docker image name"
+  default     = "runpod/echo-server"
 }
 
 variable "category" {
@@ -42,11 +44,11 @@ variable "container_disk_in_gb" {
 variable "volume_in_gb" {
   type        = number
   description = "Volume size in GB"
-  default     = 20
+  default     = 0
 }
 
 variable "volume_mount_path" {
   type        = string
   description = "Volume mount path"
-  default     = "/workspace"
+  default     = ""
 }

@@ -50,13 +50,16 @@ Create and manage Runpod pods.
 - `port` (Optional) - Main port for the pod
 - `ports` (Optional) - Port configuration string
 - `volume_in_gb` (Optional) - Volume size in GB
-- `volume_key` (Optional, sensitive) - Volume encryption key
 - `volume_mount_path` (Optional) - Volume mount path
 - `container_disk_in_gb` (Optional) - Container disk size
 - `template_id` (Optional) - Pod template ID
-- `start_ssh` (Optional, default=false) - Start SSH on boot
-- `start_jupyter` (Optional, default=false) - Start Jupyter on boot
-- `bid_per_gpu` (Optional) - Bid price per GPU
+
+**Deprecated (accepted for compatibility, ignored by the v2 API):**
+
+- `start_ssh`, `start_jupyter` - Not supported by v2; start services inside the image instead
+- `stop_after`, `terminate_after` - Not supported by v2; use `runpod_pod_action`
+- `volume_key` (Optional, sensitive) - Not supported by v2; use `volume_encrypted`
+- `bid_per_gpu`, `cloud_type`, `port`, `env` - Prefer their v2 successors (`type`, `ports`, container env)
 
 **Attributes:**
 

@@ -2,6 +2,7 @@ variable "runpod_api_key" {
   type        = string
   description = "RunPod API key"
   sensitive   = true
+  default     = ""
 }
 
 variable "pod_id" {
@@ -11,7 +12,7 @@ variable "pod_id" {
 
 variable "action" {
   type        = string
-  description = "Action to perform: stop, resume, terminate, reset"
+  description = "Action to perform: start, stop, restart, terminate"
   default     = "stop"
 }
 

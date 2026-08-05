@@ -4,25 +4,46 @@ This directory contains demo configurations for the Runpod Terraform provider.
 
 ## Prerequisites
 
-1. Get your Runpod API key from https://runpod.io/console/user/settings
-2. Update `variables.tf` files with your API key and machine IDs
-3. Set up development environment: see `LOCAL_SETUP.md` for recommended approach
+1. Get your RunPod API key from https://runpod.io/console/user/settings
+2. Set up development environment: see `LOCAL_SETUP.md` for recommended approach
+
+## API Versions
+
+- **v1 REST API** (`https://rest.runpod.io/v1`): Deprecated, being phased out
+- **v2 REST API** (`https://api.runpod.io/v2`): Current endpoint for all resources
+- **GraphQL API** (`https://api.runpod.io/graphql`): Used for operations with no REST v2 surface (user, machines, clusters)
+
+## Notes
+
+- All resources use v2 REST API where available
+- The template resource uses v2 REST API (`/v2/templates`)
+- Data sources use v2 REST API where available (`/v2/catalog/gpus`, `/v2/catalog/datacenters`)
+- Network volumes use v2 REST API (`/v2/network-volumes`)
+- Billing data sources use v2 REST API (`/v2/billing/*`)
+- Container registry auth uses v2 REST API (`/v2/registries`)
+- ECR delegation uses v2 REST API (`/v2/registries/delegations`)
+- Pod actions use v2 REST API (`/v2/pods/{id}/action`)
+- Endpoint workers use v2 REST API (`/v2/serverless/{id}/workers`)
+- Clusters (Instant Clusters) use GraphQL (`createCluster`/`deleteCluster`/`myself.cluster`)
 
 ## Available Demos
 
 ### 1. Basic Pod Creation (`examples/basic/`)
 
-Creates a simple pod with SSH and Jupyter enabled.
+Creates a simple pod with SSH and Jupyter enabled using v2 REST API with template support.
 
 ```bash
 cd examples/basic
+export RUNPOD_API_KEY="your-api-key"
 terraform init
-terraform apply
+terraform apply -var="template_id=your-template-id"
 ```
+
+**Note**: The pod resource now uses v2 REST API with full template support. It fetches template details and uses image/ports/env from template.
 
 ### 2. Pod Actions (`examples/actions/`)
 
-Demonstrates stopping, resuming, terminating, and resetting pods.
+Demonstrates stopping, resuming, terminating, and resetting pods using v2 REST API.
 
 ```bash
 cd examples/actions
@@ -32,7 +53,7 @@ terraform apply -var="action=stop"
 
 ### 3. Data Sources (`examples/datasources/`)
 
-Queries available GPU types, data centers, machines, and user info.
+Queries available GPU types and data centers.
 
 ```bash
 cd examples/datasources
@@ -40,17 +61,7 @@ terraform init
 terraform plan
 ```
 
-### 4. Machine Bidding (`examples/machine/`)
-
-Lists machines for others to use with custom specifications.
-
-```bash
-cd examples/machine
-terraform init
-terraform apply
-```
-
-### 5. Pod Monitoring (`examples/monitoring/`)
+### 4. Pod Monitoring (`examples/monitoring/`)
 
 Monitors pod status and retrieves detailed information.
 
@@ -60,40 +71,126 @@ terraform init
 terraform plan
 ```
 
+### 5. PyTorch Pod (`examples/pytorch/`)
+
+Creates a pod using a pre-created template with v2 API.
+
+The pod resource fetches template details and uses the template's `image`, `ports`, `env`, `args`, `disk`, and `mounts`.
+
+```bash
+cd examples/pytorch
+export RUNPOD_API_KEY="your-api-key"
+terraform init
+terraform apply -var="template_id=your-template-id" -var="gpu_type_id=your-gpu-type"
+```
+
+### 6. Template (`examples/template/`)
+
+Creates a custom template for repeated pod deployments.
+
+```bash
+cd examples/template
+terraform init
+terraform apply -var="runpod_api_key=your-key" -var="template_name=your-template" -var="image_name=your-image"
+```
+
+### 7. Network Volume (`examples/network_volume/`)
+
+Creates a persistent network volume using v2 REST API.
+
+```bash
+cd examples/network_volume
+terraform init
+terraform apply -var="runpod_api_key=your-key"
+```
+
+### 8. Endpoint (`examples/endpoint/`)
+
+Creates a serverless endpoint using v2 REST API.
+
+```bash
+cd examples/endpoint
+terraform init
+terraform apply -var="runpod_api_key=your-key"
+```
+
+### 9. Container Registry Auth (`examples/container_registry_auth/`)
+
+Creates authentication for private Docker registries.
+
+```bash
+cd examples/container_registry_auth
+terraform init
+terraform apply -var="runpod_api_key=your-key" -var="auth_name=your-auth-name" -var="registry_username=your-username" -var="registry_password=your-password"
+```
+
+### 10. ECR Delegation (`examples/ecr_delegation/`)
+
+Creates an ECR delegation to allow RunPod to access private AWS ECR repositories using v2 REST API.
+
+```bash
+cd examples/ecr_delegation
+terraform init
+terraform apply -var="runpod_api_key=your-key" -var="ecr_resource_arn=your-ecr-arn"
+```
+
+### 11. Endpoint Job (`examples/endpoint_job/`)
+
+Runs a job on a RunPod endpoint using v2 REST API.
+
+```bash
+cd examples/endpoint_job
+terraform init
+terraform apply -var="runpod_api_key=your-key" -var="endpoint_id=your-endpoint-id" -var="input={\"prompt\":\"hello world\"}"
+```
+
+### 12. Integrated (Pod + Template + Network Volume) (`examples/integrated/`)
+
+Demonstrates a complete workflow:
+- Creates a network volume for persistent storage
+- Creates a template
+- Launches a pod using the template with the volume attached
+
+```bash
+cd examples/integrated
+terraform init
+terraform apply -var="runpod_api_key=your-key" -var="volume_name=my-volume" -var="template_name=my-template"
+```
+
 ## Example Workflow
 
 1. **List available GPU types:**
     ```bash
     cd examples/datasources
     terraform init
-    terraform apply -var="runpod_api_key=your-key"
+    terraform apply
     ```
 
-2. **Create a pod:**
+2. **Create a pod using a template:**
     ```bash
     cd examples/basic
     terraform init
-    terraform apply -var="runpod_api_key=your-key" -var="machine_id=your-machine-id"
+    terraform apply -var="template_id=your-template-id"
     ```
 
 3. **Monitor the pod:**
     ```bash
     cd examples/monitoring
     terraform init
-    terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id"
+    terraform apply -var="pod_id=created-pod-id"
     ```
 
 4. **Stop the pod when done:**
     ```bash
     cd examples/actions
     terraform init
-    terraform apply -var="runpod_api_key=your-key" -var="pod_id=created-pod-id" -var="action=stop"
+    terraform apply -var="pod_id=created-pod-id" -var="action=stop"
     ```
 
 ## Notes
 
 - Replace placeholder values in `variables.tf` with your actual credentials
 - Pod creation may take several minutes
-- Machines need to be listed before you can deploy pods to them
-- Use data sources to discover available machines and GPU types
+- All resources use v2 REST API where available
+- Use data sources to discover available GPU types and data centers
 - For development, use `dev_overrides` (see `LOCAL_SETUP.md`) instead of building a binary

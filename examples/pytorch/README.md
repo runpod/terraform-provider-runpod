@@ -1,56 +1,27 @@
-# Runpod PyTorch Pod Example
+# PyTorch Pod Example
 
-This example creates a PyTorch pod using Terraform on dev.runpod.io.
+Create a pod from a pre-created RunPod template using the v2 API — the provider fetches the template's image, ports, env, args, disk, and mounts.
 
-## Current Status
+## Prerequisites
 
-✅ Provider compiles successfully  
-✅ Terraform configuration validates  
-✅ REST API integration ready  
-✅ Error handling for unavailable resources works  
-
-## What Works
-
-The provider successfully:
-1. Authenticates with your Runpod API key
-2. Calls the Runpod REST API at `https://rest.runpod.io/v1/pods`
-3. Creates pods using the correct API endpoint
-
-## Configuration
-
-```hcl
-resource "runpod_pod" "pytorch_experiment" {
-  # Use template_id to deploy using a specific template
-  template_id   = var.template_id  # Get from https://www.runpod.io/console/templates
-  image_name    = var.image_name
-  gpu_count     = 1
-  name          = "pytorch-experiment"
-  start_ssh     = true
-  start_jupyter = true
-  volume_in_gb  = 10
-}
-```
-
-## API Key
-
-Set your API key via environment variable:
-```bash
-export RUNPOD_API_KEY="your-api-key-here"
-```
-
-Get your API key from https://runpod.io/console/user/settings
+1. Get your RunPod API key from https://runpod.io/console/user/settings
+2. Get a Template ID from https://www.runpod.io/console/templates
 
 ## Usage
 
 ```bash
-cd /Users/books/repos/terraform-provider/examples/pytorch
+cd examples/pytorch
+export RUNPOD_API_KEY="your-api-key-here"
 terraform init
-terraform plan
-terraform apply
+terraform plan -var="template_id=your-template-id"
 ```
 
 ## Notes
 
-- The provider is fully functional and ready for use
-- The REST API integration follows the OpenAPI spec at https://rest.runpod.io/v1/openapi.json
-- You need to get a valid `template_id` from https://www.runpod.io/console/templates
+- This example is for documentation purposes only
+- Pod creation may take several minutes once applied
+
+## Outputs
+
+- `pod_id`: The pod identifier
+- `pod_status`: Current pod status

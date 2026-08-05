@@ -2,6 +2,7 @@ variable "runpod_api_key" {
   type        = string
   description = "RunPod API key"
   sensitive   = true
+  default     = ""
 }
 
 terraform {
@@ -32,25 +33,5 @@ output "data_centers" {
   value       = data.runpod_data_centers.locations
 }
 
-# Get current user info
-data "runpod_user" "current" {}
-
-output "user_id" {
-  description = "Current user ID"
-  value       = data.runpod_user.current.id
-}
-
-output "public_key" {
-  description = "User's public SSH key"
-  value       = data.runpod_user.current.pub_key
-}
-
-# List available machines
-data "runpod_machines" "available" {
-  listed = true
-}
-
-output "available_machines" {
-  description = "Available machines"
-  value       = data.runpod_machines.available
-}
+# Note: Machines data source requires GraphQL which is not exposed in v2 REST API
+# Use the RunPod console to view available machines

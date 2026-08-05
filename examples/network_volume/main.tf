@@ -19,8 +19,8 @@ variable "volume_size_gb" {
 
 variable "data_center_id" {
   type        = string
-  description = "Data center ID (e.g., US-KS-2, EU-RO-1)"
-  default     = "US-KS-2"
+  description = "Data center ID (must support network volumes, e.g., US-MD-1, EU-RO-1)"
+  default     = "US-MD-1"
 }
 
 variable "type" {
@@ -75,10 +75,18 @@ output "volume_info" {
   }
 }
 
+variable "gpu_type_id" {
+  type        = string
+  description = "GPU type (must exist in the volume's data center)"
+  default     = "NVIDIA GeForce RTX 3090"
+}
+
 resource "runpod_pod" "with_network_volume" {
+  name      = "volume-demo-pod"
   image_name      = var.image_name
   gpu_count       = var.gpu_count
-  network_volume_id = runpod_network_volume.demo.id
+  gpu_type_id     = var.gpu_type_id
+  network_volume_ids = [runpod_network_volume.demo.id]
 }
 
 output "pod_id" {

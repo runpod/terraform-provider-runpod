@@ -145,9 +145,21 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// v2 compute config: exactly one of cpu or gpu must be set. gpu_count has a
+	// schema default of 1, so the GPU-vs-CPU decision keys off the type ids.
+	hasCpu := !config.CpuFlavorId.IsNull() && config.CpuFlavorId.ValueString() != ""
+	hasGpuType := !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != ""
+
+	if hasCpu && hasGpuType {
+		resp.Diagnostics.AddError("Invalid Configuration", "Cannot specify both cpu_flavor_id and gpu_type_id; the v2 API accepts exactly one of cpu or gpu.")
+		return
+	}
+	if !hasCpu && !hasGpuType {
+		resp.Diagnostics.AddError("Invalid Configuration", "Must specify either cpu_flavor_id (CPU pod) or gpu_type_id (GPU pod) in the v2 API.")
+		return
+	}
 	// v2 GPU config requires the type id; count alone is rejected
-	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 &&
-		(config.GpuTypeId.IsNull() || config.GpuTypeId.ValueString() == "") {
+	if !hasCpu && !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 && !hasGpuType {
 		resp.Diagnostics.AddError("Invalid Configuration", "gpu_count requires gpu_type_id in the v2 API.")
 		return
 	}
@@ -214,7 +226,9 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 			body["disk"] = int64(templateDisk)
 		}
 		
-		if templateMounts, ok := template["mounts"].(map[string]interface{}); ok {
+		if templateMounts, ok := template["mounts"].(map[string]interface{}); ok && !hasCpu {
+			// CPU pods reject persistent mounts (disk or network volumes only),
+			// so template mounts are only carried over for GPU pods.
 			body["mounts"] = templateMounts
 		}
 		
@@ -225,7 +239,13 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		body["image"] = config.ImageName.ValueString()
 	}
 
-	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
+	// Explicit docker_args beats template args (lets callers override a
+	// template's baked-in command, e.g. skip a long-running post-start script).
+	if !config.DockerArgs.IsNull() && config.DockerArgs.ValueString() != "" {
+		body["args"] = config.DockerArgs.ValueString()
+	}
+
+	if !hasCpu && hasGpuType {
 		if _, ok := body["gpu"]; !ok {
 			body["gpu"] = make(map[string]interface{})
 		}
@@ -233,12 +253,23 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		gpuObj["id"] = config.GpuTypeId.ValueString()
 	}
 
-	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
+	if !hasCpu && !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
 		if _, ok := body["gpu"]; !ok {
 			body["gpu"] = make(map[string]interface{})
 		}
 		gpuObj := body["gpu"].(map[string]interface{})
 		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
+	}
+
+	if hasCpu {
+		vcpu := config.VcpuCount.ValueFloat64()
+		if vcpu <= 0 {
+			vcpu = 2
+		}
+		body["cpu"] = map[string]interface{}{
+			"id":        config.CpuFlavorId.ValueString(),
+			"vcpuCount": vcpu,
+		}
 	}
 
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
@@ -247,6 +278,11 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
 		resp.Diagnostics.AddError("Unsupported in v2", "bid_per_gpu is not accepted by the v2 pod create API; use type = \"SPOT\" for interruptible pods")
+		return
+	}
+
+	if hasCpu && config.VolumeInGb.ValueFloat64() > 0 {
+		resp.Diagnostics.AddError("Invalid Configuration", "volume_in_gb (persistent mount) is not supported for CPU pods in the v2 API; use container_disk_in_gb or network volumes")
 		return
 	}
 
@@ -518,6 +554,18 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	if val, ok := result["interruptible"].(bool); ok {
 		config.Interruptible = types.BoolValue(val)
+	}
+
+	if val, ok := result["vcpuCount"].(float64); ok && val > 0 {
+		config.VcpuCount = types.Float64Value(val)
+	} else if hasCpu && config.VcpuCount.IsNull() {
+		config.VcpuCount = types.Float64Value(2)
+	}
+
+	if hasCpu && config.GpuCount.IsNull() {
+		// gpu_count's schema default of 1 makes the plan concrete, but cpu pods
+		// never send gpu to the v2 API. Keep state consistent with the plan.
+		config.GpuCount = types.Int64Value(1)
 	}
 
 	if val, ok := result["volumeEncrypted"].(bool); ok {
@@ -919,6 +967,13 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	} else {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to get pod ID from update response: %v", result))
 		return
+	}
+
+	hasCpuUpdate := !config.CpuFlavorId.IsNull() && config.CpuFlavorId.ValueString() != ""
+	if hasCpuUpdate && config.GpuCount.IsNull() {
+		// Same plan-consistency fix as Create: gpu_count's schema default of 1
+		// is plan-only for cpu pods (never sent to the v2 API).
+		config.GpuCount = types.Int64Value(1)
 	}
 
 	diags = resp.State.Set(ctx, &config)

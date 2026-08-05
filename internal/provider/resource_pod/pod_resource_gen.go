@@ -36,6 +36,11 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 				Description:         "Cluster IP address",
 				MarkdownDescription: "Cluster IP address",
 			},
+			"cpu_flavor_id": schema.StringAttribute{
+				Optional:            true,
+				Description:         "CPU flavor ID for CPU pods (e.g. cpu3g, cpu3c). Exactly one of cpu_flavor_id or gpu_type_id must be set in the v2 API.",
+				MarkdownDescription: "CPU flavor ID for CPU pods (e.g. cpu3g, cpu3c). Exactly one of cpu_flavor_id or gpu_type_id must be set in the v2 API.",
+			},
 			"container_disk_in_gb": schema.Int64Attribute{
 				Optional:            true,
 				Computed:            true,
@@ -158,6 +163,7 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Auto-terminate timestamp (ISO 8601) - DEPRECATED: Not supported in v2 API. Use `runpod_pod_action` with action `terminate` to terminate pods manually.",
 			},
 			"vcpu_count": schema.Float64Attribute{
+				Optional:            true,
 				Computed:            true,
 				Description:         "Virtual CPU count",
 				MarkdownDescription: "Virtual CPU count",
@@ -223,6 +229,7 @@ type PodModel struct {
 	BidPerGpu         types.Float64 `tfsdk:"bid_per_gpu"`
 	CloudType         types.String  `tfsdk:"cloud_type"`
 	ClusterIp         types.String  `tfsdk:"cluster_ip"`
+	CpuFlavorId       types.String  `tfsdk:"cpu_flavor_id"`
 	ContainerDiskInGb types.Int64   `tfsdk:"container_disk_in_gb"`
 	CostPerHr         types.Float64 `tfsdk:"cost_per_hr"`
 	CreatedAt         types.String  `tfsdk:"created_at"`

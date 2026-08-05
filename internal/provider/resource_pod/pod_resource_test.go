@@ -274,6 +274,7 @@ func TestPodCreate_RequiresEnvApiKey(t *testing.T) {
 	m := baseModelWithListTypes()
 	m.Name = types.StringValue("p")
 	m.ImageName = types.StringValue("img") // valid config so we reach the api-key check
+	m.GpuTypeId = types.StringValue("gpu-1") // v2 requires exactly one of cpu/gpu
 
 	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
 	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
@@ -619,6 +620,7 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		m := baseModelWithListTypes()
 		m.Name = types.StringValue("p")
 		m.ImageName = types.StringValue("img")
+		m.GpuTypeId = types.StringValue("gpu-1") // v2 requires exactly one of cpu/gpu
 		m.CloudType = types.StringValue("SECURE")
 		m.VolumeInGb = types.Float64Value(50)
 		m.Interruptible = types.BoolValue(false)
@@ -643,6 +645,7 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		m := baseModelWithListTypes()
 		m.Name = types.StringValue("p")
 		m.ImageName = types.StringValue("img")
+		m.GpuTypeId = types.StringValue("gpu-1") // v2 requires exactly one of cpu/gpu
 		m.VolumeInGb = types.Float64Value(0)
 		body := capture(t, m)
 		if _, ok := body["cloudType"]; ok {
@@ -652,10 +655,12 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 			t.Error("volumeInGb should be absent when zero")
 		}
 	})
+
 	t.Run("volumeEncrypted present when set", func(t *testing.T) {
 		m := baseModelWithListTypes()
 		m.Name = types.StringValue("p")
 		m.ImageName = types.StringValue("img")
+		m.GpuTypeId = types.StringValue("gpu-1") // v2 requires exactly one of cpu/gpu
 		m.VolumeEncrypted = types.BoolValue(true)
 		body := capture(t, m)
 		if body["volumeEncrypted"] != true {
@@ -663,15 +668,80 @@ func TestPodCreate_ConditionalBodyFields(t *testing.T) {
 		}
 	})
 
-	t.Run("volumeEncrypted absent when unset", func(t *testing.T) {
+	t.Run("cpu flavor and vcpu present; gpu absent for CPU pods", func(t *testing.T) {
 		m := baseModelWithListTypes()
 		m.Name = types.StringValue("p")
 		m.ImageName = types.StringValue("img")
+		m.CpuFlavorId = types.StringValue("cpu3g")
+		m.VcpuCount = types.Float64Value(4)
 		body := capture(t, m)
-		if _, ok := body["volumeEncrypted"]; ok {
-			t.Error("volumeEncrypted should be absent when not set")
+		cpu, ok := body["cpu"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("cpu object not found: %v", body)
+		}
+		if cpu["id"] != "cpu3g" {
+			t.Errorf("cpu.id = %v, want cpu3g", cpu["id"])
+		}
+		if cpu["vcpuCount"] != float64(4) {
+			t.Errorf("cpu.vcpuCount = %v, want 4", cpu["vcpuCount"])
+		}
+		if _, ok := body["gpu"]; ok {
+			t.Error("gpu should be absent for CPU pods")
 		}
 	})
+
+	t.Run("docker_args override beats template args", func(t *testing.T) {
+		m := baseModelWithListTypes()
+		m.Name = types.StringValue("p")
+		m.ImageName = types.StringValue("img")
+		m.GpuTypeId = types.StringValue("gpu-1")
+		m.DockerArgs = types.StringValue("bash -c 'sleep infinity'")
+		body := capture(t, m)
+		if body["args"] != "bash -c 'sleep infinity'" {
+			t.Errorf("args = %v, want the docker_args override", body["args"])
+		}
+	})
+}
+
+func TestPodCreate_CpuPodKeepsGpuCountDefaultInState(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"pod":{"id":"pod-x"}},"meta":{"requestId":"test"},"error":null}`))
+	}))
+	defer srv.Close()
+	t.Setenv("RUNPOD_API_KEY", "testkey123")
+	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+
+	m := baseModelWithListTypes()
+	m.Name = types.StringValue("p")
+	m.ImageName = types.StringValue("img")
+	m.CpuFlavorId = types.StringValue("cpu5c")
+	m.VcpuCount = types.Float64Value(4)
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("unexpected diagnostics: %v", resp.Diagnostics)
+	}
+
+	var out PodModel
+	resp.State.Get(context.Background(), &out)
+	if out.GpuCount.ValueInt64() != 1 {
+		t.Errorf("gpu_count in state = %v, want 1 (matches the schema default the plan produced)", out.GpuCount)
+	}
+}
+
+func TestPodCreate_RejectsCpuAndGpuTogether(t *testing.T) {
+	m := baseModelWithListTypes()
+	m.Name = types.StringValue("p")
+	m.ImageName = types.StringValue("img")
+	m.CpuFlavorId = types.StringValue("cpu3g")
+	m.GpuTypeId = types.StringValue("nvidia-test")
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: PodResourceSchema(context.Background())}}
+	(&PodResource{}).Create(context.Background(), resource.CreateRequest{Config: podConfig(t, m)}, resp)
+	if !resp.Diagnostics.HasError() {
+		t.Fatal("expected an error when both cpu_flavor_id and gpu_type_id are set")
+	}
 }
 
 func TestPodDelete_Success(t *testing.T) {

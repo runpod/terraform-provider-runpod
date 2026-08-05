@@ -12,7 +12,7 @@ import (
 )
 
 // Regression test for the systemic GraphQL double-unwrap (CE-1652), fixed by
-// PR #20: client.Query() now returns the inner GraphQL "data" map, so callers
+// PR #20: rlClient.Query() now returns the inner GraphQL "data" map, so callers
 // read result["machine"] directly. This asserts the FIXED behavior — Read
 // decodes the config input first (so we supply a valid config with Id=m1),
 // then populates state from every dereferenced machine field without error.

@@ -23,7 +23,7 @@ func machineConfig(t *testing.T, m MachineModel) tfsdk.Config {
 }
 
 // TestMachineCreate_SetsID is a regression test for the CE-1652 fix (PR #20).
-// client.Query() now returns the inner GraphQL `data` map directly, so Create
+// rlClient.Query() now returns the inner GraphQL `data` map directly, so Create
 // reads result["machineAdd"]["id"] and sets config.Id. A valid GraphQL
 // response must now succeed and populate the state Id.
 func TestMachineCreate_SetsID(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMachineCreate_SetsID(t *testing.T) {
 }
 
 // TestMachineRead_PopulatesState is a regression test for the CE-1652 fix (PR #20).
-// client.Query() now returns the inner GraphQL `data` map directly, so Read
+// rlClient.Query() now returns the inner GraphQL `data` map directly, so Read
 // reads result["machine"] and populates the state. The stub must supply every
 // dereferenced field (name, gpuCount, gpuType, cpuCount, memoryInGb,
 // diskSizeInGb, region, listed, secureCloud, maintenanceMode, verified,

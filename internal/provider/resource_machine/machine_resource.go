@@ -2,10 +2,13 @@ package resource_machine
 
 import (
 	"context"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/runpod/terraform-provider-runpod/internal/provider/client"
-	"os"
 )
 
 func NewMachineResource() resource.Resource {
@@ -13,30 +16,36 @@ func NewMachineResource() resource.Resource {
 }
 
 type MachineResource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (r *MachineResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if clientWrapper, ok := req.ProviderData.(*client.RunPodClientWrapper); ok {
+			r.rlClient = &client.RunPodClient{
+				APIKey:      clientWrapper.APIKey,
+				GraphQLEndpoint: "https://api.runpod.io/graphql",
+				RestBaseURL: clientWrapper.RestBaseURL,
+				Client: &http.Client{Timeout: 60 * time.Second},
+			}
+		} else if client, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.rlClient = client
+		}
 	}
 }
 
 func (r *MachineResource) getClient() *client.RunPodClient {
-	if r.client != nil {
-		return r.client
+	if r.rlClient != nil {
+		return r.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
-	restBaseURL := os.Getenv("RUNPOD_BASE_URL")
-	if restBaseURL == "" {
-		restBaseURL = "https://api.runpod.io/v2"
-	}
-	r.client = client.NewRunPodClient(apiKey, graphqlEndpoint, restBaseURL)
-	return r.client
+	// Machines are GraphQL-only; the REST base URL is unused here.
+	r.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, "")
+	return r.rlClient
 }
 
 func (r *MachineResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

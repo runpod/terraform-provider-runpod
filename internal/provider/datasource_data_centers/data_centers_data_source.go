@@ -15,26 +15,26 @@ func NewDataCentersDataSource() datasource.DataSource {
 }
 
 type DataCentersDataSource struct {
-	client *client.RunPodClient
+	rlClient *client.RunPodClient
 }
 
 func (d *DataCentersDataSource) Configure(ctx context.Context, req datasource.ConfigureRequest, resp *datasource.ConfigureResponse) {
 	if req.ProviderData != nil {
-		d.client = req.ProviderData.(*client.RunPodClient)
+		d.rlClient = req.ProviderData.(*client.RunPodClient)
 	}
 }
 
 func (d *DataCentersDataSource) getClient() *client.RunPodClient {
-	if d.client != nil {
-		return d.client
+	if d.rlClient != nil {
+		return d.rlClient
 	}
 	apiKey := os.Getenv("RUNPOD_API_KEY")
 	graphqlEndpoint := os.Getenv("RUNPOD_GRAPHQL_URL")
 	if graphqlEndpoint == "" {
 		graphqlEndpoint = "https://api.runpod.io/graphql"
 	}
-	d.client = client.NewRunPodClient(apiKey, graphqlEndpoint, "https://rest.runpod.io/v1")
-	return d.client
+	d.rlClient = client.NewRunPodClient(apiKey, graphqlEndpoint, client.GetRestBaseURL())
+	return d.rlClient
 }
 
 func (d *DataCentersDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -46,20 +46,7 @@ func (d *DataCentersDataSource) Schema(ctx context.Context, req datasource.Schem
 }
 
 func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadRequest, resp *datasource.ReadResponse) {
-	query := `
-		query GetDataCenters {
-			dataCenters {
-				id
-				name
-				location
-				globalNetwork
-			}
-		}
-	`
-
-	variables := map[string]interface{}{}
-
-	result, err := d.getClient().Query(ctx, query, variables)
+	result, err := d.getClient().RestQuery(ctx, "GET", "catalog/datacenters", nil)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", err.Error())
 		return
@@ -86,10 +73,14 @@ func (d *DataCentersDataSource) Read(ctx context.Context, req datasource.ReadReq
 					return
 				}
 				
-				if v, ok := dcMap["location"].(string); ok {
+				location = ""				
+				// v2 API uses 'region'; 'location' was the pre-v2 field name
+				if v, ok := dcMap["region"].(string); ok {
+					location = v
+				} else if v, ok := dcMap["location"].(string); ok {
 					location = v
 				} else {
-					resp.Diagnostics.AddError("API Error", "Field 'location' is missing or not a string in data center response")
+					resp.Diagnostics.AddError("API Error", "Field 'region' (or legacy 'location') is missing or not a string in data center response")
 					return
 				}
 				

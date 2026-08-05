@@ -12,7 +12,7 @@ import (
 )
 
 // errServer returns a stub GraphQL server that always replies with a non-200
-// status, forcing client.Query() to return a transport-style error. This drives
+// status, forcing rlClient.Query() to return a transport-style error. This drives
 // the `resp.Diagnostics.AddError("API Error", ...)` branches in every CRUD op.
 func errServer(t *testing.T) *httptest.Server {
 	t.Helper()

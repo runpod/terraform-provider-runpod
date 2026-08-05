@@ -10,8 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// readWithServer wires the data source to a local REST stub and runs Read.
-// The stub body is written as-is; client.RestQuery handles v2 response envelope.
+// readWithServer wires the data source to a local GraphQL stub and runs Read.
+// The stub body is written as-is as the GraphQL response envelope.
 func readWithServer(t *testing.T, body string) *datasource.ReadResponse {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -19,7 +19,7 @@ func readWithServer(t *testing.T, body string) *datasource.ReadResponse {
 	}))
 	t.Cleanup(srv.Close)
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+	t.Setenv("RUNPOD_GRAPHQL_URL", srv.URL)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}
@@ -63,10 +63,10 @@ func TestSchema_PopulatesAttributes(t *testing.T) {
 	}
 }
 
-// TestRead_RestError_AddsDiagnostic covers the error branch where the
-// server returns a REST API error response.
-func TestRead_RestError_AddsDiagnostic(t *testing.T) {
-	resp := readWithServer(t, `{"error":"Unauthorized"}`)
+// TestRead_GraphQLErrorResponse_AddsDiagnostic covers the error branch where the
+// server returns a 200 response containing a GraphQL errors array.
+func TestRead_GraphQLErrorResponse_AddsDiagnostic(t *testing.T) {
+	resp := readWithServer(t, `{"errors":[{"message":"Unauthorized"}]}`)
 	if !resp.Diagnostics.HasError() {
 		t.Fatal("expected diagnostics error from REST error response")
 	}
@@ -82,7 +82,7 @@ func TestRead_RestError_AddsDiagnostic(t *testing.T) {
 }
 
 // TestRead_HTTPError_AddsDiagnostic covers the same error branch reached via a
-// non-200 HTTP status from the REST endpoint.
+// non-200 HTTP status from the GraphQL endpoint.
 func TestRead_HTTPError_AddsDiagnostic(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -90,7 +90,7 @@ func TestRead_HTTPError_AddsDiagnostic(t *testing.T) {
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+	t.Setenv("RUNPOD_GRAPHQL_URL", srv.URL)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}
@@ -102,8 +102,7 @@ func TestRead_HTTPError_AddsDiagnostic(t *testing.T) {
 }
 
 // TestRead_DataMissingInResponse_AddsDiagnostic covers the else branch: the
-// response decodes but has no `data` object, so Read reports
-// "User data not found in response".
+// response decodes but has no `data` object, so Read reports an error.
 func TestRead_DataMissingInResponse_AddsDiagnostic(t *testing.T) {
 	resp := readWithServer(t, `{"somethingElse":{}}`)
 	if !resp.Diagnostics.HasError() {

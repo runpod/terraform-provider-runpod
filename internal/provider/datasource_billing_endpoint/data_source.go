@@ -50,7 +50,7 @@ func (d *BillingEndpointDataSource) Read(ctx context.Context, req datasource.Rea
 
 	restUrl := os.Getenv("RUNPOD_BASE_URL")
 	if restUrl == "" {
-		restUrl = "https://rest.runpod.io/v1"
+		restUrl = client.GetRestBaseURL()
 	}
 
 	runpodClient := client.NewRunPodClient(apiKey, "https://api.runpod.io/graphql", restUrl)
@@ -60,20 +60,20 @@ func (d *BillingEndpointDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	if billingArray, ok := result["billing"].([]interface{}); ok {
-		records := billingArray
+	if recordsArray, ok := result["records"].([]interface{}); ok {
+		records := recordsArray
 		models := make([]BillingRecordModel, len(records))
 		for i, record := range records {
 			if recordMap, ok := record.(map[string]interface{}); ok {
 				models[i] = BillingRecordModel{
-					Amount: types.Float64Value(recordMap["amount"].(float64)),
+					Amount: types.Float64Value(recordMap["totalAmount"].(float64)),
 					EndpointId: func() types.String {
 						if val, ok := recordMap["endpointId"].(string); ok {
 							return types.StringValue(val)
 						}
 						return types.StringNull()
 					}(),
-					Time: types.StringValue(recordMap["time"].(string)),
+					Time: types.StringValue(recordMap["startTime"].(string)),
 					TimeBilledMs: func() types.Int64 {
 						if val, ok := recordMap["timeBilledMs"].(float64); ok {
 							return types.Int64Value(int64(val))

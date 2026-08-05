@@ -10,30 +10,34 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// TestUserRead_PopulatesState tests the REST migration with v2 user endpoint.
-func TestUserRead_PopulatesState(t *testing.T) {
+// graphqlStub serves a canned GraphQL response for any request.
+func graphqlStub(t *testing.T, body string) {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// v2 REST response format with data envelope
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "u1",
-				"name": "Test User",
-				"email": "test@runpod.io",
-				"pubKey": "ssh-ed25519 AAAA test@runpod",
-				"verified": true,
-				"cloudType": "aws",
-				"gpuLimit": 10,
-				"gpuUsage": 2,
-				"storageLimit": 100,
-				"storageUsage": 25
-			},
-			"meta": {},
-			"error": null
-		}`))
+		if r.Method != "POST" {
+			t.Errorf("expected POST to GraphQL endpoint, got %q", r.Method)
+		}
+		if auth := r.Header.Get("Authorization"); auth != "Bearer testkey123" {
+			t.Errorf("expected Bearer token, got %q", auth)
+		}
+		_, _ = w.Write([]byte(body))
 	}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+	t.Setenv("RUNPOD_GRAPHQL_URL", srv.URL)
+}
+
+// TestUserRead_PopulatesState tests the GraphQL `myself` query: there is no
+// user endpoint in the v2 REST API, so account info comes from GraphQL.
+func TestUserRead_PopulatesState(t *testing.T) {
+	graphqlStub(t, `{
+		"data": {
+			"myself": {
+				"id": "u1",
+				"pubKey": "ssh-ed25519 AAAA test@runpod"
+			}
+		}
+	}`)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}
@@ -51,48 +55,15 @@ func TestUserRead_PopulatesState(t *testing.T) {
 	if model.Id.ValueString() != "u1" {
 		t.Errorf("expected id %q, got %q", "u1", model.Id.ValueString())
 	}
-	if model.Name.ValueString() != "Test User" {
-		t.Errorf("expected name %q, got %q", "Test User", model.Name.ValueString())
-	}
-	if model.Email.ValueString() != "test@runpod.io" {
-		t.Errorf("expected email %q, got %q", "test@runpod.io", model.Email.ValueString())
-	}
 	if model.PubKey.ValueString() != "ssh-ed25519 AAAA test@runpod" {
 		t.Errorf("expected pubKey %q, got %q", "ssh-ed25519 AAAA test@runpod", model.PubKey.ValueString())
 	}
-	if !model.Verified.ValueBool() {
-		t.Errorf("expected verified to be true")
-	}
-	if model.CloudType.ValueString() != "aws" {
-		t.Errorf("expected cloudType %q, got %q", "aws", model.CloudType.ValueString())
-	}
-	if model.GpuLimit.ValueFloat64() != 10 {
-		t.Errorf("expected gpuLimit %v, got %v", 10.0, model.GpuLimit.ValueFloat64())
-	}
-	if model.GpuUsage.ValueFloat64() != 2 {
-		t.Errorf("expected gpuUsage %v, got %v", 2.0, model.GpuUsage.ValueFloat64())
-	}
-	if model.StorageLimit.ValueFloat64() != 100 {
-		t.Errorf("expected storageLimit %v, got %v", 100.0, model.StorageLimit.ValueFloat64())
-	}
-	if model.StorageUsage.ValueFloat64() != 25 {
-		t.Errorf("expected storageUsage %v, got %v", 25.0, model.StorageUsage.ValueFloat64())
-	}
 }
 
-// TestUserRead_HandlesMissingOptionalFields tests that optional fields can be omitted.
-func TestUserRead_HandlesMissingOptionalFields(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{
-			"data": {
-				"id": "u2",
-				"name": "Minimal User"
-			}
-		}`))
-	}))
-	defer srv.Close()
-	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+// TestUserRead_MissingPubKey tests that a `myself` response without pubKey
+// still populates state with a null pub_key.
+func TestUserRead_MissingPubKey(t *testing.T) {
+	graphqlStub(t, `{"data": {"myself": {"id": "u2"}}}`)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}
@@ -110,19 +81,14 @@ func TestUserRead_HandlesMissingOptionalFields(t *testing.T) {
 	if model.Id.ValueString() != "u2" {
 		t.Errorf("expected id %q, got %q", "u2", model.Id.ValueString())
 	}
-	if model.Name.ValueString() != "Minimal User" {
-		t.Errorf("expected name %q, got %q", "Minimal User", model.Name.ValueString())
+	if !model.PubKey.IsNull() {
+		t.Errorf("expected pub_key to be null when omitted, got %v", model.PubKey)
 	}
 }
 
 // TestUserRead_MissingIdField_AddsDiagnostic tests that missing id field causes an error.
 func TestUserRead_MissingIdField_AddsDiagnostic(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"data": {"name": "No ID User"}}`))
-	}))
-	defer srv.Close()
-	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+	graphqlStub(t, `{"data": {"myself": {"pubKey": "x"}}}`)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}
@@ -142,15 +108,15 @@ func TestUserRead_MissingIdField_AddsDiagnostic(t *testing.T) {
 	}
 }
 
-// TestUserRead_RestError_AddsDiagnostic tests REST API error handling.
-func TestUserRead_RestError_AddsDiagnostic(t *testing.T) {
+// TestUserRead_Error_AddsDiagnostic tests GraphQL endpoint error handling.
+func TestUserRead_Error_AddsDiagnostic(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = w.Write([]byte(`{"error":"Internal Server Error"}`))
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_BASE_URL", srv.URL)
+	t.Setenv("RUNPOD_GRAPHQL_URL", srv.URL)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: UserDataSourceSchema(ctx)}}

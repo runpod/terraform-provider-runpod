@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 )
 
-// CE-1652 (GraphQL double-unwrap) is FIXED by PR #20: client.Query() returns the
+// CE-1652 (GraphQL double-unwrap) is FIXED by PR #20: rlClient.Query() returns the
 // inner "data" map and Read() reads result["dataCenter"] directly. This data
 // source is still non-functional because of a SEPARATE, pre-existing bug that
 // #20 did not touch: Read builds a []DataCentersModel slice and calls State.Set
@@ -26,11 +26,13 @@ import (
 // to assert the parsed data-center list.
 func TestDataCentersRead_PopulatesState(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"data":{"dataCenters":[{"id":"US-CA-1","name":"California 1","location":"US","globalNetwork":true}]}}`))
+		if r.URL.Path == "/v2/catalog/datacenters" {
+			_, _ = w.Write([]byte(`{"dataCenters":[{"id":"US-CA-1","name":"California 1","location":"US","globalNetwork":true}]}`))
+		}
 	}))
 	defer srv.Close()
 	t.Setenv("RUNPOD_API_KEY", "testkey123")
-	t.Setenv("RUNPOD_GRAPHQL_URL", srv.URL)
+	t.Setenv("RUNPOD_BASE_URL", srv.URL)
 
 	ctx := context.Background()
 	resp := &datasource.ReadResponse{State: tfsdk.State{Schema: DataCentersDataSourceSchema(ctx)}}

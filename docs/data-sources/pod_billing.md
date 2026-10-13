@@ -3,12 +3,12 @@
 page_title: "runpod_pod_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. Replaces the deprecated runpod_billing_pod.
 ---
 
 # runpod_pod_billing (Data Source)
 
-Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. Replaces the deprecated runpod_billing_pod.
 
 ## Example Usage
 

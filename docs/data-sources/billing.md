@@ -3,12 +3,12 @@
 page_title: "runpod_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Account-wide spend, time-bucketed, with every cost component broken out by resource. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Account-wide spend, time-bucketed, with every cost component broken out by resource.
 ---
 
 # runpod_billing (Data Source)
 
-Account-wide spend, time-bucketed, with every cost component broken out by resource. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Account-wide spend, time-bucketed, with every cost component broken out by resource.
 
 ## Example Usage
 

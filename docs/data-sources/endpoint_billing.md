@@ -3,12 +3,12 @@
 page_title: "runpod_endpoint_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. This is not the replacement for the deprecated runpod_billing_endpoint; use runpod_serverless_billing for that.
 ---
 
 # runpod_endpoint_billing (Data Source)
 
-Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. This is not the replacement for the deprecated runpod_billing_endpoint; use runpod_serverless_billing for that.
 
 ## Example Usage
 

@@ -15,7 +15,7 @@ thing.
 
 ## Requirements
 
-- Terraform 1.6 or higher
+- Terraform 1.6 or higher to use the provider and modules; 1.13 or higher to run `task validate-tf` and the tests in `tests/`
 - Go 1.25 or higher (for development)
 - [Task](https://taskfile.dev) (for development)
 - Python 3 (for the module coverage gate and for `task docs`, which re-keys the

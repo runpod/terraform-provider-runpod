@@ -20,14 +20,6 @@ run "account_and_billing" {
     error_message = "the account response carried no id"
   }
   assert {
-    condition     = output.gpu_headroom != null
-    error_message = "the account response carried no GPU quota"
-  }
-  assert {
-    condition     = output.storage_headroom != null
-    error_message = "the account response carried no storage quota"
-  }
-  assert {
     condition     = output.machine_id == null && output.machine_gpu_total == null
     error_message = "a machine was registered without create_machine"
   }

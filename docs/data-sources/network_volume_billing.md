@@ -3,12 +3,12 @@
 page_title: "runpod_network_volume_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. Replaces the deprecated runpod_billing_network_volume.
 ---
 
 # runpod_network_volume_billing (Data Source)
 
-Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. Replaces the deprecated runpod_billing_network_volume.
 
 ## Example Usage
 

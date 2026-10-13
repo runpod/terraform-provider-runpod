@@ -14,14 +14,6 @@ resource "runpod_serverless_endpoint" "inference" {
   # and only on hosts at or above the CUDA floor.
   excluded_types   = ["NVIDIA L40"]
   min_cuda_version = "12.1"
-
-  # Deprecated, both preserving 1.x attributes. compute_type restates the GPU
-  # choice gpu_pools already makes, so it is derived from what the v2 API
-  # reports and a value contradicting it is rejected; nothing is written to the
-  # REST v1 shim for it. gpu_type_priority has no v2 field at all and is applied
-  # through that shim.
-  compute_type      = "GPU"
-  gpu_type_priority = "availability"
 }
 
 # A load-balancer endpoint routes requests straight to the worker's own HTTP
@@ -61,11 +53,6 @@ resource "runpod_serverless_endpoint" "cpu" {
       vcpu_count  = 8
     },
   ]
-
-  # The CPU-side counterpart of the deprecated pair above: the 1.x compute_type,
-  # derived from the cpu block, and cpu_flavor_priority on the REST v1 shim.
-  compute_type        = "CPU"
-  cpu_flavor_priority = "availability"
 }
 
 # Queue endpoints report their job operation URLs; a load-balancer endpoint
@@ -76,14 +63,4 @@ output "inference_run_url" {
 
 output "http_base_url" {
   value = runpod_serverless_endpoint.http.request_urls.base
-}
-
-# Deprecated read-backs, preserving the 1.x version and workers attributes.
-# runpod_endpoint_workers is the supported view of the same workers.
-output "inference_version" {
-  value = runpod_serverless_endpoint.inference.version
-}
-
-output "inference_worker_ids" {
-  value = [for worker in runpod_serverless_endpoint.inference.workers : worker.id]
 }

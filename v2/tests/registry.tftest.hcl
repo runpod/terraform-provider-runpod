@@ -11,6 +11,25 @@ provider "runpod" {}
 # The credential cannot be created without the login, so the run fails without
 # it. The ARN has to be one this account is allowed to delegate; leaving it
 # unset skips the delegation and its assertions.
+#
+# The run block reads them as var.*, which a test file can only do for
+# variables it declares itself; tests/main.tf's declarations do not reach a run
+# that loads another module.
+variable "registry_username" {
+  type    = string
+  default = null
+}
+
+variable "registry_password" {
+  type      = string
+  sensitive = true
+  default   = null
+}
+
+variable "ecr_resource_arn" {
+  type    = string
+  default = null
+}
 
 run "store" {
   module {

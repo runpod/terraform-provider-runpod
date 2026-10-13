@@ -92,6 +92,18 @@ release:
   # release. The registry ingests both, but only the full release satisfies an
   # ordinary version constraint.
   prerelease: auto
+  # The changelog below is off, so this header is the whole release body.
+  header: |
+    Runpod Terraform provider {{ .Version }}. The 2.x line is a rebuild on the Runpod REST API v2 and
+    breaks 1.x configurations. Before upgrading from 1.x, read the migration guide:
+    https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x
+
+    Install with `source = "runpod/runpod"` and `version = "~> 2.0"`.
+    {{- if .Prerelease }} This is a release candidate, which `~> 2.0` does not select: pin `version = "{{ .Version }}"` to install it.{{ end }}
+
+    Full notes: https://github.com/runpod/terraform-provider-runpod/blob/{{ .Tag }}/CHANGELOG.md
+
+    Using an AI agent? Point it to https://docs.runpod.io/agent-setup.md
 
 changelog:
   disable: true

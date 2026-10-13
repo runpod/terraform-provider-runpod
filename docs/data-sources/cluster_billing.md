@@ -3,12 +3,12 @@
 page_title: "runpod_cluster_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket.
 ---
 
 # runpod_cluster_billing (Data Source)
 
-Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket.
 
 ## Example Usage
 

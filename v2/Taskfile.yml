@@ -26,13 +26,15 @@ tasks:
     env:
       CGO_ENABLED: '0'
     cmds:
-      # -ldflags stamps main.version so the running provider reports the same
-      # version the mirror path installs it as.
+      # The mirror path carries the release version, so the modules' ~> 2.0
+      # pins install this build. main.version, which goes into the User-Agent,
+      # gets a -dev suffix: only the released binary reports the bare version,
+      # so the API's request data can tell our own runs from users'.
       - |
-        echo -n "Building provider v{{.VERSION}} ({{.ARCH}})... "
+        echo -n "Building provider v{{.VERSION}}-dev ({{.ARCH}})... "
         rm -rf "{{.MIRROR_DIR}}"
         mkdir -p "{{.MIRROR_DIR}}"
-        go build -ldflags "-X main.version={{.VERSION}}" -o "{{.MIRROR_DIR}}/{{.NAME}}_v{{.VERSION}}" .
+        go build -ldflags "-X main.version={{.VERSION}}-dev" -o "{{.MIRROR_DIR}}/{{.NAME}}_v{{.VERSION}}" .
         echo "done"
       - task: dev-config
 

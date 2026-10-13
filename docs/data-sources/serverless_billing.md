@@ -3,12 +3,12 @@
 page_title: "runpod_serverless_billing Data Source - Runpod"
 subcategory: ""
 description: |-
-  Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+  Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. Replaces the deprecated runpod_billing_endpoint.
 ---
 
 # runpod_serverless_billing (Data Source)
 
-Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. Replaces the 1.x provider's billing data source, which read the REST v1 API.
+Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. Replaces the deprecated runpod_billing_endpoint.
 
 ## Example Usage
 

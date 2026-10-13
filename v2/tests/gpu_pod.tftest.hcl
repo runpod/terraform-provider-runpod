@@ -1,9 +1,11 @@
 provider "runpod" {}
 
 # The GPU the pod tests create. A run block can only read variables declared in
-# its own test file, so it is declared here; TF_VAR_gpu_type_id overrides it.
-variables {
-  gpu_type_id = "NVIDIA L40S"
+# its own test file, so it is declared here. A file-level variables block would
+# outrank TF_VAR_gpu_type_id; a variable block's default does not.
+variable "gpu_type_id" {
+  type    = string
+  default = "NVIDIA L40S"
 }
 
 # Creates a real (billed) pod; terraform test destroys it afterwards.

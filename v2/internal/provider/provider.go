@@ -39,7 +39,7 @@ func (p *runpodProvider) Metadata(_ context.Context, _ provider.MetadataRequest,
 
 func (p *runpodProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Interact with Runpod through the v2 REST API.",
+		Description: "Manage Runpod GPU and CPU pods, Serverless endpoints, templates, network volumes, Instant Clusters, account SSH keys and container registry credentials through the Runpod REST API v2.",
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				Description: "Runpod API key. Falls back to the RUNPOD_API_KEY environment variable.",

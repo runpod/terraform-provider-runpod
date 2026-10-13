@@ -191,7 +191,7 @@ fi
 
 tf_platform=""
 if ! command -v terraform > /dev/null 2>&1; then
-  fail "terraform is not on PATH: install Terraform 1.6 or newer"
+  fail "terraform is not on PATH: install Terraform 1.13 or newer"
 else
   tf_json="$(CHECKPOINT_DISABLE=1 terraform version -json 2> /dev/null)"
   tf_version="$(printf '%s\n' "$tf_json" | sed -n 's/.*"terraform_version": *"\([^"]*\)".*/\1/p')"
@@ -202,10 +202,10 @@ else
   case "$tf_major.$tf_minor" in
     *[!0-9.]* | .* | *.) fail "could not read the terraform version from 'terraform version -json'" ;;
     *)
-      if [ "$tf_major" -gt 1 ] || { [ "$tf_major" -eq 1 ] && [ "$tf_minor" -ge 6 ]; }; then
-        ok "terraform $tf_version (1.6 or newer), running as $tf_platform"
+      if [ "$tf_major" -gt 1 ] || { [ "$tf_major" -eq 1 ] && [ "$tf_minor" -ge 13 ]; }; then
+        ok "terraform $tf_version (1.13 or newer), running as $tf_platform"
       else
-        fail "terraform $tf_version is older than 1.6, the minimum terraform test needs"
+        fail "terraform $tf_version is older than 1.13, the first that reads the variable blocks in tests/*.tftest.hcl"
       fi
       ;;
   esac

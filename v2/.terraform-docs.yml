@@ -1,0 +1,24 @@
+# terraform-docs configuration for the use-case modules under modules/.
+# `task docs` injects the generated tables into each module's README.md between
+# the BEGIN_TF_DOCS / END_TF_DOCS markers; the prose around them is hand-written.
+formatter: "markdown table"
+
+output:
+  file: README.md
+  mode: inject
+  template: |-
+    <!-- BEGIN_TF_DOCS -->
+    {{ .Content }}
+    <!-- END_TF_DOCS -->
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: false
+  default: true
+  description: true
+  hide-empty: true
+  required: true
+  type: true

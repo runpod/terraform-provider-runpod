@@ -1,0 +1,204 @@
+version: '3'
+
+silent: true
+
+# RUNPOD_API_KEY, and RUNPOD_API_BASE_URL for stage, go in .env, which git
+# ignores; see .env.example.
+dotenv: ['.env']
+
+vars:
+  NAME: terraform-provider-runpod
+  VERSION: 2.0.0
+  TERRAFORM_DOCS: go run github.com/terraform-docs/terraform-docs@v0.24.0
+  GOLANGCI_LINT: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+  DIR_ARTIFACTS: '{{.ROOT_DIR}}/artifacts'
+  DIR_MIRROR: '{{.DIR_ARTIFACTS}}/provider-mirror'
+  DEV_TFRC: '{{.DIR_ARTIFACTS}}/dev.tfrc'
+  PROVIDER_SOURCE: registry.terraform.io/runpod/runpod
+
+tasks:
+  build:
+    desc: Build the provider into a local filesystem mirror terraform can install from
+    vars:
+      ARCH:
+        sh: echo "$(go env GOOS)_$(go env GOARCH)"
+      MIRROR_DIR: '{{.DIR_MIRROR}}/{{.PROVIDER_SOURCE}}/{{.VERSION}}/{{.ARCH}}'
+    env:
+      CGO_ENABLED: '0'
+    cmds:
+      # -ldflags stamps main.version so the running provider reports the same
+      # version the mirror path installs it as.
+      - |
+        echo -n "Building provider v{{.VERSION}} ({{.ARCH}})... "
+        rm -rf "{{.MIRROR_DIR}}"
+        mkdir -p "{{.MIRROR_DIR}}"
+        go build -ldflags "-X main.version={{.VERSION}}" -o "{{.MIRROR_DIR}}/{{.NAME}}_v{{.VERSION}}" .
+        echo "done"
+      - task: dev-config
+
+  dev-config:
+    internal: true
+    cmds:
+      - |
+        mkdir -p "{{.DIR_ARTIFACTS}}"
+        cat > "{{.DEV_TFRC}}" <<EOF
+        provider_installation {
+          filesystem_mirror {
+            path    = "{{.DIR_MIRROR}}"
+            include = ["{{.PROVIDER_SOURCE}}"]
+          }
+          direct {
+            exclude = ["{{.PROVIDER_SOURCE}}"]
+          }
+        }
+        EOF
+
+  schema:
+    internal: true
+    env:
+      TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
+    cmds:
+      # The registered set as the built binary reports it. The coverage gate and
+      # the docs renderer both read this file.
+      - |
+        rm -rf tests/.terraform tests/.terraform.lock.hcl
+        terraform -chdir=tests init -backend=false -input=false > /dev/null
+        terraform -chdir=tests providers schema -json > "{{.DIR_ARTIFACTS}}/schema.json"
+        rm -rf tests/.terraform tests/.terraform.lock.hcl
+
+  test:
+    desc: Unit tests (offline, no API key, no terraform binary)
+    cmds:
+      - go vet ./...
+      - go test ./...
+
+  lint:
+    desc: golangci-lint over the whole module, with the linter set Runpod's Go repos use
+    cmds:
+      # The config is .golangci.yaml; the version is pinned here so the local
+      # run and the CI job report the same findings.
+      - '{{.GOLANGCI_LINT}} run ./...'
+
+  test-tf:
+    desc: |
+      Acceptance tests: terraform test over the use-case modules (tests/*.tftest.hcl).
+      Needs RUNPOD_API_KEY (put it in .env); set RUNPOD_API_BASE_URL for stage.
+      The registry test also needs TF_VAR_registry_username and TF_VAR_registry_password,
+      plus TF_VAR_ecr_resource_arn for the ECR delegation half.
+      Creates and destroys real resources. TEST=<name> runs one file, e.g.
+      task test-tf TEST=catalog_discovery
+    deps: [build]
+    vars:
+      FILTER: '{{if .TEST}}-filter={{.TEST}}.tftest.hcl{{end}}'
+    env:
+      TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
+    cmds:
+      - |
+        if [ -z "${RUNPOD_API_KEY:-}" ]; then
+          echo "RUNPOD_API_KEY is not set: put it in {{.ROOT_DIR}}/.env (see .env.example)"
+          exit 1
+        fi
+        rm -rf tests/.terraform tests/.terraform.lock.hcl
+        terraform -chdir=tests init -backend=false -input=false > /dev/null
+        terraform -chdir=tests test {{.FILTER}}
+
+  test-e2e:
+    desc: |
+      The full live run: every tests/*.tftest.hcl file, cheapest first, one terraform test
+      per file, then a read-only sweep that lists anything named tf-test- left on the account.
+      A pre-flight checks the key, the local build and terraform before anything live runs.
+      Creates and bills real resources. E2E_DRY_RUN=1 prints the plan and runs nothing;
+      E2E_ONLY="a b" runs just those files. Opt-ins: E2E_CLUSTER=1 (two H100 pods),
+      E2E_HOST_ACCOUNT=1 (legacy_machine), E2E_SSH_KEYS=yes (replaces the account's SSH keys).
+      Logs land in E2E_LOG_ROOT, default artifacts/e2e. See scripts/test_e2e.sh.
+    deps: [build]
+    # Attached to the terminal, so Ctrl-C and the live output reach the script directly.
+    interactive: true
+    env:
+      TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
+      E2E_PROVIDER_VERSION: '{{.VERSION}}'
+    cmds:
+      - bash scripts/test_e2e.sh
+
+  validate-tf:
+    desc: Validate the test root and every use-case module, check module coverage and the generated READMEs (offline)
+    deps: [build]
+    env:
+      TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
+    cmds:
+      - |
+        rm -rf tests/.terraform tests/.terraform.lock.hcl
+        terraform -chdir=tests init -backend=false -input=false > /dev/null
+        terraform -chdir=tests validate
+      - terraform fmt -check -recursive modules tests
+      - |
+        for dir in modules/*/; do
+          rm -rf "${dir}.terraform" "${dir}.terraform.lock.hcl"
+          terraform -chdir="${dir}" init -backend=false -input=false > /dev/null || exit 1
+          terraform -chdir="${dir}" validate > /dev/null || exit 1
+          # The lock records the locally mirrored build, and terraform-docs
+          # reads it: leaving it behind would make the README's provider table
+          # say 2.0.0 instead of the ~> 2.0 the module declares, and the
+          # --output-check below would then always disagree with task docs.
+          rm -rf "${dir}.terraform" "${dir}.terraform.lock.hcl"
+          echo "${dir} valid"
+        done
+      - task: schema
+      # The coverage gate: a registered type no module uses fails the build.
+      - python3 scripts/module_coverage.py "{{.DIR_ARTIFACTS}}/schema.json" modules
+      # The generated tables in each module README have to match its .tf files.
+      - |
+        for dir in modules/*/; do
+          {{.TERRAFORM_DOCS}} --config .terraform-docs.yml --output-check "${dir}"
+        done
+      # Every module needs the guide page that documents it.
+      - |
+        for dir in modules/*/; do
+          tmpl="templates/guides/$(basename "${dir}").md.tmpl"
+          if [ ! -f "${tmpl}" ]; then
+            echo "${tmpl} is missing: every module under modules/ needs a guide"
+            exit 1
+          fi
+        done
+        echo "every module has a guide template"
+
+  docs:
+    desc: Generate registry docs into the repository-root docs/ and the terraform-docs tables into the module READMEs
+    deps: [build]
+    env:
+      TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
+    cmds:
+      - task: schema
+      # tfplugindocs v0.25 only finds the schema under the hashicorp/<name>
+      # registry key; re-key our runpod/runpod entry before rendering.
+      - |
+        python3 -c '
+        import json
+        with open("{{.DIR_ARTIFACTS}}/schema.json") as fh:
+            doc = json.load(fh)
+        schemas = doc["provider_schemas"]
+        schemas["registry.terraform.io/hashicorp/runpod"] = schemas.pop("registry.terraform.io/runpod/runpod")
+        with open("{{.DIR_ARTIFACTS}}/schema-docs.json", "w") as fh:
+            json.dump(doc, fh)
+        '
+      # The Terraform Registry reads docs/ only at the repository root, so the
+      # pages render one level up from this v2/ directory.
+      - |
+        go run github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@v0.25.0 generate \
+          --provider-name runpod \
+          --providers-schema "{{.DIR_ARTIFACTS}}/schema-docs.json" \
+          --rendered-provider-name "Runpod" \
+          --rendered-website-dir ../docs
+      # The input and output tables inside each module README's TF_DOCS markers.
+      - |
+        for dir in modules/*/; do
+          {{.TERRAFORM_DOCS}} --config .terraform-docs.yml "${dir}"
+        done
+
+  all:
+    desc: Build, unit-test, lint, and validate everything that runs offline
+    cmds:
+      - task: build
+      - task: test
+      - task: lint
+      - task: validate-tf

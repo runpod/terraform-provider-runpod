@@ -1,0 +1,82 @@
+---
+page_title: "Pod lifecycle"
+subcategory: "Compute"
+description: |-
+  Runs one state transition (start, stop, restart or terminate) on a pod that already exists, then reads the pod back and lists every pod on the account.
+---
+
+# Pod lifecycle
+
+Runs one state transition (start, stop, restart or terminate) on a pod
+that already exists, then reads the pod back and lists every pod on the
+account. Use it to drive a pod created outside Terraform, or a pod from
+[gpu-pod](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/gpu-pod)
+/
+[cpu-pod](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/cpu-pod)
+whose run state you do not want managed declaratively.
+
+```bash
+terraform apply -var pod_id=gfj8b292vyg08g -var action=restart
+```
+
+`triggers` is the usual way to tie a restart to something else moving:
+
+```hcl
+triggers = {
+  image = var.image
+}
+```
+
+Free by itself, but the transition it runs changes what the pod costs:
+`start` resumes hourly billing, `stop` releases the compute, `terminate`
+deletes the pod. Do not point this at a pod whose `runpod_pod` resource sets
+`desired_state`: that attribute manages the same transitions declaratively,
+and the two would undo each other on every apply.
+
+The `status` output comes from the deprecated GraphQL shim and exists for
+1.x configurations; `pod_status` is the supported read.
+
+## Usage
+
+```hcl
+module "pod_lifecycle" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0"
+
+  pod_id = "gfj8b292vyg08g"
+  action = "restart"
+}
+```
+
+## Resources and data sources
+
+- [`runpod_pod_action`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/pod_action)
+- [`runpod_pod`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/pod)
+- [`runpod_pods`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/pods)
+
+## Configuration
+
+```terraform
+# One state transition on a pod that already exists. The resource is
+# imperative: the action runs on create and again whenever action or triggers
+# change; a refresh calls nothing and destroying it only forgets it.
+resource "runpod_pod_action" "this" {
+  pod_id   = var.pod_id
+  action   = var.action
+  triggers = var.triggers
+}
+
+# The pod after the transition, and every pod on the account.
+data "runpod_pod" "this" {
+  id = var.pod_id
+
+  depends_on = [runpod_pod_action.this]
+}
+
+data "runpod_pods" "all" {
+  include_cluster_pods = var.include_cluster_pods
+
+  depends_on = [runpod_pod_action.this]
+}
+```
+
+Inputs and outputs are documented in the module's README.

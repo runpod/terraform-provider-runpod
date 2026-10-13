@@ -1,0 +1,23 @@
+# Runpod's Go lint standard: the default linter set plus gofmt and goimports,
+# with this module as the local import prefix so its imports sort into their
+# own group.
+
+version: "2"
+
+linters:
+  default: standard
+
+issues:
+  # golangci-lint defaults to 50 issues per linter and 3 per repeated message,
+  # which silently truncates a report. Zero lifts both caps.
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/runpod/terraform-provider-runpod

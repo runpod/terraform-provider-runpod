@@ -1,0 +1,62 @@
+---
+page_title: "Catalog discovery"
+subcategory: "Discovery and reporting"
+description: |-
+  Reads the catalogs every other module picks its identifiers from: GPU types, CPU flavors, data centers, and one slice of the publicly shared templates.
+---
+
+# Catalog discovery
+
+Reads the catalogs every other module picks its identifiers from: the GPU
+types with their Serverless pools and prices, the CPU flavors with their
+vCPU bounds, the data centers with their capabilities, and one slice of the
+publicly shared templates. Read-only and free against any account.
+
+`gpu_ids` feeds `gpu_type_id` in
+[gpu-pod](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/gpu-pod)
+and
+[cluster](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/cluster);
+`gpu_pools` maps a GPU type to the pool the
+[serverless-endpoint](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/serverless-endpoint)
+module takes; `cpu_types` gives the flavors and vCPU ranges for
+[cpu-pod](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/cpu-pod)
+and
+[serverless-endpoint-cpu](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/serverless-endpoint-cpu);
+`global_network_ids` lists where a pod can enable global networking;
+`catalog_template_ids` are ready-made `template_id` values.
+
+```bash
+terraform apply -var catalog_slice=verified -var cpu_type_id=cpu5c
+```
+
+The account's own templates come from the
+[template](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/template)
+module's listing instead.
+
+## Usage
+
+```hcl
+module "catalog_discovery" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0"
+
+  gpu_type_id    = "NVIDIA GeForce RTX 4090"
+  data_center_id = "EU-RO-1"
+  catalog_slice  = "official"
+}
+```
+
+## Resources and data sources
+
+- [`runpod_gpu_types`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/gpu_types)
+- [`runpod_gpu_type`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/gpu_type)
+- [`runpod_cpu_types`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cpu_types)
+- [`runpod_cpu_type`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cpu_type)
+- [`runpod_data_centers`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/data_centers)
+- [`runpod_data_center`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/data_center)
+- [`runpod_catalog_templates`](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/catalog_templates)
+
+## Configuration
+
+{{ tffile "modules/catalog-discovery/main.tf" }}
+
+Inputs and outputs are documented in the module's README.

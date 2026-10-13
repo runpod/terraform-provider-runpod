@@ -1,0 +1,7 @@
+artifacts/
+.env
+.terraform/
+.terraform.lock.hcl
+*.tfstate*
+terraform-provider-runpod
+.DS_Store

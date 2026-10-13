@@ -103,7 +103,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
-          go-version-file: 'v2/go.mod'
+          # tfplugindocs v0.25.0 needs Go 1.25.8 or newer; go.mod's go 1.25.0 is the floor for users, not for this job.
+          go-version: '1.25.x'
           cache: true
           cache-dependency-path: 'v2/go.sum'
 

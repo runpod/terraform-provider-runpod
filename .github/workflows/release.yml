@@ -1,53 +1,93 @@
-# This GitHub action can publish assets for release when a tag is created.
-# Currently its setup to run on any tag that matches the pattern "v*" (ie. v0.1.0).
+# Publishes provider release assets when a version tag is pushed.
 #
-# This uses an action (crazy-max/ghaction-import-gpg) that assumes you set your
-# private key in the `GPG_PRIVATE_KEY` secret and passphrase in the `PASSPHRASE`
-# secret. If you would rather own your own GPG handling, please fork this action
-# or use an alternative one for key handling.
+# The repository carries two provider code lines: 1.x at the root and 2.x in v2/.
+# A tag beginning with v1. builds the root module with .goreleaser.yml; a tag
+# beginning with v2. builds the v2/ module with .goreleaser.v2.yml. Selecting the
+# config from the pushed tag keeps 1.0.x patch releases working unchanged and does
+# not depend on which ref GitHub loads the workflow file from.
 #
-# You will need to pass the `--batch` flag to `gpg` in your signing step 
-# in `goreleaser` to indicate this is being used in a non-interactive mode.
-#
+# Signing uses the GPG_PRIVATE_KEY and PASSPHRASE repository secrets. The matching
+# public key must be registered as a signing key on the runpod registry namespace,
+# and must be RSA or DSA: the registry does not accept the default ECC key type.
 name: release
+
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
-    
+
 permissions:
   contents: write
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
-      -
-        name: Unshallow
-        run: git fetch --prune --unshallow
-      -
-        name: Set up Go
-        uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
-          go-version-file: 'go.mod'
+          # goreleaser needs the full history to resolve the previous tag.
+          fetch-depth: 0
+
+      - name: Select the code line for this tag
+        id: line
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            v1.*)
+              echo "config=.goreleaser.yml" >> "$GITHUB_OUTPUT"
+              echo "gomod=go.mod" >> "$GITHUB_OUTPUT"
+              echo "docs=" >> "$GITHUB_OUTPUT"
+              ;;
+            v2.*)
+              echo "config=.goreleaser.v2.yml" >> "$GITHUB_OUTPUT"
+              echo "gomod=v2/go.mod" >> "$GITHUB_OUTPUT"
+              echo "docs=docs" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::${GITHUB_REF_NAME} is not a v1 or v2 release tag"
+              exit 1
+              ;;
+          esac
+
+      # The registry reads provider documentation from the docs/ directory of the
+      # tagged commit. A workflow cannot add files to a commit that is already
+      # tagged, so a 2.x tag with no docs/ would publish a version with no
+      # documentation and the only fix would be a new version. Fail here instead.
+      - name: Check documentation is present
+        if: steps.line.outputs.docs != ''
+        run: |
+          set -euo pipefail
+          test -f docs/index.md
+          test -d docs/resources
+          test -d docs/data-sources
+          echo "docs/ present: $(find docs -name '*.md' | wc -l) pages"
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: ${{ steps.line.outputs.gomod }}
           cache: true
-      -
-        name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@111c56156bcc6918c056dbef52164cfa583dc549 # v5.2.0
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
         id: import_gpg
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.PASSPHRASE }}
-      -
-        name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f82d6c1c344bcacabba2c841718984797f664a6b # v4.2.0
+
+      # Note for a future 1.0.x patch: .goreleaser.yml still uses the deprecated
+      # archives.format key. It releases today but a later goreleaser will reject
+      # it; the fix is to replace `format: zip` with `formats: [zip]` in that file.
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
-          version: latest
-          args: release
+          # Pinned so a tag builds with the goreleaser the release was rehearsed
+          # on (goreleaser release --snapshot); bump it deliberately.
+          version: v2.18.2
+          args: release --clean --config ${{ steps.line.outputs.config }}
         env:
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
-          # GitHub sets this automatically
+          # GitHub sets this automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

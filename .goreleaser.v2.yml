@@ -1,0 +1,97 @@
+# Release config for the 2.x provider, whose Go module lives in the v2/ directory.
+#
+# The 1.x config stays in .goreleaser.yml, byte for byte, so a 1.0.x patch still
+# releases exactly the way v1.0.9 did. .github/workflows/release.yml picks between
+# the two from the tag that was pushed.
+#
+# Everything except builds[].dir runs from the repository root, which is where
+# terraform-registry-manifest.json lives and where the Terraform Registry expects
+# the release assets to be named from.
+version: 2
+
+# Without this, the archive and checksum names would be derived from the v2/
+# module path and come out as "v2_2.0.0_linux_amd64.zip", which the registry
+# rejects.
+project_name: terraform-provider-runpod
+
+# Read module metadata from v2/, not from the 1.x go.mod still sitting at the root.
+gomod:
+  dir: v2
+
+before:
+  hooks:
+    # Hooks run at the repository root and are not passed through a shell, so the
+    # directory has to come from go's own -C flag rather than a cd.
+    - go -C v2 mod tidy
+
+builds:
+  - dir: v2
+    main: .
+    env:
+      # goreleaser does not work with CGO, and it would complicate use in CI/CD
+      # systems such as HCP Terraform where users cannot install libraries.
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    # main.go declares only `version`; there is no `commit` variable to stamp.
+    ldflags:
+      - '-s -w -X main.version={{.Version}}'
+    goos:
+      - freebsd
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - '386'
+      - arm
+      - arm64
+    ignore:
+      - goos: darwin
+        goarch: '386'
+    # The registry requires this exact binary name inside each archive.
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+
+archives:
+  - formats:
+      - zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    # goreleaser's default would add the README files at the repository root,
+    # which describe the 1.x provider. Ship the 2.x license and the changelog
+    # next to the binary instead.
+    files:
+      - CHANGELOG.md
+      - src: v2/LICENSE
+        strip_parent: true
+
+checksum:
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+
+signs:
+  - artifacts: checksum
+    args:
+      # --batch because this runs unattended in GitHub Actions.
+      - "--batch"
+      - "--local-user"
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - "--output"
+      - "${signature}"
+      - "--detach-sign"
+      - "${artifact}"
+
+release:
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  # A tag such as v2.0.0-rc.1 becomes a GitHub prerelease; v2.0.0 becomes a full
+  # release. The registry ingests both, but only the full release satisfies an
+  # ordinary version constraint.
+  prerelease: auto
+
+changelog:
+  disable: true

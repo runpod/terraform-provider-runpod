@@ -1,7 +1,16 @@
-# Runs the unit test suite (go vet + go test) on every pull request and on
-# pushes to main. Acceptance tests are gated behind TF_ACC (unset here), so this
-# job runs only the unit lane — no live RunPod API or riab access required.
+# The offline lane: runs on every pull request, on pushes to main, and on demand.
+#
+# The repository carries two Go modules: the frozen 1.x provider at the root
+# and the 2.x provider in v2/. The 1.x module keeps its unit lane. The 2.x
+# module gets lint, unit tests with the race detector, and the terraform-side
+# validation gates, including the check that the registry docs/ at the
+# repository root and the module READMEs in v2/modules/ match what `task docs`
+# generates.
+#
+# Acceptance tests (task test-tf in v2/) are not run here: they need a live
+# Runpod API key and create real resources.
 name: test
+
 on:
   pull_request:
   push:
@@ -11,24 +20,127 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read # lets golangci-lint annotate the pull request
 
 jobs:
-  unit:
+  unit-1x:
     name: unit tests
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@ac593985615ec2ede58e132d2e21d2b1cbd6127c # v3.3.0
-      -
-        name: Set up Go
-        uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version-file: 'go.mod'
           cache: true
-      -
-        name: Vet
+
+      # v2/ has its own go.mod, so ./... here stops at the 1.x module.
+      - name: Vet
         run: go vet ./...
-      -
-        name: Unit tests
+
+      - name: Unit tests
         run: go test -race ./...
+
+  lint:
+    name: lint (2.x)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'v2/go.mod'
+          cache: true
+          cache-dependency-path: 'v2/go.sum'
+
+      # Same version and same .golangci.yaml as the lint task in v2/Taskfile.yml.
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          working-directory: v2
+          problem-matchers: true
+
+  unit:
+    name: unit tests (2.x)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'v2/go.mod'
+          cache: true
+          cache-dependency-path: 'v2/go.sum'
+
+      - name: Vet
+        run: go vet ./...
+
+      # -race needs a C toolchain, which the GitHub runner has; this is the
+      # only place the race detector runs.
+      - name: Unit tests
+        run: go test -race ./...
+
+  validate:
+    name: terraform validation and generated files (2.x)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'v2/go.mod'
+          cache: true
+          cache-dependency-path: 'v2/go.sum'
+
+      # terraform_wrapper: false keeps `terraform providers schema -json`
+      # pipeable, which the schema task depends on.
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.16.x
+          terraform_wrapper: false
+
+      - name: Set up Task
+        uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2.0.0
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Validates the test root and all fourteen modules, checks terraform fmt,
+      # the type-coverage gate (scripts/module_coverage.py, which uses the
+      # python3 that ships on ubuntu-latest), the generated module READMEs and
+      # the guide templates.
+      - name: Validate modules
+        run: task validate-tf
+
+      # The Terraform Registry reads docs/ from the tagged commit, so the
+      # generated pages, guides and module READMEs have to be committed
+      # already, not regenerated at release time.
+      - name: Regenerate documentation
+        run: task docs
+
+      - name: Fail if generated files drifted
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --porcelain -- ../docs modules)" ]; then
+            echo "::error::docs/ or v2/modules/ is out of date; run 'task docs' in v2/ and commit the result"
+            git status --porcelain -- ../docs modules
+            git diff -- ../docs modules | head -200
+            exit 1
+          fi
+          echo "docs/ and v2/modules/ match the provider schema and the module sources"

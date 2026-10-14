@@ -16,7 +16,7 @@ import (
 // provider that do not go through the generated v2 SDK, because their routes
 // do not exist in v2 yet. Everything in this file goes away with them.
 
-const machineDeprecation = "Machines have no REST v2 route yet; this resource calls the GraphQL API " +
+const machineDeprecation = "Machines have no REST v2 route yet; this calls the GraphQL API " +
 	"and will be removed when a /v2/machines surface exists."
 
 const userDeprecation = "There is no REST v2 account identity route yet; this data source reads the " +

@@ -34,6 +34,18 @@ what REST v2 reports.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "serverless_endpoint" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0"
+
+  name        = "inference"
+  gpu_pools   = ["ADA_24"]
+  workers_max = 3
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

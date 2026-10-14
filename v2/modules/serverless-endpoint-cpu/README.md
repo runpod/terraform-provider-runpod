@@ -19,6 +19,21 @@ reports.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "serverless_endpoint_cpu" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0"
+
+  name = "api"
+  cpu = [{
+    cpu_type_id = "cpu5c"
+    vcpu_count  = 4
+  }]
+  workers_max = 3
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

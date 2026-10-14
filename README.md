@@ -1,165 +1,35 @@
 # Runpod Terraform Provider
 
-A Terraform provider for managing Runpod infrastructure using the Terraform Plugin Framework.
+Manage Runpod GPU and CPU pods, Serverless endpoints, templates, network volumes, Instant Clusters,
+account SSH keys and container registry credentials with Terraform, through the Runpod REST API v2.
 
 <!-- runpod-agent-setup:start -->
-**Using an AI agent?** Point it to https://docs.runpod.io/agent-setup.md to install the Runpod skills and MCP server.
+**Using an AI agent?** Point it to https://agents.runpod.io to install the Runpod skills and MCP server.
 <!-- runpod-agent-setup:end -->
 
-## Quick Start
-
-### Prerequisites
-
-- Go 1.21 or higher (for development)
-- Terraform 1.0 or higher
-- Runpod API token
-
-### Development Setup (Recommended)
-
-This provider uses Terraform's `dev_overrides` feature for local development. **No binary building required!**
-
-Create a Terraform CLI config file at `~/.terraform.d/config.tfrc`:
-
-```hcl
-provider_installation {
-  dev_overrides {
-    "runpod/runpod" = "./"
-  }
-  direct {}
-}
-```
-
-Then use the provider in your Terraform configuration:
-
 ```hcl
 terraform {
+  required_version = ">= 1.6"
+
   required_providers {
     runpod = {
-      source = "runpod/runpod"
+      source  = "runpod/runpod"
+      version = "~> 2.0"
     }
   }
 }
 
-provider "runpod" {
-  api_key = var.runpod_api_key
-}
+provider "runpod" {} # reads RUNPOD_API_KEY
 ```
 
-### For Production Use
+- Documentation: https://registry.terraform.io/providers/runpod/runpod/latest/docs
+- Upgrading from 1.x: 2.0.0 is a breaking release; read the
+  [migration guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x) first.
+- Using the provider from an AI agent: [agent guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup)
+- Runnable use-case modules: [v2/modules/](v2/modules/)
+- Source and development: [v2/README.md](v2/README.md)
+- Release notes: [CHANGELOG.md](CHANGELOG.md)
+- License: MIT, see [v2/LICENSE](v2/LICENSE)
 
-If you need to build and use a binary:
-
-```bash
-go build -o terraform-provider-runpod
-```
-
-Then configure Terraform to use the local provider binary:
-
-```hcl
-provider_installation {
-  filesystem_paths {
-    paths = ["."]
-  }
-}
-```
-
-## Usage
-
-### Basic Example
-
-```hcl
-terraform {
-  required_providers {
-    runpod = {
-      source = "runpod/runpod"
-    }
-  }
-}
-
-# API key can be set via environment variable RUNPOD_API_KEY
-# or in the provider configuration (not shown in this example)
-
-resource "runpod_pod" "demo" {
-  machine_id  = "your-machine-id"
-  image_name  = "runpod/miniconda:py3.10-cuda11.8.0"
-  gpu_count   = 1
-  start_ssh   = true
-}
-```
-
-### Environment Variable
-
-Set your Runpod API key as an environment variable:
-
-```bash
-export RUNPOD_API_KEY="your-api-key-here"
-```
-
-Get your API key from [Runpod Console](https://runpod.io/console/user/settings)
-
-### Examples Directory
-
-- `examples/basic/` - Basic pod creation
-- `examples/actions/` - Pod actions
-- `examples/datasources/` - Data sources
-- `examples/machine/` - Machine management
-- `examples/monitoring/` - Pod monitoring
-
-## Development
-
-### Provider Specification
-
-The provider schema is defined in `terraform-provider-spec.json`. To regenerate provider code after modifying the spec:
-
-```bash
-tfplugingen-framework generate all \
-    --input terraform-provider-spec.json \
-    --output internal/provider
-```
-
-### Directory Structure
-
-```
-terraform-provider-runpod/
-├── internal/provider/          # Generated code
-│   ├── provider_runpod/
-│   ├── resource_pod/
-│   ├── resource_pod_action/
-│   ├── resource_machine/
-│   ├── datasource_pod/
-│   ├── datasource_machine/
-│   └── ...
-├── examples/                   # Example configurations
-├── main.go                     # Provider entry point
-├── plugin.go                   # Plugin interface
-├── go.mod                      # Go dependencies
-└── terraform-provider-spec.json # Provider schema definition
-```
-
-## API Documentation
-
-- [Runpod API Docs](https://docs.runpod.io)
-- [REST API Reference](https://rest.runpod.io/v1/docs)
-
-## Provider Specification
-
-The provider specification is defined in `terraform-provider-spec.json` and includes:
-
-### Resources
-
-- `runpod_pod` - Pod management
-- `runpod_pod_action` - Pod actions
-- `runpod_machine` - Machine management
-
-### Data Sources
-
-- `runpod_pod` - Pod information
-- `runpod_machine` - Machine information
-- `runpod_machines` - Machine listing
-- `runpod_gpu_types` - GPU types
-- `runpod_data_centers` - Data centers
-- `runpod_user` - User info
-
-## License
-
-MIT
+The 1.x provider (1.0.x tags) is built from the Go module at the repository root; its files stay here
+only for 1.0.x patch releases.

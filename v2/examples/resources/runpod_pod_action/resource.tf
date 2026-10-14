@@ -1,3 +1,6 @@
+# Assumes runpod_pod.jupyter, runpod_pod.batch and the variables image and
+# shift are declared elsewhere in the configuration.
+
 # Restart the pod whenever the image it should run changes. The action is
 # imperative: it runs on create and on every triggers change, and destroying
 # this resource leaves the pod as it is.

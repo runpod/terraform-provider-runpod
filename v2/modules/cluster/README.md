@@ -19,6 +19,19 @@ you drive it; SSH needs keys registered through
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "cluster" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cluster?ref=v2.0.0"
+
+  name              = "training"
+  gpu_type_id       = "NVIDIA H100 80GB HBM3"
+  gpu_count_per_pod = 8
+  pod_count         = 2
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

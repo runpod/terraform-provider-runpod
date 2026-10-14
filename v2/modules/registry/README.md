@@ -16,10 +16,23 @@ terraform apply -var username=... -var password=... \
 Neither resource supports `terraform import`: the API never returns the
 credential secret or the delegated ARN, so an imported resource could not be
 reconciled against configuration. The listings read back every credential
-and delegation on the account; the `registry_usernames` output comes from
-the deprecated GraphQL shim and exists for 1.x configurations.
+and delegation on the account. The `registry_usernames` output exists for
+1.x configurations and is always null: no supported API reports a
+credential's username.
 
 Build and run it with the shared flow in [../README.md](../README.md).
+
+## Usage
+
+```hcl
+module "registry" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/registry?ref=v2.0.0"
+
+  name     = "ghcr"
+  username = var.registry_username
+  password = var.registry_password
+}
+```
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements

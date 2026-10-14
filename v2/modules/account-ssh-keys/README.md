@@ -24,6 +24,17 @@ terraform import module.account_ssh_keys.runpod_account_ssh_keys.this account
 
 Build and run it with the shared flow in [../README.md](../README.md).
 
+## Usage
+
+```hcl
+module "account_ssh_keys" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/account-ssh-keys?ref=v2.0.0"
+
+  keys              = [trimspace(file("~/.ssh/id_ed25519.pub"))]
+  remove_on_destroy = false
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

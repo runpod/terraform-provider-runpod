@@ -24,11 +24,22 @@ terraform apply -var create_machine=true -var machine_name=host-01
 ```
 
 Point the shims elsewhere with the provider's `graphql_url` /
-`RUNPOD_GRAPHQL_URL` (machines) and `rest_v1_url` / `RUNPOD_REST_V1_URL`
-(account, billing) settings.
+`RUNPOD_GRAPHQL_URL` (machines and the account read) and `rest_v1_url` /
+`RUNPOD_REST_V1_URL` (billing) settings.
 
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy` if a machine was registered.
+
+## Usage
+
+```hcl
+module "legacy" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0"
+
+  bucket_size = "day"
+  gpu_type_id = "NVIDIA A100 80GB PCIe"
+}
+```
 
 <!-- BEGIN_TF_DOCS -->
 ## Requirements

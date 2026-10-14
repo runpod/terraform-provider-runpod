@@ -33,8 +33,8 @@ const legacyShimDescriptionSuffix = "Served by the deprecated REST v1 shim and r
 // or two keys it owns, a shape that release never sent, so the result depends
 // on how the route merges a partial body. The attribute text says so.
 const legacyShimPartialPatchCaveat = "The shim sends this field on its own, where the 1.x provider sent the whole " +
-	"resource body, so applying it relies on the REST v1 route merging a partial request. That behaviour is " +
-	"untested."
+	"resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects " +
+	"it, the apply fails with the route's error after the REST v2 change has been applied."
 
 // appendLegacyReadFailure records a REST v1 read that did not answer. The
 // legacy host is expected to disappear before these shims are removed, so a

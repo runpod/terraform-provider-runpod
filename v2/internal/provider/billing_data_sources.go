@@ -31,8 +31,6 @@ import (
 // feeAmount on the Serverless route) is not mapped: the API deprecated it and
 // always returns 0, with the charge folded into the compute amounts.
 
-const billingReplacementNote = "Replaces the 1.x provider's billing data source, which read the REST v1 API."
-
 // billingWindow is the query window shared by every billing route.
 type billingWindow struct {
 	StartTime  types.String
@@ -276,7 +274,7 @@ func (d *billingDataSource) Metadata(_ context.Context, req datasource.MetadataR
 
 func (d *billingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Account-wide spend, time-bucketed, with every cost component broken out by resource. " + billingReplacementNote,
+		Description: "Account-wide spend, time-bucketed, with every cost component broken out by resource.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"metadata": schema.SingleNestedAttribute{
 				Computed:    true,
@@ -457,7 +455,7 @@ func (d *podBillingDataSource) Metadata(_ context.Context, req datasource.Metada
 
 func (d *podBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. " + billingReplacementNote,
+		Description: "Pod spend, time-bucketed, covering both GPU and CPU pods. Without pod_id the API emits one record per pod per bucket. Replaces the deprecated runpod_billing_pod.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"pod_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one pod."},
 			"metadata": schema.SingleNestedAttribute{
@@ -641,7 +639,7 @@ func (d *serverlessBillingDataSource) Metadata(_ context.Context, req datasource
 
 func (d *serverlessBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. " + billingReplacementNote,
+		Description: "Serverless spend, time-bucketed. Without serverless_id the API emits one record per endpoint per bucket. Replaces the deprecated runpod_billing_endpoint.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"serverless_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one Serverless endpoint."},
 			"metadata": schema.SingleNestedAttribute{
@@ -800,7 +798,7 @@ func (d *endpointBillingDataSource) Metadata(_ context.Context, req datasource.M
 
 func (d *endpointBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. " + billingReplacementNote,
+		Description: "Spend on Runpod's own public endpoints, time-bucketed. This route takes no resource filter. This is not the replacement for the deprecated runpod_billing_endpoint; use runpod_serverless_billing for that.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"metadata": schema.SingleNestedAttribute{
 				Computed:    true,
@@ -966,7 +964,7 @@ func (d *networkVolumeBillingDataSource) Metadata(_ context.Context, req datasou
 
 func (d *networkVolumeBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. " + billingReplacementNote,
+		Description: "Network volume storage spend, time-bucketed and split by storage tier. Without network_volume_id the API emits one record per volume per bucket. Replaces the deprecated runpod_billing_network_volume.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"network_volume_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one network volume."},
 			"metadata": schema.SingleNestedAttribute{
@@ -1149,7 +1147,7 @@ func (d *clusterBillingDataSource) Metadata(_ context.Context, req datasource.Me
 
 func (d *clusterBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
-		Description: "Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket. " + billingReplacementNote,
+		Description: "Instant Cluster spend, time-bucketed. Clusters are GPU-only, so there is no CPU component. Without cluster_id the API emits one record per cluster per bucket.",
 		Attributes: withAttributes(billingWindowAttributes(), map[string]schema.Attribute{
 			"cluster_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one cluster."},
 			"metadata": schema.SingleNestedAttribute{

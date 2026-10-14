@@ -1,3 +1,5 @@
+# Deprecated GraphQL shim; removed when REST v2 has a machines route.
+
 data "runpod_machine" "rig" {
   id = "m4h2k9qzx1"
 }

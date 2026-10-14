@@ -3,7 +3,8 @@ terraform {
 
   required_providers {
     runpod = {
-      source = "runpod/runpod"
+      source  = "runpod/runpod"
+      version = "~> 2.0"
     }
   }
 }

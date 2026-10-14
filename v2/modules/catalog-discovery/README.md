@@ -22,6 +22,18 @@ listing instead.
 
 Build and run it with the shared flow in [../README.md](../README.md).
 
+## Usage
+
+```hcl
+module "catalog_discovery" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0"
+
+  gpu_type_id    = "NVIDIA GeForce RTX 4090"
+  data_center_id = "EU-RO-1"
+  catalog_slice  = "official"
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

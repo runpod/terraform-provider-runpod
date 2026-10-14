@@ -29,6 +29,17 @@ The `status` output comes from the deprecated GraphQL shim and exists for
 
 Build and run it with the shared flow in [../README.md](../README.md).
 
+## Usage
+
+```hcl
+module "pod_lifecycle" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0"
+
+  pod_id = "gfj8b292vyg08g"
+  action = "restart"
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

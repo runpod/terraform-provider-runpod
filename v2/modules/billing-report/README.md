@@ -22,6 +22,17 @@ per-record GPU type and time fields live in the [legacy](../legacy) module.
 
 Build and run it with the shared flow in [../README.md](../README.md).
 
+## Usage
+
+```hcl
+module "billing_report" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0"
+
+  bucket_size = "day"
+  last_n      = 7
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

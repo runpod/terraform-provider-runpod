@@ -1,3 +1,6 @@
+# Assumes runpod_network_volume.datasets is declared elsewhere in the
+# configuration.
+
 resource "runpod_cluster" "training" {
   name              = "llama-finetune"
   type              = "TRAINING"

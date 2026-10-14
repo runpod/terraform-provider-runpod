@@ -22,10 +22,10 @@ schema and cannot configure nine of its ten resources, so 1.0.8 is the last rele
 baseline for everything 2.0.0 preserves; see "Why 1.0.9 is not the baseline" at the end.
 
 What 1.x did and v2 has no field for yet is kept rather than dropped, on its old backend and
-marked deprecated: the machine surface on GraphQL; the user identity read, the
-three 1.x billing data sources, and a handful of attributes on pods, templates and Serverless endpoints on
-REST v1. Terraform warns about each one on every plan, and each goes away when v2 reports the same thing;
-see "Deprecated shims" at the end. The mapping tables below name them row by row.
+marked deprecated: the machine surface and the user identity read on GraphQL; the three 1.x billing
+data sources and a handful of attributes on pods, templates and Serverless endpoints on REST v1. Terraform
+warns about each one on every plan, and each goes away when v2 reports the same thing; see "Deprecated
+shims" at the end. The mapping tables below name them row by row.
 
 This is a breaking release. Every resource needs a configuration edit, and every resource needs a state
 action, described in the state migration section at the end.
@@ -73,7 +73,7 @@ The `base_url` argument now points at a different host. In 1.0.8 the `base_url` 
 `base_url` sets the REST v2 host that everything except the deprecated shims calls, falling back to
 `RUNPOD_API_BASE_URL` and then the production API. A 1.0.8 configuration that sets `base_url` must move
 that value to `rest_v1_url` (below): left in `base_url`, it sends every v2 call to the REST v1 host. Set
-`base_url` or `RUNPOD_API_BASE_URL` only to point the provider at a v2 stage host.
+`base_url` or `RUNPOD_API_BASE_URL` only to point the provider at a non-production v2 host.
 
 Two more provider arguments exist only for the deprecated shims, and everything on REST v2 ignores them:
 
@@ -89,20 +89,27 @@ Two more provider arguments exist only for the deprecated shims, and everything 
 Set them only if you use the deprecated surfaces against a non-production environment. The
 `RUNPOD_BASE_URL` variable is unchanged for a 1.0.8 setup: it set the REST v1 host then and sets the REST
 v1 shim host now, so a 1.0.8 staging setup keeps pointing its shim reads at staging. The v2 client does
-not read it; point that at stage with `RUNPOD_API_BASE_URL` or `base_url`.
+not read it; point that at a non-production host with `RUNPOD_API_BASE_URL` or `base_url`.
 
 ## Upgrade steps
 
 1. Pin the new major version and raise the Terraform floor:
 
    ```hcl
-   runpod = {
-     source  = "runpod/runpod"
-     version = "2.0.0"
+   terraform {
+     required_version = ">= 1.6"
+
+     required_providers {
+       runpod = {
+         source  = "runpod/runpod"
+         version = "~> 2.0"
+       }
+     }
    }
    ```
 
-   Run `terraform init -upgrade`.
+   Run `terraform init -upgrade`. A release candidate, such as `2.0.0-rc.2`, installs only through an exact
+   pin, `version = "2.0.0-rc.2"`; `~> 2.0` does not select it.
 
 2. Before editing anything, record the identifiers you will need to re-import. `terraform state list`
    plus `terraform show -json` against the old state, or the `id` outputs you already have.
@@ -1182,8 +1189,8 @@ above sets `start_ssh` and `start_jupyter`, so a pod migrated with it as written
 safe ways through:
 
 - **Leave a running 1.x pod on 1.x.** Do not remove and import it. Keep it in a root module that stays
-  pinned to 1.0.8 and let that provider manage it until the pod is due to be recreated anyway, then create
-  its successor under 2.0.0.
+  pinned to `version = "<= 1.0.8"` (not `~> 1.0`, which selects 1.0.9) and let that provider manage it
+  until the pod is due to be recreated anyway, then create its successor under 2.0.0.
 - **Adopt it with `ignore_changes`.** If the pod has to move to 2.0.0 now, add a `lifecycle` block naming
   every one of the eight the configuration sets, before the first apply. Listing all eight is harmless if
   you are not sure which ones the pod was created with.
@@ -1206,9 +1213,10 @@ safe ways through:
   replacement.
 
   On a GPU pod, also set `cloud` and `gpu_count` to the values the pod already has. When either is left out
-  of the configuration, any other change on the pod plans it as unknown, and both force replacement. `env`
-  and `desired_state` are two such changes: an import leaves them empty as well, so a configuration that
-  sets them plans an in-place update of the pod.
+  of the configuration, any other change on the pod plans it as unknown, and both force replacement.
+  `desired_state` is one such change: an import leaves it empty, so a configuration that sets it plans an
+  in-place update. `env` is another: an import reads the pod's whole environment, so a configuration that
+  sets it plans an in-place update that removes every key it leaves out.
 
 Either way, read the first plan before applying it: it must not replace a pod you mean to keep, and the
 `# forces replacement` marker names the attribute responsible.

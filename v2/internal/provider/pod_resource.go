@@ -319,7 +319,7 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"data_center_ids": schema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
-				Description: "Preferred data centers for placement. Create-time hint; the scheduler's pick lands in data_center_id.",
+				Description: "Preferred data centers for placement. Create-time hint; the scheduler's pick lands in data_center_id. The API neither returns nor updates it, so changing it replaces the pod.",
 				PlanModifiers: []planmodifier.List{
 					listplanmodifier.RequiresReplace(),
 				},
@@ -452,13 +452,13 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 			"docker_entrypoint": schema.ListAttribute{
 				ElementType:   types.StringType,
 				Computed:      true,
-				Description:   "Container entrypoint the pod runs, in exec form, e.g. [\"/bin/bash\", \"-c\"], as the API decodes it from args. Read-only: 1.0.8 accepted a value but never sent it. Set the command through args.",
+				Description:   "Container entrypoint the pod runs, in exec form, e.g. [\"/bin/bash\", \"-c\"], as the API decodes it from args. Read-only. Set the command through args.",
 				PlanModifiers: []planmodifier.List{usePodCommandStateUnlessArgsChanges()},
 			},
 			"docker_start_cmd": schema.ListAttribute{
 				ElementType:   types.StringType,
 				Computed:      true,
-				Description:   "Container start command the pod runs, in exec form, as the API decodes it from args; when there is an entrypoint, this is the argument list passed to it. Read-only: 1.0.8 accepted a value but never sent it. Set the command through args.",
+				Description:   "Container start command the pod runs, in exec form, as the API decodes it from args; when there is an entrypoint, this is the argument list passed to it. Read-only. Set the command through args.",
 				PlanModifiers: []planmodifier.List{usePodCommandStateUnlessArgsChanges()},
 			},
 			"volume_encrypted": schema.BoolAttribute{

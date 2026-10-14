@@ -103,7 +103,7 @@ release:
 
     Full notes: https://github.com/runpod/terraform-provider-runpod/blob/{{ .Tag }}/CHANGELOG.md
 
-    Using an AI agent? Point it to https://docs.runpod.io/agent-setup.md
+    Using an AI agent? Point it to https://agents.runpod.io
 
 changelog:
   disable: true

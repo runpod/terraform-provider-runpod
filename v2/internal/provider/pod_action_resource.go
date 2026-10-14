@@ -51,7 +51,9 @@ func (r *podActionResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			"Do not use it on a pod whose runpod_pod resource sets desired_state: that attribute " +
 			"manages the same transitions declaratively and would fight this one, each apply undoing " +
 			"the other. Pick desired_state for a run state Terraform should keep, and this resource " +
-			"for a one-off restart or a stop tied to something else changing.",
+			"for a one-off restart or a stop tied to something else changing.\n\n" +
+			"There is nothing to import. Declaring the resource again, for example after it was removed " +
+			"from state, runs the action again.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

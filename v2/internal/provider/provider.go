@@ -47,8 +47,9 @@ func (p *runpodProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 				Sensitive:   true,
 			},
 			"base_url": schema.StringAttribute{
-				Description: "API base URL, for stage or self-hosted targets. Falls back to the " +
-					"RUNPOD_API_BASE_URL environment variable, then the production API.",
+				Description: "API base URL. Leave unset for the production API; set it only to target a " +
+					"non-production Runpod environment. Falls back to the RUNPOD_API_BASE_URL " +
+					"environment variable, then the production API.",
 				Optional: true,
 			},
 			"graphql_url": schema.StringAttribute{

@@ -44,7 +44,7 @@ func (r *registryDelegationResource) Metadata(_ context.Context, req resource.Me
 func (r *registryDelegationResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "An AWS ECR pull delegation. The API has no update operation, so " +
-			"any change replaces the delegation.",
+			"any change replaces the delegation. It cannot be imported: the API never returns the delegated ARN.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

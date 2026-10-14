@@ -20,6 +20,18 @@ scales; take a current one from the
 
 Build and run it with the shared flow in [../README.md](../README.md).
 
+## Usage
+
+```hcl
+module "logs" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/logs?ref=v2.0.0"
+
+  pod_id     = "gfj8b292vyg08g"
+  log_source = "container"
+  tail       = 50
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

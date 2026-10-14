@@ -7,11 +7,10 @@ Terraform Plugin Framework; all API access goes through the generated
 `runpod-go-sdk` Go client. A small set of deprecated compatibility shims still
 calls the GraphQL and REST v1 APIs, through that SDK's deprecated `legacy`
 package, because REST v2 has no route for what they carry: the machine surface
-and the registry usernames on GraphQL, and the account read, the three 1.x
-billing data sources and a handful of attributes on pods, templates and
-Serverless endpoints on REST v1. They exist so a 1.x configuration keeps
-working; each warns on every plan and is removed once REST v2 reports the same
-thing.
+and the account read on GraphQL, and the three 1.x billing data sources and a
+handful of attributes on pods, templates and Serverless endpoints on REST v1.
+They exist so a 1.x configuration keeps working; each warns on every plan and
+is removed once REST v2 reports the same thing.
 
 ## Requirements
 
@@ -45,10 +44,10 @@ environment, e.g. stage.
 
 Two more arguments exist only for the deprecated shims and are ignored by
 everything on REST v2: `graphql_url` (or `RUNPOD_GRAPHQL_URL`) for the machine
-resource and data sources and the registry usernames, and `rest_v1_url` (or
+resource and data sources and the user data source, and `rest_v1_url` (or
 `RUNPOD_REST_V1_URL`, then `RUNPOD_BASE_URL`, the 1.x name for that host) for
-the user data source, the 1.x billing data sources and the deprecated
-attributes on pods, templates and Serverless endpoints.
+the 1.x billing data sources and the deprecated attributes on pods, templates
+and Serverless endpoints.
 
 ```hcl
 data "runpod_gpu_types" "all" {}
@@ -135,7 +134,7 @@ values v2 billing does not carry yet: `time_billed_ms`,
 filter. New configuration belongs on the v2 billing data sources above.
 Two supported data sources also carry deprecated attributes: `runpod_template`
 (`readme`, `earned`, `is_runpod`, `runtime_in_min`, on REST v1) and
-`runpod_registries` (`username`, on GraphQL).
+`runpod_registries` (`username`, which no API reports and is always null).
 
 Working configurations live in [modules/](modules/): fourteen use-case
 modules, each with variables, outputs, a README and an acceptance test. Every

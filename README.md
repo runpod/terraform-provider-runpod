@@ -4,7 +4,7 @@ Manage Runpod GPU and CPU pods, Serverless endpoints, templates, network volumes
 account SSH keys and container registry credentials with Terraform, through the Runpod REST API v2.
 
 <!-- runpod-agent-setup:start -->
-**Using an AI agent?** Point it to https://docs.runpod.io/agent-setup.md to install the Runpod skills and MCP server.
+**Using an AI agent?** Point it to https://agents.runpod.io to install the Runpod skills and MCP server.
 <!-- runpod-agent-setup:end -->
 
 ```hcl
@@ -25,6 +25,7 @@ provider "runpod" {} # reads RUNPOD_API_KEY
 - Documentation: https://registry.terraform.io/providers/runpod/runpod/latest/docs
 - Upgrading from 1.x: 2.0.0 is a breaking release; read the
   [migration guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x) first.
+- Using the provider from an AI agent: [agent guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup)
 - Runnable use-case modules: [v2/modules/](v2/modules/)
 - Source and development: [v2/README.md](v2/README.md)
 - Release notes: [CHANGELOG.md](CHANGELOG.md)

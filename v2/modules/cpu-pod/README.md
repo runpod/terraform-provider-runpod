@@ -16,6 +16,18 @@ REST v1 compatibility shim and read null when that host does not answer.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "cpu_pod" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cpu-pod?ref=v2.0.0"
+
+  name        = "preprocessing"
+  cpu_type_id = "cpu5c"
+  vcpu_count  = 4
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

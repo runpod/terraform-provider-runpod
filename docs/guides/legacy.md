@@ -114,4 +114,5 @@ data "runpod_billing_endpoint" "this" {
 }
 ```
 
-Inputs and outputs are documented in the module's README.
+Inputs and outputs are documented in the
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/legacy/README.md).

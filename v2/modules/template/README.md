@@ -17,6 +17,18 @@ exist for 1.x configurations.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "template" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0"
+
+  name  = "pytorch-base"
+  image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+  disk  = 20
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

@@ -26,6 +26,18 @@ REST v1 compatibility shim and read null when that host does not answer.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "gpu_pod" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
+
+  name        = "training"
+  gpu_type_id = "NVIDIA GeForce RTX 4090"
+  disk        = 50
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

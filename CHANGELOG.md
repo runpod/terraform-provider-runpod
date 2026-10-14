@@ -5,7 +5,8 @@
 A rebuild of the provider on the Runpod REST v2 API and the generated Go SDK.
 The 1.x provider stays on the registry at its published versions; nothing about
 it changes. A 1.x configuration will not plan unchanged against 2.0.0; read
-the migration guide before pinning `~> 2.0`.
+the [migration guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x)
+before pinning `~> 2.0`.
 
 The Go module for this release is `github.com/runpod/terraform-provider-runpod/v2`
 and its source lives in the `v2/` directory of this repository. The registry
@@ -21,8 +22,8 @@ from this repository at the release tag, for example
 ### Provider configuration
 
 - `api_key`: Runpod API key, or the `RUNPOD_API_KEY` environment variable.
-- `base_url`: REST v2 base URL, or `RUNPOD_API_BASE_URL`; for stage or
-  self-hosted targets.
+- `base_url`: REST v2 base URL, or `RUNPOD_API_BASE_URL`; set it only to target
+  a non-production Runpod environment.
 - `graphql_url`: GraphQL endpoint, or `RUNPOD_GRAPHQL_URL`. Used only by the
   deprecated machine resource and data sources and by the deprecated
   `runpod_user` data source.

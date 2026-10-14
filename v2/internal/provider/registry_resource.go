@@ -39,7 +39,8 @@ func (r *registryResource) Metadata(_ context.Context, req resource.MetadataRequ
 func (r *registryResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Container registry credentials used to pull private images. " +
-			"The API has no update operation, so any change replaces the credential.",
+			"The API has no update operation, so any change replaces the credential. It cannot be imported: " +
+			"the API never returns the password.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
 				Computed:      true,

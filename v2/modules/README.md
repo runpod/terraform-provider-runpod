@@ -30,7 +30,7 @@ Documentation snippets for the registry pages live under
 ## Running a module
 
 The modules resolve the provider from a local build, so build it once from the
-repository root:
+`v2/` directory:
 
 ```bash
 task build   # local filesystem mirror + artifacts/dev.tfrc
@@ -48,7 +48,8 @@ terraform destroy   # for the modules that create something
 
 Against the published provider, leave `TF_CLI_CONFIG_FILE` unset: the
 `source = "runpod/runpod"` in each module's `versions.tf` then resolves from the
-registry.
+registry. A release candidate installs only through an exact pin, which the
+modules' `~> 2.0` does not allow, so test one against a local build.
 
 ## Using a module from your own configuration
 

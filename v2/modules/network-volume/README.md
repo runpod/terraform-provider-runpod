@@ -12,6 +12,18 @@ place but never shrink.
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
 
+## Usage
+
+```hcl
+module "network_volume" {
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/network-volume?ref=v2.0.0"
+
+  name        = "datasets"
+  size        = 100
+  data_center = "EU-RO-1"
+}
+```
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 

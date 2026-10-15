@@ -26,8 +26,14 @@ type PodResource struct {
 }
 
 func (r *PodResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	// The provider passes a *client.RunPodClientWrapper as ResourceData (see
+	// main.go), not a *client.RunPodClient. Use the comma-ok form so a type
+	// mismatch leaves r.client nil (Create/Read/Update/Delete then fall back to
+	// the RUNPOD_API_KEY / RUNPOD_BASE_URL env path) instead of panicking.
 	if req.ProviderData != nil {
-		r.client = req.ProviderData.(*client.RunPodClient)
+		if c, ok := req.ProviderData.(*client.RunPodClient); ok {
+			r.client = c
+		}
 	}
 }
 
@@ -37,7 +43,7 @@ func (r *PodResource) getClient() *client.RunPodClient {
 	}
 	var apiKey string
 	var endpoint string
-	
+
 	if r.client != nil {
 		apiKey = r.client.APIKey
 		endpoint = r.client.RestBaseURL
@@ -97,7 +103,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 
 	var apiKey string
 	var endpoint string
-	
+
 	if r.client != nil {
 		apiKey = r.client.APIKey
 		endpoint = r.client.RestBaseURL
@@ -108,7 +114,7 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 			endpoint = "https://rest.runpod.io/v1"
 		}
 	}
-	
+
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
 		return
@@ -125,81 +131,48 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 	if hasTemplateId {
 		body["templateId"] = config.TemplateId.ValueString()
 	} else if hasImageName {
-		body["image"] = config.ImageName.ValueString()
+		// REST v1 expects a FLAT body: imageName (not a nested "image").
+		body["imageName"] = config.ImageName.ValueString()
 	}
 
+	// gpuCount is a top-level integer (not gpu.count).
 	if !config.GpuCount.IsNull() && config.GpuCount.ValueInt64() > 0 {
-		if _, ok := body["gpu"]; !ok {
-			body["gpu"] = make(map[string]interface{})
-		}
-		gpuObj := body["gpu"].(map[string]interface{})
-		gpuObj["count"] = int64(config.GpuCount.ValueInt64())
+		body["gpuCount"] = int64(config.GpuCount.ValueInt64())
 	}
 
+	// gpuTypeIds is a top-level array of strings (not gpu.id).
 	if !config.GpuTypeId.IsNull() && config.GpuTypeId.ValueString() != "" {
-		if _, ok := body["gpu"]; !ok {
-			body["gpu"] = make(map[string]interface{})
-		}
-		gpuObj := body["gpu"].(map[string]interface{})
-		gpuObj["id"] = config.GpuTypeId.ValueString()
+		body["gpuTypeIds"] = []string{config.GpuTypeId.ValueString()}
 	}
 
+	// cloudType (not "cloud").
 	if !config.CloudType.IsNull() && config.CloudType.ValueString() != "" {
-		body["cloud"] = config.CloudType.ValueString()
+		body["cloudType"] = config.CloudType.ValueString()
 	}
 
 	if !config.BidPerGpu.IsNull() && config.BidPerGpu.ValueFloat64() > 0 {
 		body["bidPerGpu"] = config.BidPerGpu.ValueFloat64()
 	}
 
-	if config.VolumeInGb.ValueFloat64() > 0 || !config.NetworkVolumeId.IsNull() || !config.VolumeMountPath.IsNull() {
-		if _, ok := body["mounts"]; !ok {
-			body["mounts"] = make([]map[string]interface{}, 0)
-		}
-		mounts := body["mounts"].([]map[string]interface{})
-		
-		if config.VolumeInGb.ValueFloat64() > 0 {
-			mount := map[string]interface{}{
-				"volumeInGb": int64(config.VolumeInGb.ValueFloat64()),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			if !config.VolumeEncrypted.IsNull() {
-				mount["volumeEncrypted"] = config.VolumeEncrypted.ValueBool()
-			}
-			mounts = append(mounts, mount)
-		}
-
-		if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
-			mount := map[string]interface{}{
-				"networkVolumeId": config.NetworkVolumeId.ValueString(),
-			}
-			if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-				mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-			}
-			mounts = append(mounts, mount)
-		}
-
-		if !config.NetworkVolumeIds.IsNull() && len(config.NetworkVolumeIds.Elements()) > 0 {
-			for _, id := range config.NetworkVolumeIds.Elements() {
-				if strVal, ok := id.(types.String); ok {
-					mount := map[string]interface{}{
-						"networkVolumeId": strVal.ValueString(),
-					}
-					if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
-						mount["volumeMountPath"] = config.VolumeMountPath.ValueString()
-					}
-					mounts = append(mounts, mount)
-				}
-			}
-		}
-		
-		body["mounts"] = mounts
+	// Volume config uses FLAT top-level keys, NOT a nested "mounts" array
+	// (the API rejects "mounts" with "Extra input keys provided").
+	// Only send each field when actually set.
+	if config.VolumeInGb.ValueFloat64() > 0 {
+		body["volumeInGb"] = int64(config.VolumeInGb.ValueFloat64())
 	}
+	if !config.VolumeMountPath.IsNull() && config.VolumeMountPath.ValueString() != "" {
+		body["volumeMountPath"] = config.VolumeMountPath.ValueString()
+	}
+	if !config.NetworkVolumeId.IsNull() && config.NetworkVolumeId.ValueString() != "" {
+		body["networkVolumeId"] = config.NetworkVolumeId.ValueString()
+	}
+	// NOTE: volumeEncrypted and networkVolumeIds (plural) are intentionally NOT
+	// sent — they are not top-level keys in the create-pod body schema and would
+	// re-trigger "Extra input keys". Confirm before adding either.
 
+	// containerDiskInGb (not "disk").
 	if !config.ContainerDiskInGb.IsNull() && config.ContainerDiskInGb.ValueInt64() > 0 {
-		body["disk"] = int64(config.ContainerDiskInGb.ValueInt64())
+		body["containerDiskInGb"] = int64(config.ContainerDiskInGb.ValueInt64())
 	}
 
 	if !config.Ports.IsNull() && config.Ports.ValueString() != "" {
@@ -240,11 +213,54 @@ func (r *PodResource) Create(ctx context.Context, req resource.CreateRequest, re
 		body["startJupyter"] = config.StartJupyter.ValueBool()
 	}
 
+	// Container start command (e.g. ["bash","-c","..."]). The field already
+	// existed in the schema/model and was parsed by Read(), but Create() never
+	// sent it — this wires it into the request body as dockerStartCmd.
+	if !config.DockerStartCmd.IsNull() && len(config.DockerStartCmd.Elements()) > 0 {
+		startCmd := make([]string, 0)
+		for _, e := range config.DockerStartCmd.Elements() {
+			if s, ok := e.(types.String); ok {
+				startCmd = append(startCmd, s.ValueString())
+			}
+		}
+		if len(startCmd) > 0 {
+			body["dockerStartCmd"] = startCmd
+		}
+	}
+
+	if !config.DockerEntrypoint.IsNull() && len(config.DockerEntrypoint.Elements()) > 0 {
+		entrypoint := make([]string, 0)
+		for _, e := range config.DockerEntrypoint.Elements() {
+			if s, ok := e.(types.String); ok {
+				entrypoint = append(entrypoint, s.ValueString())
+			}
+		}
+		if len(entrypoint) > 0 {
+			body["dockerEntrypoint"] = entrypoint
+		}
+	}
+
+	// Target data center(s). Sent as dataCenterIds (array), matching the
+	// convention used by the endpoint resource.
+	if !config.DataCenterIds.IsNull() && len(config.DataCenterIds.Elements()) > 0 {
+		dcIds := make([]string, 0)
+		for _, e := range config.DataCenterIds.Elements() {
+			if s, ok := e.(types.String); ok {
+				dcIds = append(dcIds, s.ValueString())
+			}
+		}
+		if len(dcIds) > 0 {
+			body["dataCenterIds"] = dcIds
+		}
+	}
+
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		resp.Diagnostics.AddError("API Error", fmt.Sprintf("Failed to marshal request body: %v", err))
 		return
 	}
+
+	fmt.Fprintf(os.Stderr, "[runpod_pod] POST %s body=%s\n", url, string(jsonBody))
 
 	reqHTTP, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -442,7 +458,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 
 	var apiKey string
 	var endpoint string
-	
+
 	if r.client != nil {
 		apiKey = r.client.APIKey
 		endpoint = r.client.RestBaseURL
@@ -453,7 +469,7 @@ func (r *PodResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 			endpoint = "https://rest.runpod.io/v1"
 		}
 	}
-	
+
 	if apiKey == "" {
 		resp.Diagnostics.AddError("API Error", "RUNPOD_API_KEY environment variable must be set")
 		return
@@ -657,7 +673,7 @@ func (r *PodResource) Update(ctx context.Context, req resource.UpdateRequest, re
 
 	var apiKey string
 	var endpoint string
-	
+
 	if r.client != nil {
 		apiKey = r.client.APIKey
 		endpoint = r.client.RestBaseURL
@@ -821,7 +837,7 @@ func (r *PodResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 
 	var apiKey string
 	var endpoint string
-	
+
 	if r.client != nil {
 		apiKey = r.client.APIKey
 		endpoint = r.client.RestBaseURL

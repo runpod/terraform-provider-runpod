@@ -1,6 +1,6 @@
 ---
 page_title: "Pod lifecycle"
-subcategory: "Compute"
+subcategory: "Use-case modules"
 description: |-
   Runs one state transition (start, stop, restart or terminate) on a pod that already exists, then reads the pod back and lists every pod on the account.
 ---
@@ -40,7 +40,7 @@ The `status` output comes from the deprecated GraphQL shim and exists for
 
 ```hcl
 module "pod_lifecycle" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0-rc.3"
 
   pod_id = "gfj8b292vyg08g"
   action = "restart"
@@ -80,4 +80,4 @@ data "runpod_pods" "all" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/pod-lifecycle/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/pod-lifecycle/README.md).

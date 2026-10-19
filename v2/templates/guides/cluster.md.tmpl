@@ -1,6 +1,6 @@
 ---
 page_title: "Multi-node cluster"
-subcategory: "Compute"
+subcategory: "Use-case modules"
 description: |-
   Creates a cluster of identical GPU pods on one private overlay network, then reads it back through the cluster data sources.
 ---
@@ -27,7 +27,7 @@ you drive it; SSH needs keys registered through
 
 ```hcl
 module "cluster" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cluster?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cluster?ref=v2.0.0-rc.3"
 
   name              = "training"
   gpu_type_id       = "NVIDIA H100 80GB HBM3"
@@ -48,4 +48,4 @@ module "cluster" {
 {{ tffile "modules/cluster/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/cluster/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/cluster/README.md).

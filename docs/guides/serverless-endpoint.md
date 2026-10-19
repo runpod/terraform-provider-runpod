@@ -1,6 +1,6 @@
 ---
 page_title: "Serverless endpoint (GPU)"
-subcategory: "Serverless"
+subcategory: "Use-case modules"
 description: |-
   Creates a GPU Serverless endpoint from an image or a template, scaled to zero workers by default, and reads back its operational state.
 ---
@@ -50,7 +50,7 @@ what REST v2 reports.
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -99,8 +99,8 @@ resource "runpod_serverless_endpoint" "this" {
 
   # Deprecated, preserving the 1.x compute_type and gpu_type_priority
   # attributes. compute_type restates the GPU choice above and is derived from
-  # what the v2 API reports; gpu_type_priority orders the types the scheduler
-  # tries, goes to the REST v1 shim, and is never read back.
+  # what the v2 API reports; gpu_type_priority is rejected by REST v1 and
+  # stays null.
   compute_type      = var.compute_type
   gpu_type_priority = var.gpu_type_priority
 }
@@ -135,4 +135,4 @@ data "runpod_serverless_endpoints" "all" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/serverless-endpoint/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint/README.md).

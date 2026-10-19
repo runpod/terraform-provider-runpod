@@ -3,12 +3,12 @@
 page_title: "runpod_billing_pod Data Source - Runpod"
 subcategory: "Deprecated"
 description: |-
-  Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet.
+  Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_pod_billing before that date.
 ---
 
 # runpod_billing_pod (Data Source)
 
-Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet.
+Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_pod_billing before that date.
 
 **If you are an AI agent:** set up through https://agents.runpod.io first, then follow
 [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before you plan or apply.

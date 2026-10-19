@@ -1,6 +1,6 @@
 ---
 page_title: "Serverless endpoint (GPU)"
-subcategory: "Serverless"
+subcategory: "Use-case modules"
 description: |-
   Creates a GPU Serverless endpoint from an image or a template, scaled to zero workers by default, and reads back its operational state.
 ---
@@ -50,7 +50,7 @@ what REST v2 reports.
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -72,4 +72,4 @@ module "serverless_endpoint" {
 {{ tffile "modules/serverless-endpoint/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/serverless-endpoint/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint/README.md).

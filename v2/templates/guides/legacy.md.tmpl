@@ -1,6 +1,6 @@
 ---
 page_title: "Legacy shims (deprecated)"
-subcategory: "Deprecated"
+subcategory: "Use-case modules"
 description: |-
   Everything the 2.0 provider still serves from the GraphQL and REST v1 APIs because REST v2 has no route for it: machines, the account read, and the three 1.x billing data sources.
 ---
@@ -15,7 +15,9 @@ sources (`runpod_billing_pod`, `runpod_billing_network_volume`,
 `runpod_billing_endpoint`) with their per-record `gpu_type_id`,
 `disk_space_billed_gb`, `endpoint_id` and `time_billed_ms` fields. **Every
 part of this module is deprecated**, warns on each plan, and is removed once
-REST v2 reports the same thing. New configurations use the
+REST v2 reports the same thing. The billing data sources read REST v1, which is
+retired on 2026-11-15; from that date the module's default plan fails until the
+billing reads are removed. New configurations use the
 [billing-report](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/billing-report)
 module and never register machines from Terraform.
 
@@ -41,7 +43,7 @@ Point the shims elsewhere with the provider's `graphql_url` /
 
 ```hcl
 module "legacy" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.3"
 
   bucket_size = "day"
   gpu_type_id = "NVIDIA A100 80GB PCIe"
@@ -63,4 +65,4 @@ module "legacy" {
 {{ tffile "modules/legacy/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/legacy/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/legacy/README.md).

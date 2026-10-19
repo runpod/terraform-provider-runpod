@@ -36,7 +36,7 @@ resource "runpod_serverless_endpoint" "http" {
 # template here instead of an image.
 resource "runpod_serverless_endpoint" "cpu" {
   name          = "inference-cpu"
-  template_id   = "30zmvf89kd"
+  template_id   = runpod_template.cpu_worker.id
   endpoint_type = "QUEUE"
   scaling_type  = "REQUEST_COUNT"
   scaling_value = 1
@@ -53,6 +53,13 @@ resource "runpod_serverless_endpoint" "cpu" {
       vcpu_count  = 8
     },
   ]
+}
+
+resource "runpod_template" "cpu_worker" {
+  name       = "inference-cpu-worker"
+  image      = "runpod/mock-worker:dev"
+  serverless = true
+  disk       = 10
 }
 
 # Queue endpoints report their job operation URLs; a load-balancer endpoint

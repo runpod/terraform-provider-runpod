@@ -53,16 +53,23 @@ resource "runpod_pod" "preprocess" {
 # network_volume_id.
 resource "runpod_pod" "from_template" {
   name                   = "template-pod"
-  template_id            = "30zmvf89kd"
+  template_id            = runpod_template.pod.id
   gpu_type_id            = "NVIDIA GeForce RTX 4090"
   min_cuda_version       = "12.1"
   min_ram_per_gpu        = 8
   min_vcpu_count_per_gpu = 2
+  data_center_ids        = [runpod_network_volume.data.data_center]
 
   network_volumes = [{
     volume_id = runpod_network_volume.data.id
     path      = "/runpod-volume"
   }]
+}
+
+resource "runpod_template" "pod" {
+  name  = "template-pod-base"
+  image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+  disk  = 20
 }
 
 resource "runpod_network_volume" "data" {
@@ -91,18 +98,6 @@ output "training_docker_entrypoint" {
 
 output "training_docker_start_cmd" {
   value = runpod_pod.training.docker_start_cmd
-}
-
-# Deprecated read-backs, preserving the 1.x machine_id and volume_encrypted
-# attributes. They come from the REST v1 shim and go away once REST v2 reports
-# the same fields; a pod applies fine without the shim, and then they read
-# null.
-output "training_machine_id" {
-  value = runpod_pod.training.machine_id
-}
-
-output "training_volume_encrypted" {
-  value = runpod_pod.training.volume_encrypted
 }
 ```
 
@@ -155,12 +150,12 @@ the Guides section documents each one.
 - `docker_start_cmd` (List of String) Container start command the pod runs, in exec form, as the API decodes it from args; when there is an entrypoint, this is the argument list passed to it. Read-only. Set the command through args.
 - `id` (String) Pod identifier assigned by the API.
 - `locked` (Boolean) Whether the pod is locked, which prevents stopping or resetting it.
-- `machine_id` (String, Deprecated) Deprecated. Host machine the pod is placed on, read from the REST v1 pod. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
+- `machine_id` (String, Deprecated) Deprecated. Host machine the pod is placed on, read from the REST v1 pod. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
 - `memory_in_gb` (Number) System RAM in GB allocated to the pod: across all requested GPUs on a GPU pod, or the flavor's allocation on a CPU pod.
 - `runtime` (Attributes) Live utilization the API reports for a RUNNING pod; null in every other status. (see [below for nested schema](#nestedatt--runtime))
 - `started_at` (String) When the pod last started, in RFC 3339 format. Null until it has run.
 - `status` (String) Pod lifecycle status as reported by the API, e.g. RUNNING, EXITED, PROVISIONING.
-- `volume_encrypted` (Boolean, Deprecated) Deprecated. Whether the pod's volume is encrypted, read from the REST v1 pod. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
+- `volume_encrypted` (Boolean, Deprecated) Deprecated. Whether the pod's volume is encrypted, read from the REST v1 pod. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
 
 <a id="nestedatt--network_volumes"></a>
 ### Nested Schema for `network_volumes`
@@ -217,10 +212,14 @@ Import is supported using the following syntax:
 The [`terraform import` command](https://developer.hashicorp.com/terraform/cli/commands/import) can be used, for example:
 
 ```shell
-# Pods are imported by pod id. The import reads the pod's whole env into
-# state, so the first apply with a configured env removes every key the
-# configuration leaves out, template keys included; PUBLIC_KEY and
-# JUPYTER_PASSWORD stay on the pod. Copy the keys to keep into the
-# configuration before that apply.
+# Pods are imported by pod id. The API does not return template_id, start_ssh,
+# start_jupyter, allowed_cuda_versions, min_cuda_version, min_ram_per_gpu,
+# min_vcpu_count_per_gpu or data_center_ids, so an import leaves them empty
+# and each one the configuration sets forces replacement on the first apply.
+# Name them in lifecycle { ignore_changes = [...] } before that apply. The
+# import also reads the pod's whole env into state, so the first apply with a
+# configured env removes every key the configuration leaves out, template keys
+# included; PUBLIC_KEY and JUPYTER_PASSWORD stay on the pod. Copy the keys to
+# keep into the configuration before that apply.
 terraform import runpod_pod.training pod_abc123
 ```

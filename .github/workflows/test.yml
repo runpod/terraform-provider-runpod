@@ -138,10 +138,10 @@ jobs:
       - name: Fail if generated files drifted
         run: |
           set -euo pipefail
-          if [ -n "$(git status --porcelain -- ../docs modules)" ]; then
-            echo "::error::docs/ or v2/modules/ is out of date; run 'task docs' in v2/ and commit the result"
-            git status --porcelain -- ../docs modules
-            git diff -- ../docs modules | head -200
+          if [ -n "$(git status --porcelain -- ../docs modules templates examples README.md ../README.md)" ]; then
+            echo "::error::docs/, templates, READMEs or v2/modules/ are out of date; run 'task docs' in v2/ and commit the result"
+            git status --porcelain -- ../docs modules templates examples README.md ../README.md
+            git diff -- ../docs modules templates examples README.md ../README.md | head -200
             exit 1
           fi
-          echo "docs/ and v2/modules/ match the provider schema and the module sources"
+          echo "docs/, templates, READMEs and v2/modules/ match the provider schema, RELEASE and the module sources"

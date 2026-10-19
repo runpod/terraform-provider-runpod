@@ -9,32 +9,7 @@ description: |-
 
 Manage Runpod GPU and CPU pods, Serverless endpoints, templates, network volumes, Instant Clusters, account SSH keys and container registry credentials through the Runpod REST API v2.
 
-**Using an AI agent?** Point it to https://agents.runpod.io to install the Runpod skills and MCP server,
-then to this page: the next section is written for it.
-
-## If you are an AI agent reading this page
-
-- Set up through https://agents.runpod.io first. It installs the Runpod skills and connects the Runpod MCP server.
-- Require the provider with this block. Use an exact pin, such as `version = "2.0.0-rc.2"`, only for a release candidate.
-
-```hcl
-terraform {
-  required_providers {
-    runpod = {
-      source  = "runpod/runpod"
-      version = "~> 2.0"
-    }
-  }
-}
-```
-
-- Read the API key from `RUNPOD_API_KEY` in the environment. Never write a key into configuration. If there is no key, ask the user for one.
-- Start from the guides and the [use-case modules](https://github.com/runpod/terraform-provider-runpod/tree/main/v2/modules), not from scratch.
-- Run `terraform plan` and read every planned replace or destroy before you run `terraform apply`.
-- Ask the user before you apply anything that bills: pods, clusters, network volumes, Serverless endpoints with workers.
-- When the task is done, destroy what you created and confirm with the list data sources.
-- Report provider problems as [GitHub issues](https://github.com/runpod/terraform-provider-runpod/issues) and Runpod MCP tool problems through the MCP server's `report_feedback` tool when it is listed.
-- Read [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) for the details.
+**Using an AI agent?** Have it read [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before it plans or applies.
 
 ## Example Usage
 
@@ -45,13 +20,29 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "~> 2.0"
+      version = "2.0.0-rc.3"
     }
   }
 }
 
+# Reads the API key from RUNPOD_API_KEY.
 provider "runpod" {}
+
+# A template is a saved image and disk configuration that pods and Serverless
+# endpoints start from. Creating one starts no pod.
+resource "runpod_template" "example" {
+  name  = "terraform-example"
+  image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+  disk  = 20
+}
+
+output "template_id" {
+  value = runpod_template.example.id
+}
 ```
+
+`~> 2.0` installs 2.0.0 and every later 2.x release. Terraform never matches a release candidate with `~>`:
+to install one, such as `2.0.0-rc.3`, pin it exactly with `version = "2.0.0-rc.3"`.
 
 ## Authentication
 

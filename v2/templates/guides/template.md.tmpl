@@ -1,6 +1,6 @@
 ---
 page_title: "Template"
-subcategory: "Storage and images"
+subcategory: "Use-case modules"
 description: |-
   Creates a reusable pod / endpoint configuration template, reads it back by id, and lists every template visible to the account.
 ---
@@ -29,7 +29,7 @@ exist for 1.x configurations.
 
 ```hcl
 module "template" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.3"
 
   name  = "pytorch-base"
   image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -48,4 +48,4 @@ module "template" {
 {{ tffile "modules/template/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/template/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/template/README.md).

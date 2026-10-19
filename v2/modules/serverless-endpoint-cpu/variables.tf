@@ -148,7 +148,7 @@ variable "compute_type" {
 }
 
 variable "cpu_flavor_priority" {
-  description = "Deprecated. How the scheduler orders the configured CPU flavors, e.g. \"availability\", preserving the 1.x cpu_flavor_priority attribute. Nothing reads it back."
+  description = "Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null."
   type        = string
   default     = null
 }

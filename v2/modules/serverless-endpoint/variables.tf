@@ -183,7 +183,7 @@ variable "compute_type" {
 }
 
 variable "gpu_type_priority" {
-  description = "Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. \"availability\", preserving the 1.x gpu_type_priority attribute. Nothing reads it back."
+  description = "Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null."
   type        = string
   default     = null
 }

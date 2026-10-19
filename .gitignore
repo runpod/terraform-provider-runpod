@@ -1,6 +1,8 @@
 # Terraform
 .terraform/
 .terraform.lock.hcl
+*.tfstate
+*.tfstate.*
 
 # Binary files
 terraform-provider-runpod

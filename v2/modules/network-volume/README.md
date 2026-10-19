@@ -16,7 +16,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "network_volume" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/network-volume?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/network-volume?ref=v2.0.0-rc.3"
 
   name        = "datasets"
   size        = 100
@@ -30,20 +30,20 @@ module "network_volume" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/network_volume) | resource |
-| [runpod_network_volumes.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/network_volumes) | data source |
+| [runpod_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/network_volume) | resource |
+| [runpod_network_volumes.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/network_volumes) | data source |
 
 ## Inputs
 

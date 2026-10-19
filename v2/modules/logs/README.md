@@ -24,7 +24,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "logs" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/logs?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/logs?ref=v2.0.0-rc.3"
 
   pod_id     = "gfj8b292vyg08g"
   log_source = "container"
@@ -38,20 +38,20 @@ module "logs" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_endpoint_worker_logs.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_worker_logs) | data source |
-| [runpod_pod_logs.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/pod_logs) | data source |
+| [runpod_endpoint_worker_logs.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_worker_logs) | data source |
+| [runpod_pod_logs.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/pod_logs) | data source |
 
 ## Inputs
 

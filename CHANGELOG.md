@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0
+## 2.0.0 (unreleased; release candidates 2.0.0-rc.1 on 2026-10-13, 2.0.0-rc.2 on 2026-10-14, 2.0.0-rc.3 on 2026-10-19)
 
 A rebuild of the provider on the Runpod REST v2 API and the generated Go SDK.
 The 1.x provider stays on the registry at its published versions; nothing about
@@ -18,6 +18,62 @@ acceptance test, and a coverage gate that fails the build when a registered
 resource or data source is used by none of them. A module is used straight
 from this repository at the release tag, for example
 `github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0`.
+
+### Changes in 2.0.0-rc.3
+
+Documentation and release tooling only; no provider behaviour changes. The Go
+changes are description strings.
+
+- The release the docs point at is one line, `RELEASE` in `v2/Taskfile.yml`:
+  `task docs` rewrites every module `?ref=`, module README link, provider pin
+  and module version pin from it, the CI drift gate fails when they are out of
+  date, and a tag whose number differs from `RELEASE` does not release. The
+  local build carries the same number, so it reports `2.0.0-rc.3-dev`.
+- The modules pin the release their guide documents, an exact pin while it is
+  a candidate, so `2.0.0-rc.3` installs them from the registry.
+- Registry index: one pointer to the agent guide instead of the agent section,
+  Example Usage creates a template, and the note under it says why a release
+  candidate needs an exact pin.
+- The fourteen module guides sit under one "Use-case modules" group; the agent
+  and migration guides have no group and list first.
+- Agent guide: the first step is optional, so an agent without the Runpod
+  skills can follow the steps; the version step names the pin to use while
+  only release candidates exist, the import section covers clusters and the
+  SSH keys id, and the leftover check lists templates, clusters and registry
+  credentials too.
+- REST v1 is retired on 2026-11-15: the migration guide, the legacy guide, the
+  v2 README, the changelog and the shim descriptions say what stops working
+  then; `gpu_type_priority` and `cpu_flavor_priority` are documented as
+  rejected by REST v1, and the Serverless modules say to leave them null.
+- Examples: the pod and Serverless snippets declare their own template, a pod
+  with a network volume sets `data_center_ids`, the deprecated pod outputs and
+  the template's REST v1 writes are gone, and the pod Import section lists the
+  create-time settings an import leaves empty.
+- The legacy module README links the migration guide at its real path; the v2
+  README no longer names "stage".
+- The 1.x `examples/` at the repository root, a committed state file and a
+  developer-override config are removed, `*.tfstate` is ignored, and the root
+  README says the remaining root `*.md` files describe 1.x.
+
+### Changes in 2.0.0-rc.2
+
+No provider behaviour changes; the Go changes are description strings.
+
+- New guide, "Using the provider from an AI agent", linked from the registry
+  index and README.md; the registry index and every resource and data-source
+  page carry a pointer to it.
+- The machine, user and three `runpod_billing_*` pages are grouped under
+  Deprecated in the registry navigation.
+- `runpod_registry`, `runpod_registry_delegation` and `runpod_pod_action` say
+  they cannot be imported; a re-declared pod action runs again.
+- The Serverless endpoint example no longer sets the deprecated attributes or
+  outputs.
+- Local builds report `2.0.0-dev` in the User-Agent, so the API's request data
+  tells the project's own runs from users'.
+- Test files: legacy no longer asserts outputs the module dropped, registry
+  declares the variables its run block reads, and the pod tests declare
+  `gpu_type_id` as a variable. Running the tests needs Terraform 1.13; the
+  provider and the modules still need 1.6.
 
 ### Provider configuration
 
@@ -103,6 +159,12 @@ These ship and work. Each is a shim over an older API because REST v2 has no
 equivalent route yet, and each is removed in the first release after REST v2
 covers it. Plans that use them emit a deprecation warning.
 
+REST v1 is retired on 2026-11-15. From then on the REST v1 attributes read
+null, setting `docker_entrypoint`, `readme`, `gpu_type_priority` or
+`cpu_flavor_priority` fails the apply, and the three `runpod_billing_*` data
+sources fail every plan. The GraphQL shims (`runpod_machine`, `runpod_user`)
+are not affected by that date.
+
 - `runpod_machine` resource and the `runpod_machine` / `runpod_machines` data
   sources. Machines have no REST v2 route; these call the GraphQL API. Only
   `name` and `bid_price_per_gpu` are settable (the create mutation takes no
@@ -136,8 +198,9 @@ covers it. Plans that use them emit a deprecation warning.
   - `runpod_pod`: `machine_id` and `volume_encrypted`: REST v1 read-backs,
     read-only, because the 1.x provider never sent them on a create either.
   - `runpod_serverless_endpoint`: `gpu_type_priority` and `cpu_flavor_priority`
-    go out as a REST v1 patch on create and on every update that sets them, and
-    are never read back, exactly as in 1.x; `template_version`, `users`,
+    are deprecated and currently rejected by REST v1 (the acceptance tests
+    leave them out for that reason); remove them from the configuration, the
+    v2 endpoint has no equivalent; `template_version`, `users`,
     `version` and `workers` are REST v1 read-backs, and
     `runpod_endpoint_workers` is the supported view of the worker snapshot.
     `compute_type` is deprecated for a different reason: it restates what

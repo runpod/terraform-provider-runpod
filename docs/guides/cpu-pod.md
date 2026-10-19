@@ -1,6 +1,6 @@
 ---
 page_title: "CPU pod"
-subcategory: "Compute"
+subcategory: "Use-case modules"
 description: |-
   Runs one CPU-only pod: a CPU flavor (cpu_type_id) and a vCPU count instead of a GPU type.
 ---
@@ -26,7 +26,7 @@ REST v1 compatibility shim and read null when that host does not answer.
 
 ```hcl
 module "cpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cpu-pod?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cpu-pod?ref=v2.0.0-rc.3"
 
   name        = "preprocessing"
   cpu_type_id = "cpu5c"
@@ -70,4 +70,4 @@ resource "runpod_pod" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/cpu-pod/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/cpu-pod/README.md).

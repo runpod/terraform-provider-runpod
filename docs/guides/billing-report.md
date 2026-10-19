@@ -1,6 +1,6 @@
 ---
 page_title: "Billing report"
-subcategory: "Discovery and reporting"
+subcategory: "Use-case modules"
 description: |-
   Read-only spend reporting: the account-wide total plus one data source per billed resource kind (pods, Serverless, endpoints, network volumes and clusters).
 ---
@@ -33,7 +33,7 @@ module.
 
 ```hcl
 module "billing_report" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0-rc.3"
 
   bucket_size = "day"
   last_n      = 7
@@ -90,4 +90,4 @@ data "runpod_cluster_billing" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/billing-report/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/billing-report/README.md).

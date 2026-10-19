@@ -96,6 +96,7 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 			},
 			"machine_id": schema.StringAttribute{
 				Optional:            true,
+				Computed:            true,
 				Description:         "Machine ID to deploy pod on (optional if gpu_type_id is specified)",
 				MarkdownDescription: "Machine ID to deploy pod on (optional if gpu_type_id is specified)",
 			},
@@ -187,9 +188,9 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 				MarkdownDescription: "Network volume ID to attach to the pod. When attached, the network volume replaces the pod volume. Deprecated: use network_volume_ids for multiple volumes.",
 			},
 			"network_volume_ids": schema.ListAttribute{
-				ElementType: types.StringType,
-				Optional:    true,
-				Description: "List of network volume IDs to attach to the pod",
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "List of network volume IDs to attach to the pod",
 				MarkdownDescription: "List of network volume IDs to attach to the pod. Supports multiple network volumes.",
 			},
 			"docker_entrypoint": schema.ListAttribute{
@@ -203,6 +204,12 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 				Optional:            true,
 				Description:         "Docker start command array",
 				MarkdownDescription: "Docker start command array",
+			},
+			"data_center_ids": schema.ListAttribute{
+				ElementType:         types.StringType,
+				Optional:            true,
+				Description:         "Data center IDs the pod may be placed in (sent as dataCenterIds)",
+				MarkdownDescription: "Data center IDs the pod may be placed in. Sent to the API as `dataCenterIds`.",
 			},
 			"interruptible": schema.BoolAttribute{
 				Optional:            true,
@@ -219,7 +226,7 @@ func PodResourceSchema(ctx context.Context) schema.Schema {
 }
 
 type PodModel struct {
-	Type              types.String  `tfsdk:"type"`  // v2 required field: ON_DEMAND or SPOT
+	Type              types.String  `tfsdk:"type"` // v2 required field: ON_DEMAND or SPOT
 	BidPerGpu         types.Float64 `tfsdk:"bid_per_gpu"`
 	CloudType         types.String  `tfsdk:"cloud_type"`
 	ClusterIp         types.String  `tfsdk:"cluster_ip"`
@@ -248,10 +255,11 @@ type PodModel struct {
 	VolumeInGb        types.Float64 `tfsdk:"volume_in_gb"`
 	VolumeKey         types.String  `tfsdk:"volume_key"`
 	VolumeMountPath   types.String  `tfsdk:"volume_mount_path"`
-  NetworkVolumeId   types.String  `tfsdk:"network_volume_id"`
-  NetworkVolumeIds  types.List    `tfsdk:"network_volume_ids"`
-  DockerEntrypoint  types.List    `tfsdk:"docker_entrypoint"`
-  DockerStartCmd    types.List    `tfsdk:"docker_start_cmd"`
-  Interruptible     types.Bool    `tfsdk:"interruptible"`
-  VolumeEncrypted   types.Bool    `tfsdk:"volume_encrypted"`
+	NetworkVolumeId   types.String  `tfsdk:"network_volume_id"`
+	NetworkVolumeIds  types.List    `tfsdk:"network_volume_ids"`
+	DockerEntrypoint  types.List    `tfsdk:"docker_entrypoint"`
+	DockerStartCmd    types.List    `tfsdk:"docker_start_cmd"`
+	DataCenterIds     types.List    `tfsdk:"data_center_ids"`
+	Interruptible     types.Bool    `tfsdk:"interruptible"`
+	VolumeEncrypted   types.Bool    `tfsdk:"volume_encrypted"`
 }

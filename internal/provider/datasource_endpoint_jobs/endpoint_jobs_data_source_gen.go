@@ -3,9 +3,9 @@ package datasource_endpoint_jobs
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-framework/attr"
 )
 
 func EndpointJobsDataSourceSchema(ctx context.Context) schema.Schema {
@@ -30,6 +30,7 @@ func EndpointJobsDataSourceSchema(ctx context.Context) schema.Schema {
 				Computed: true,
 			},
 			"jobs": schema.ListAttribute{
+				Computed: true,
 				ElementType: types.ObjectType{
 					AttrTypes: map[string]attr.Type{
 						"id":           types.StringType,

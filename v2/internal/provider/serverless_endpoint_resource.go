@@ -366,7 +366,7 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 			},
 			"gpu_type_priority": schema.StringAttribute{
 				Optional: true,
-				Description: "Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. \"availability\", preserving the 1.x gpu_type_priority attribute. Applied through the REST v1 shim on create and on every update that sets it; nothing reads it back, exactly as in 1.x, so the value stays as configured. GPU endpoints only. " +
+				Description: "Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. \"availability\", preserving the 1.x gpu_type_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. GPU endpoints only. " +
 					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				Validators: []validator.String{
@@ -375,7 +375,7 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 			},
 			"cpu_flavor_priority": schema.StringAttribute{
 				Optional: true,
-				Description: "Deprecated. How the scheduler orders the configured CPU flavors, e.g. \"availability\", preserving the 1.x cpu_flavor_priority attribute. Applied through the REST v1 shim on create and on every update that sets it; nothing reads it back, exactly as in 1.x, so the value stays as configured. CPU endpoints only. " +
+				Description: "Deprecated. How the scheduler orders the configured CPU flavors, e.g. \"availability\", preserving the 1.x cpu_flavor_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. CPU endpoints only. " +
 					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				Validators: []validator.String{

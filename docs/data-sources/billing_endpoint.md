@@ -3,12 +3,12 @@
 page_title: "runpod_billing_endpoint Data Source - Runpod"
 subcategory: "Deprecated"
 description: |-
-  Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead.
+  Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_serverless_billing before that date.
 ---
 
 # runpod_billing_endpoint (Data Source)
 
-Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead.
+Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_serverless_billing before that date.
 
 **If you are an AI agent:** set up through https://agents.runpod.io first, then follow
 [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before you plan or apply.

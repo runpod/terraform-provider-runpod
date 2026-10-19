@@ -23,7 +23,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "serverless_endpoint_cpu" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.3"
 
   name = "api"
   cpu = [{
@@ -40,19 +40,19 @@ module "serverless_endpoint_cpu" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/serverless_endpoint) | resource |
+| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/serverless_endpoint) | resource |
 
 ## Inputs
 
@@ -60,7 +60,7 @@ module "serverless_endpoint_cpu" {
 | ---- | ----------- | ---- | ------- | :------: |
 | compute\_type | Deprecated. Worker compute family, preserving the 1.x compute\_type attribute. Null derives it from cpu; a value other than CPU is rejected here. | `string` | `null` | no |
 | cpu | CPU configurations workers may be placed on: a flavor from the CPU catalog (see the catalog-discovery module) and a vCPU count valid for it. | <pre>list(object({<br/>    cpu_type_id = string<br/>    vcpu_count  = number<br/>  }))</pre> | <pre>[<br/>  {<br/>    "cpu_type_id": "cpu5c",<br/>    "vcpu_count": 4<br/>  }<br/>]</pre> | no |
-| cpu\_flavor\_priority | Deprecated. How the scheduler orders the configured CPU flavors, e.g. "availability", preserving the 1.x cpu\_flavor\_priority attribute. Nothing reads it back. | `string` | `null` | no |
+| cpu\_flavor\_priority | Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null. | `string` | `null` | no |
 | data\_center\_ids | Data centers workers may be placed in. Null lets the scheduler choose; a network volume requires the workers to land in the volume's data center. | `list(string)` | `null` | no |
 | disk | Worker container disk in GB. Null uses the API default. | `number` | `null` | no |
 | endpoint\_type | Request routing: QUEUE or LOAD\_BALANCER. | `string` | `"QUEUE"` | no |

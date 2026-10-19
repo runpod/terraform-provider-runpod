@@ -11,7 +11,7 @@ REST v2 reports the same thing. New configurations use the
 [billing-report](../billing-report) module and never register machines from
 Terraform.
 
-The [migration guide](../../docs/guides/migrating-from-1-x.md) lists every
+The [migration guide](../../../docs/guides/migrating-from-1-x.md) lists every
 shim with the 1.x attribute or data source it preserves and what replaces it.
 
 By default the module is read-only and safe against any account: the
@@ -34,7 +34,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "legacy" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.3"
 
   bucket_size = "day"
   gpu_type_id = "NVIDIA A100 80GB PCIe"
@@ -47,25 +47,25 @@ module "legacy" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/machine) | resource |
-| [runpod_billing_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/billing_endpoint) | data source |
-| [runpod_billing_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/billing_network_volume) | data source |
-| [runpod_billing_pod.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/billing_pod) | data source |
-| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/machine) | data source |
-| [runpod_machines.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/machines) | data source |
-| [runpod_user.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/user) | data source |
+| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/machine) | resource |
+| [runpod_billing_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_endpoint) | data source |
+| [runpod_billing_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_network_volume) | data source |
+| [runpod_billing_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_pod) | data source |
+| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/machine) | data source |
+| [runpod_machines.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/machines) | data source |
+| [runpod_user.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/user) | data source |
 
 ## Inputs
 

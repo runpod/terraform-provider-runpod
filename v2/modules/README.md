@@ -48,14 +48,15 @@ terraform destroy   # for the modules that create something
 
 Against the published provider, leave `TF_CLI_CONFIG_FILE` unset: the
 `source = "runpod/runpod"` in each module's `versions.tf` then resolves from the
-registry. A release candidate installs only through an exact pin, which the
-modules' `~> 2.0` does not allow, so test one against a local build.
+registry. Each module pins the release its guide documents: an exact pin while
+that release is a candidate, `~> MAJOR.MINOR` from the final release on. The
+pin comes from `RELEASE` in the Taskfile and `task docs` rewrites it.
 
 ## Using a module from your own configuration
 
 ```hcl
 module "training_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"

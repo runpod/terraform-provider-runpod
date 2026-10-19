@@ -30,7 +30,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "~> 2.0"
+      version = "2.0.0-rc.3"
     }
   }
 }
@@ -39,8 +39,8 @@ provider "runpod" {}
 ```
 
 The provider reads `RUNPOD_API_KEY` from the environment, or takes `api_key`
-explicitly. `RUNPOD_API_BASE_URL` (or `base_url`) points it at another
-environment, e.g. stage.
+explicitly. `RUNPOD_API_BASE_URL` (or `base_url`) points it at a
+non-production Runpod environment.
 
 Two more arguments exist only for the deprecated shims and are ignored by
 everything on REST v2: `graphql_url` (or `RUNPOD_GRAPHQL_URL`) for the machine
@@ -90,7 +90,7 @@ yet:
 | Resource | Deprecated attributes | Where they come from |
 |---|---|---|
 | `runpod_pod` | `machine_id`, `volume_encrypted` | REST v1 read-back after the v2 read; read-only, as they effectively were in 1.x |
-| `runpod_serverless_endpoint` | `gpu_type_priority`, `cpu_flavor_priority` | REST v1 patch on create and update when set, never read back, as in 1.x |
+| `runpod_serverless_endpoint` | `gpu_type_priority`, `cpu_flavor_priority` | Deprecated and currently rejected by REST v1 (the acceptance tests leave them out for that reason); remove them from the configuration |
 | `runpod_serverless_endpoint` | `template_version`, `users`, `version`, `workers` | REST v1 read-back; `runpod_endpoint_workers` is the supported view of the worker snapshot |
 | `runpod_serverless_endpoint` | `compute_type` | Derived from the v2 response, with no call to any older API; a value contradicting `gpu_pools` or `cpu` is rejected |
 | `runpod_template` | `docker_entrypoint`, `readme` | REST v1 patch on create and update, read back from it |
@@ -99,6 +99,12 @@ yet:
 A deprecated attribute nothing configured is a read: if the older API does not
 answer, the plan warns and the attribute reads null. One the configuration sets
 is a write, and a failure there fails the apply.
+
+REST v1 is retired on 2026-11-15. From then on the REST v1 attributes read
+null, setting `docker_entrypoint`, `readme`, `gpu_type_priority` or
+`cpu_flavor_priority` fails the apply, and the three `runpod_billing_*` data
+sources fail every plan. The GraphQL shims (`runpod_machine`, `runpod_user`)
+are not affected by that date.
 
 `runpod_pod`, `runpod_network_volume`, `runpod_template`,
 `runpod_serverless_endpoint`, `runpod_cluster` and `runpod_machine` support
@@ -143,7 +149,7 @@ registered resource and data source above is used by at least one of them, and
 
 ```hcl
 module "training_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -265,7 +271,8 @@ on its outputs, and destroys it afterwards.
 `task test-tf TEST=catalog_discovery`, `TEST=billing_report` and
 `TEST=legacy` run only read-only tests. The pod, CPU pod, volume, template,
 endpoint, pod-lifecycle and logs tests create real resources for the duration
-of the run — set `RUNPOD_API_BASE_URL` to target stage. Of those, a pod bills
+of the run — set `RUNPOD_API_BASE_URL` to target a non-production Runpod
+environment. Of those, a pod bills
 per hour while it runs and the network volume bills for allocated storage; the
 endpoints are scaled to zero workers and the template is metadata, so neither
 costs anything to keep.

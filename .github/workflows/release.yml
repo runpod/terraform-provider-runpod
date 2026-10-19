@@ -64,6 +64,15 @@ jobs:
           test -d docs/data-sources
           echo "docs/ present: $(find docs -name '*.md' | wc -l) pages"
 
+      - name: Check the docs point at this tag
+        if: steps.line.outputs.docs != ''
+        run: |
+          set -euo pipefail
+          if ! grep -qxF "  RELEASE: ${GITHUB_REF_NAME#v}" v2/Taskfile.yml; then
+            echo "::error::v2/Taskfile.yml has '$(grep -E '^  RELEASE:' v2/Taskfile.yml | sed 's/^ *//')' but the tag is ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+
       - name: Set up Go
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:

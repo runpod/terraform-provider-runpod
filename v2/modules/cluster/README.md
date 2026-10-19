@@ -23,7 +23,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "cluster" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cluster?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cluster?ref=v2.0.0-rc.3"
 
   name              = "training"
   gpu_type_id       = "NVIDIA H100 80GB HBM3"
@@ -38,22 +38,22 @@ module "cluster" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_cluster.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/cluster) | resource |
-| [runpod_cluster.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cluster) | data source |
-| [runpod_cluster_pods.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cluster_pods) | data source |
-| [runpod_clusters.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/clusters) | data source |
+| [runpod_cluster.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/cluster) | resource |
+| [runpod_cluster.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/cluster) | data source |
+| [runpod_cluster_pods.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/cluster_pods) | data source |
+| [runpod_clusters.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/clusters) | data source |
 
 ## Inputs
 

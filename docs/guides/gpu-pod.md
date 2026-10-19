@@ -1,6 +1,6 @@
 ---
 page_title: "GPU pod"
-subcategory: "Compute"
+subcategory: "Use-case modules"
 description: |-
   Runs one GPU pod.
 ---
@@ -38,7 +38,7 @@ REST v1 compatibility shim and read null when that host does not answer.
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -87,4 +87,4 @@ resource "runpod_pod" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/gpu-pod/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/gpu-pod/README.md).

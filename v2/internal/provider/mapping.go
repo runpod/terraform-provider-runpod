@@ -26,7 +26,7 @@ import (
 
 const legacyShimDeprecation = "REST v1 shim: REST v2 has no equivalent yet; removed when it does"
 
-const legacyShimDescriptionSuffix = "Served by the deprecated REST v1 shim and removed once REST v2 reports it."
+const legacyShimDescriptionSuffix = "Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it."
 
 // legacyShimPartialPatchCaveat goes on every attribute the shim writes. 1.0.8
 // PATCHed the whole resource body on every update; the shim sends only the one

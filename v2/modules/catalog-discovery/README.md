@@ -26,7 +26,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "catalog_discovery" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0-rc.3"
 
   gpu_type_id    = "NVIDIA GeForce RTX 4090"
   data_center_id = "EU-RO-1"
@@ -40,25 +40,25 @@ module "catalog_discovery" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_catalog_templates.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/catalog_templates) | data source |
-| [runpod_cpu_type.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cpu_type) | data source |
-| [runpod_cpu_types.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/cpu_types) | data source |
-| [runpod_data_center.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/data_center) | data source |
-| [runpod_data_centers.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/data_centers) | data source |
-| [runpod_gpu_type.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/gpu_type) | data source |
-| [runpod_gpu_types.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/gpu_types) | data source |
+| [runpod_catalog_templates.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/catalog_templates) | data source |
+| [runpod_cpu_type.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/cpu_type) | data source |
+| [runpod_cpu_types.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/cpu_types) | data source |
+| [runpod_data_center.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/data_center) | data source |
+| [runpod_data_centers.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/data_centers) | data source |
+| [runpod_gpu_type.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/gpu_type) | data source |
+| [runpod_gpu_types.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/gpu_types) | data source |
 
 ## Inputs
 

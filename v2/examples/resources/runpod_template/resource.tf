@@ -23,11 +23,6 @@ resource "runpod_template" "pytorch" {
   }
 
   ports = ["8888/http", "22/tcp"]
-
-  # Deprecated, served by the REST v1 shim: the 1.x docker_entrypoint and
-  # readme attributes. Both are applied on create and update and read back.
-  docker_entrypoint = ["/bin/bash"]
-  readme            = "PyTorch notebook with JupyterLab on port 8888."
 }
 
 # What the shim reports back about a template's usage, preserving the 1.x

@@ -1,6 +1,5 @@
 ---
 page_title: "Migrating from 1.x to 2.0.0"
-subcategory: "Upgrade"
 description: |-
   Attribute-by-attribute mapping from the 1.0.8 provider to 2.0.0, with the configuration edit and state action every resource needs.
 ---
@@ -24,7 +23,7 @@ baseline for everything 2.0.0 preserves; see "Why 1.0.9 is not the baseline" at 
 What 1.x did and v2 has no field for yet is kept rather than dropped, on its old backend and
 marked deprecated: the machine surface and the user identity read on GraphQL; the three 1.x billing
 data sources and a handful of attributes on pods, templates and Serverless endpoints on REST v1. Terraform
-warns about each one on every plan, and each goes away when v2 reports the same thing; see "Deprecated
+warns about each one on every plan, and the REST v1 ones stop working on 2026-11-15; see "Deprecated
 shims" at the end. The mapping tables below name them row by row.
 
 This is a breaking release. Every resource needs a configuration edit, and every resource needs a state
@@ -57,7 +56,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "~> 2.0"
+      version = "2.0.0-rc.3"
     }
   }
 }
@@ -102,14 +101,14 @@ not read it; point that at a non-production host with `RUNPOD_API_BASE_URL` or `
      required_providers {
        runpod = {
          source  = "runpod/runpod"
-         version = "~> 2.0"
+         version = "2.0.0-rc.3"
        }
      }
    }
    ```
 
-   Run `terraform init -upgrade`. A release candidate, such as `2.0.0-rc.2`, installs only through an exact
-   pin, `version = "2.0.0-rc.2"`; `~> 2.0` does not select it.
+   Run `terraform init -upgrade`. A release candidate, such as `2.0.0-rc.3`, installs only through an exact
+   pin, `version = "2.0.0-rc.3"`; `~> 2.0` does not select it.
 
 2. Before editing anything, record the identifiers you will need to re-import. `terraform state list`
    plus `terraform show -json` against the old state, or the `id` outputs you already have.
@@ -248,9 +247,10 @@ the same data center as the pod:
 
 ```hcl
 resource "runpod_pod" "training" {
-  name        = "training-pod"
-  image       = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
-  gpu_type_id = "NVIDIA GeForce RTX 4090"
+  name            = "training-pod"
+  image           = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+  gpu_type_id     = "NVIDIA GeForce RTX 4090"
+  data_center_ids = [runpod_network_volume.data.data_center]
 
   network_volumes = [{
     volume_id = runpod_network_volume.data.id
@@ -275,12 +275,12 @@ exceptions from them.
 | `template_version` | `template_version` | Deprecated, read-only: read back from the REST v1 shim. Releases are also reported by the `runpod_endpoint_releases` data source |
 | `gpu_type_id` | `gpu_pools` | Replaced: a list of Serverless pool ids, e.g. `["ADA_24"]`. Read the pool from the `pool` field of `runpod_gpu_types` |
 | `gpu_type_ids` | `gpu_pools` | Replaced, same as above |
-| `gpu_type_priority` | `gpu_type_priority` | Deprecated: the v2 endpoint has no priority ordering inside a pool, so a configured value is applied through the REST v1 shim and, as in 1.x, never read back |
+| `gpu_type_priority` | `gpu_type_priority` | Deprecated and currently rejected by REST v1 (the acceptance tests leave it out for that reason); remove it from the configuration, the v2 endpoint has no equivalent |
 | `gpu_count` | `gpu_count` | Same |
 | `compute_type` | `compute_type` | Deprecated: the family follows from whether `gpu_pools` or `cpu` is set, so the value is derived from what v2 reports. Keeping it in the configuration is allowed as long as it agrees with the block; a value that contradicts it is rejected |
 | `cpu_flavor_ids` | `cpu[].cpu_type_id` | Moved into block |
 | `vcpu_count` | `cpu[].vcpu_count` | Moved into block; one entry per eligible configuration |
-| `cpu_flavor_priority` | `cpu_flavor_priority` | Deprecated: applied through the REST v1 shim when set and never read back, as in 1.x |
+| `cpu_flavor_priority` | `cpu_flavor_priority` | Deprecated and currently rejected by REST v1 (the acceptance tests leave it out for that reason); remove it from the configuration, the v2 endpoint has no equivalent |
 | `cloud_type` | — | Removed; it exists only in 1.0.9, which never ran, and the v2 Serverless create takes no cloud tier |
 | `scaler_type` | `scaling_type` | Renamed; values `QUEUE_DELAY` or `REQUEST_COUNT` |
 | `scaler_value` | `scaling_value` | Renamed; now **required** alongside `scaling_type` |
@@ -1091,6 +1091,12 @@ configuration can have depended on.
 
 ## Deprecated shims
 
+REST v1 is retired on 2026-11-15 (docs.runpod.io/api-reference/overview). After that date the REST v1
+read-backs read null with a warning, setting `docker_entrypoint`, `readme`, `gpu_type_priority` or
+`cpu_flavor_priority` fails the apply, and `runpod_billing_pod`, `runpod_billing_network_volume` and
+`runpod_billing_endpoint` fail every plan. Move off them before that date. The GraphQL shims
+(`runpod_machine`, the machine data sources, `runpod_user`) are not affected by it.
+
 Everything a 1.0.8 configuration used that REST v2 has no field for still works in 2.0.0, on the old
 backend, marked deprecated in the schema. Terraform prints the deprecation warning on every plan, and the
 attribute or data source goes away in a later release once REST v2 reports the same thing. These are the
@@ -1136,11 +1142,11 @@ plan that touches one prints the warning:
   1.0.8 either: the 1.0.8 create body never carried them. `docker_entrypoint` and `docker_start_cmd` are
   not shims: they are read from the v2 pod.
 
-- **`runpod_serverless_endpoint`** — `gpu_type_priority` and `cpu_flavor_priority` are applied through a
-  REST v1 PATCH on create and on every update that sets them, and are never read back, exactly as in 1.x,
-  so the value stays as configured; `template_version`, `users`, `version` and `workers` (with `id`,
-  `pod_id`, `status`, `uptime_ms`, `start_time` and `last_busy_ms`) are REST v1 read-backs, and when a
-  priority is set the PATCH response supplies them, so the shim costs one request rather than two.
+- **`runpod_serverless_endpoint`** — `gpu_type_priority` and `cpu_flavor_priority` are deprecated and
+  currently rejected by REST v1 (the acceptance tests leave them out for that reason); remove them from
+  the configuration, the v2 endpoint has no equivalent. `template_version`, `users`, `version` and
+  `workers` (with `id`, `pod_id`, `status`, `uptime_ms`, `start_time` and `last_busy_ms`) are REST v1
+  read-backs.
   `compute_type` is deprecated for a different reason: it restates what `gpu_pools` or `cpu` already says,
   so 2.0.0 derives it from the v2 response, rejects a value that contradicts the block, and writes nothing
   to the old host for it. It goes away once 1.x configurations have moved to `gpu_pools` and `cpu`, not on

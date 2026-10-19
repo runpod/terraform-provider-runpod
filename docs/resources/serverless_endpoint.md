@@ -54,7 +54,7 @@ resource "runpod_serverless_endpoint" "http" {
 # template here instead of an image.
 resource "runpod_serverless_endpoint" "cpu" {
   name          = "inference-cpu"
-  template_id   = "30zmvf89kd"
+  template_id   = runpod_template.cpu_worker.id
   endpoint_type = "QUEUE"
   scaling_type  = "REQUEST_COUNT"
   scaling_value = 1
@@ -71,6 +71,13 @@ resource "runpod_serverless_endpoint" "cpu" {
       vcpu_count  = 8
     },
   ]
+}
+
+resource "runpod_template" "cpu_worker" {
+  name       = "inference-cpu-worker"
+  image      = "runpod/mock-worker:dev"
+  serverless = true
+  disk       = 10
 }
 
 # Queue endpoints report their job operation URLs; a load-balancer endpoint
@@ -103,7 +110,7 @@ the Guides section documents each one.
 - `allowed_cuda_versions` (List of String) Acceptable CUDA versions for worker placement, as major.minor, e.g. ["12.8", "12.6"]. Matching is exact. A non-empty list cannot be combined with min_cuda_version; set it to [] to state no constraint. Takes effect as workers are replaced. GPU endpoints only.
 - `compute_type` (String, Deprecated) Deprecated. Worker compute family, GPU or CPU, preserving the 1.x compute_type attribute. It restates the choice gpu_pools and cpu already make, so it is derived from the endpoint the v2 API reports and a value contradicting that choice is rejected; nothing is written to the deprecated host for it. Removed once 1.x configurations have moved to gpu_pools and cpu.
 - `cpu` (Attributes List) Eligible CPU configurations for each worker, for a CPU-only endpoint. Workers are placed on whichever listed configuration has capacity, and memory follows from the flavor's catalog RAM multiplier. Exactly one of gpu_pools or cpu must be set; the API cannot move an endpoint between the GPU and CPU families, so switching replaces the endpoint. (see [below for nested schema](#nestedatt--cpu))
-- `cpu_flavor_priority` (String, Deprecated) Deprecated. How the scheduler orders the configured CPU flavors, e.g. "availability", preserving the 1.x cpu_flavor_priority attribute. Applied through the REST v1 shim on create and on every update that sets it; nothing reads it back, exactly as in 1.x, so the value stays as configured. CPU endpoints only. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
+- `cpu_flavor_priority` (String, Deprecated) Deprecated. How the scheduler orders the configured CPU flavors, e.g. "availability", preserving the 1.x cpu_flavor_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. CPU endpoints only. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
 - `data_center_ids` (List of String) Preferred data centers for workers.
 - `disk` (Number) Worker container disk in GB.
 - `env` (Map of String) Environment variables for workers.
@@ -111,7 +118,7 @@ the Guides section documents each one.
 - `flashboot` (String) FlashBoot cold-start acceleration: OFF, FLASHBOOT, or PRIORITY_FLASHBOOT (enabled with priority capacity).
 - `gpu_count` (Number) GPUs per worker.
 - `gpu_pools` (List of String) Serverless GPU pool IDs (see the gpu catalog's pool field), e.g. ["ADA_24"]. Workers run on whichever listed pool has capacity. Exactly one of gpu_pools or cpu must be set; the API cannot move an endpoint between the GPU and CPU families, so switching replaces the endpoint.
-- `gpu_type_priority` (String, Deprecated) Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. "availability", preserving the 1.x gpu_type_priority attribute. Applied through the REST v1 shim on create and on every update that sets it; nothing reads it back, exactly as in 1.x, so the value stays as configured. GPU endpoints only. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
+- `gpu_type_priority` (String, Deprecated) Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. "availability", preserving the 1.x gpu_type_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. GPU endpoints only. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
 - `idle_timeout` (Number) Seconds before idle workers scale down, between 1 and 3600. Not applicable to REQUEST_COUNT-scaled queue endpoints.
 - `image` (String) Docker image reference for workers. Optional when template_id supplies one; at least one of image or template_id is required.
 - `min_cuda_version` (String) Lowest acceptable CUDA version for worker placement, as major.minor, compared numerically: 12.11 is above 12.2. Use it for an open-ended floor and allowed_cuda_versions for an exact set; set it to "" to drop the floor. GPU endpoints only.
@@ -128,10 +135,10 @@ the Guides section documents each one.
 - `created_at` (String) Creation timestamp in RFC 3339 format.
 - `id` (String) Endpoint identifier assigned by the API.
 - `request_urls` (Attributes) Invocation URLs the API reports for this endpoint. A QUEUE endpoint fills the job operations (run, run_sync, status, stream, cancel, retry, purge_queue, health); a LOAD_BALANCER endpoint fills base and health, since its remaining paths are worker-defined. The attributes that do not apply to the endpoint's routing type are null. (see [below for nested schema](#nestedatt--request_urls))
-- `template_version` (Number, Deprecated) Deprecated. Version of the template the endpoint was built from, preserving the 1.x template_version attribute. Null when the endpoint was built from an image rather than a template. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
-- `users` (List of String, Deprecated) Deprecated. Account that owns the endpoint, as a one-element list, preserving the 1.x users attribute and its shape. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
-- `version` (Number, Deprecated) Deprecated. The endpoint's configuration version, which the platform increments on every change, preserving the 1.x version attribute. Served by the deprecated REST v1 shim and removed once REST v2 reports it.
-- `workers` (Attributes List, Deprecated) Deprecated. Workers allocated to the endpoint at the moment it was read, preserving the 1.x workers attribute. Allocation changes with load, so this is a snapshot; runpod_endpoint_workers is the supported view of the same thing. Served by the deprecated REST v1 shim and removed once REST v2 reports it. (see [below for nested schema](#nestedatt--workers))
+- `template_version` (Number, Deprecated) Deprecated. Version of the template the endpoint was built from, preserving the 1.x template_version attribute. Null when the endpoint was built from an image rather than a template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `users` (List of String, Deprecated) Deprecated. Account that owns the endpoint, as a one-element list, preserving the 1.x users attribute and its shape. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `version` (Number, Deprecated) Deprecated. The endpoint's configuration version, which the platform increments on every change, preserving the 1.x version attribute. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `workers` (Attributes List, Deprecated) Deprecated. Workers allocated to the endpoint at the moment it was read, preserving the 1.x workers attribute. Allocation changes with load, so this is a snapshot; runpod_endpoint_workers is the supported view of the same thing. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it. (see [below for nested schema](#nestedatt--workers))
 
 <a id="nestedatt--cpu"></a>
 ### Nested Schema for `cpu`

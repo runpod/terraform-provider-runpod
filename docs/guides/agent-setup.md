@@ -1,6 +1,5 @@
 ---
 page_title: "Using the provider from an AI agent"
-subcategory: "Getting started"
 description: |-
   How an AI agent sets up Runpod, authenticates the provider without a user present, pins versions, reviews plans and cleans up what it creates.
 ---
@@ -14,11 +13,12 @@ for the person who sets one up.
 
 Follow these steps in order. The sections below explain each one.
 
-1. Set up through https://agents.runpod.io first. It installs the Runpod skills
-   and connects the Runpod MCP server. Use Terraform for infrastructure that
-   persists, and the MCP server for one-off operations.
-2. Require the provider as `source = "runpod/runpod"`, `version = "~> 2.0"`.
-   Use an exact pin only for a release candidate (see Versions).
+1. If the Runpod skills and the Runpod MCP server are installed, use the MCP
+   server for one-off operations and Terraform for infrastructure that
+   persists. Neither is required for the steps below.
+2. Require the provider as `source = "runpod/runpod"` with the pin shown under
+   Versions: `~> 2.0` once 2.0.0 is released, an exact pin such as
+   `2.0.0-rc.3` while only release candidates exist.
 3. Read the API key from `RUNPOD_API_KEY` in the environment. Never write a key
    into a `.tf` file, a `.tfvars` file or a command line, and never print it.
    If there is no key, stop and ask the user for one.
@@ -93,7 +93,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "~> 2.0"
+      version = "2.0.0-rc.3"
     }
   }
 }
@@ -101,10 +101,9 @@ terraform {
 provider "runpod" {}
 ```
 
-`~> 2.0` takes every 2.x release. A release candidate, such as `2.0.0-rc.2`,
-installs only through an exact pin, `version = "2.0.0-rc.2"`. The use-case
-modules require `~> 2.0`, so they do not install next to an exact
-release-candidate pin.
+`~> 2.0` takes every 2.x release. A release candidate, such as `2.0.0-rc.3`,
+installs only through an exact pin, `version = "2.0.0-rc.3"`. The use-case
+modules carry the same pin as the block above, so they install next to it.
 
 ## Start from a module
 
@@ -115,7 +114,7 @@ scratch:
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
 
   name        = "agent-training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -156,6 +155,13 @@ and a pod action holds no state to import. Declaring a registry credential or
 delegation again creates a new one. Declaring a pod action again, for example
 after it was removed from state, runs the action again.
 
+Clusters need the same care as pods: the API does not return the container
+settings, so an import leaves `image`, `args`, `disk`, `env`, `ports`,
+`data_center_ids`, `mounts`, `start_ssh` and `start_jupyter` empty in state,
+and each one the configuration sets forces a new cluster on the first apply;
+list them in `lifecycle { ignore_changes = [...] }` before that apply.
+`runpod_account_ssh_keys` imports by the literal id `account`.
+
 ## Naming and cleanup
 
 - Give test resources a recognisable prefix, such as `agent-`, so they are easy to
@@ -171,18 +177,23 @@ data "runpod_pods" "all" {
 }
 data "runpod_network_volumes" "all" {}
 data "runpod_serverless_endpoints" "all" {}
+data "runpod_templates" "all" {}
+data "runpod_clusters" "all" {}
+data "runpod_registries" "all" {}
 
 output "leftovers" {
   value = concat(
     [for p in data.runpod_pods.all.pods : p.id if try(startswith(p.name, "agent-"), false)],
     [for v in data.runpod_network_volumes.all.network_volumes : v.id if try(startswith(v.name, "agent-"), false)],
     [for e in data.runpod_serverless_endpoints.all.endpoints : e.id if try(startswith(e.name, "agent-"), false)],
+    [for t in data.runpod_templates.all.templates : t.id if try(startswith(t.name, "agent-"), false)],
+    [for c in data.runpod_clusters.all.clusters : c.id if try(startswith(c.name, "agent-"), false)],
+    [for r in data.runpod_registries.all.registries : r.id if try(startswith(r.name, "agent-"), false)],
   )
 }
 ```
 
-`runpod_templates`, `runpod_clusters`, `runpod_registries` and
-`runpod_registry_delegations` list the rest.
+`runpod_registry_delegations` lists the delegations.
 
 ## Errors
 

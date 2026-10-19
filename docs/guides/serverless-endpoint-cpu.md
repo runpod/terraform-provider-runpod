@@ -1,6 +1,6 @@
 ---
 page_title: "Serverless endpoint (CPU)"
-subcategory: "Serverless"
+subcategory: "Use-case modules"
 description: |-
   Creates a CPU Serverless endpoint: cpu lists the flavor / vCPU pairs workers may be placed on instead of GPU pools.
 ---
@@ -28,7 +28,7 @@ reports.
 
 ```hcl
 module "serverless_endpoint_cpu" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.3"
 
   name = "api"
   cpu = [{
@@ -71,12 +71,12 @@ resource "runpod_serverless_endpoint" "this" {
 
   # Deprecated, preserving the 1.x compute_type and cpu_flavor_priority
   # attributes. compute_type restates the CPU choice above and is derived from
-  # what the v2 API reports; cpu_flavor_priority orders the flavors the
-  # scheduler tries, goes to the REST v1 shim, and is never read back.
+  # what the v2 API reports; cpu_flavor_priority is rejected by REST v1 and
+  # stays null.
   compute_type        = var.compute_type
   cpu_flavor_priority = var.cpu_flavor_priority
 }
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/serverless-endpoint-cpu/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint-cpu/README.md).

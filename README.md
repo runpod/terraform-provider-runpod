@@ -14,7 +14,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "~> 2.0"
+      version = "2.0.0-rc.3"
     }
   }
 }
@@ -33,3 +33,5 @@ provider "runpod" {} # reads RUNPOD_API_KEY
 
 The 1.x provider (1.0.x tags) is built from the Go module at the repository root; its files stay here
 only for 1.0.x patch releases.
+Root `*.md` files other than README.md and CHANGELOG.md describe the 1.x provider, refer to a 1.x
+`examples/` directory that is no longer in the tree, and do not work with 2.x.

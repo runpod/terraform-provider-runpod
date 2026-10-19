@@ -28,7 +28,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "account_ssh_keys" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/account-ssh-keys?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/account-ssh-keys?ref=v2.0.0-rc.3"
 
   keys              = [trimspace(file("~/.ssh/id_ed25519.pub"))]
   remove_on_destroy = false
@@ -41,19 +41,19 @@ module "account_ssh_keys" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_account_ssh_keys.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/account_ssh_keys) | resource |
+| [runpod_account_ssh_keys.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/account_ssh_keys) | resource |
 
 ## Inputs
 

@@ -33,7 +33,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "pod_lifecycle" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/pod-lifecycle?ref=v2.0.0-rc.3"
 
   pod_id = "gfj8b292vyg08g"
   action = "restart"
@@ -46,21 +46,21 @@ module "pod_lifecycle" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_pod_action.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/pod_action) | resource |
-| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/pod) | data source |
-| [runpod_pods.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/pods) | data source |
+| [runpod_pod_action.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/pod_action) | resource |
+| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/pod) | data source |
+| [runpod_pods.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/pods) | data source |
 
 ## Inputs
 

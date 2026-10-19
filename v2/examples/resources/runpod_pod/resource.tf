@@ -35,16 +35,23 @@ resource "runpod_pod" "preprocess" {
 # network_volume_id.
 resource "runpod_pod" "from_template" {
   name                   = "template-pod"
-  template_id            = "30zmvf89kd"
+  template_id            = runpod_template.pod.id
   gpu_type_id            = "NVIDIA GeForce RTX 4090"
   min_cuda_version       = "12.1"
   min_ram_per_gpu        = 8
   min_vcpu_count_per_gpu = 2
+  data_center_ids        = [runpod_network_volume.data.data_center]
 
   network_volumes = [{
     volume_id = runpod_network_volume.data.id
     path      = "/runpod-volume"
   }]
+}
+
+resource "runpod_template" "pod" {
+  name  = "template-pod-base"
+  image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
+  disk  = 20
 }
 
 resource "runpod_network_volume" "data" {
@@ -73,16 +80,4 @@ output "training_docker_entrypoint" {
 
 output "training_docker_start_cmd" {
   value = runpod_pod.training.docker_start_cmd
-}
-
-# Deprecated read-backs, preserving the 1.x machine_id and volume_encrypted
-# attributes. They come from the REST v1 shim and go away once REST v2 reports
-# the same fields; a pod applies fine without the shim, and then they read
-# null.
-output "training_machine_id" {
-  value = runpod_pod.training.machine_id
-}
-
-output "training_volume_encrypted" {
-  value = runpod_pod.training.volume_encrypted
 }

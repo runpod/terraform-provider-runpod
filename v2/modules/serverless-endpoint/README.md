@@ -38,7 +38,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -52,24 +52,24 @@ module "serverless_endpoint" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | ~> 2.0 |
+| runpod | 2.0.0-rc.3 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/serverless_endpoint) | resource |
-| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_build) | data source |
-| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_builds) | data source |
-| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_releases) | data source |
-| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_workers) | data source |
-| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/serverless_endpoints) | data source |
+| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/serverless_endpoint) | resource |
+| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_build) | data source |
+| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_builds) | data source |
+| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_releases) | data source |
+| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_workers) | data source |
+| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/serverless_endpoints) | data source |
 
 ## Inputs
 
@@ -86,7 +86,7 @@ module "serverless_endpoint" {
 | flashboot | FlashBoot cold-start acceleration: OFF, FLASHBOOT, or PRIORITY\_FLASHBOOT. Null uses the API default. | `string` | `null` | no |
 | gpu\_count | GPUs per worker. | `number` | `1` | no |
 | gpu\_pools | Serverless GPU pool IDs (the pool field in the GPU catalog, see the catalog-discovery module). | `list(string)` | <pre>[<br/>  "ADA_24"<br/>]</pre> | no |
-| gpu\_type\_priority | Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. "availability", preserving the 1.x gpu\_type\_priority attribute. Nothing reads it back. | `string` | `null` | no |
+| gpu\_type\_priority | Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null. | `string` | `null` | no |
 | idle\_timeout | Seconds an idle worker stays up before scaling down, 1 to 3600. Null uses the API default. | `number` | `null` | no |
 | image | Docker image reference for workers. Null when template\_id supplies one. | `string` | `"runpod/mock-worker:dev"` | no |
 | min\_cuda\_version | Lowest acceptable CUDA version for worker placement, e.g. "12.1". Null sets no floor. | `string` | `null` | no |

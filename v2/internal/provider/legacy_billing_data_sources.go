@@ -146,7 +146,8 @@ func (d *legacyPodBillingDataSource) Metadata(_ context.Context, req datasource.
 func (d *legacyPodBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. " +
-			"Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet.",
+			"Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet." +
+			" REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_pod_billing before that date.",
 		DeprecationMessage: legacyBillingDeprecation,
 		Attributes: withAttributes(legacyBillingWindowAttributes(), map[string]schema.Attribute{
 			"gpu_type_id": schema.StringAttribute{
@@ -249,7 +250,8 @@ func (d *legacyNetworkVolumeBillingDataSource) Metadata(_ context.Context, req d
 func (d *legacyNetworkVolumeBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Deprecated. Network volume spend as the 1.x provider reported it, read from the REST v1 " +
-			"billing/networkvolumes route. Use runpod_network_volume_billing instead.",
+			"billing/networkvolumes route. Use runpod_network_volume_billing instead." +
+			" REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_network_volume_billing before that date.",
 		DeprecationMessage: legacyBillingDeprecation,
 		Attributes: withAttributes(legacyBillingWindowAttributes(), map[string]schema.Attribute{
 			"network_volume_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one network volume."},
@@ -343,7 +345,8 @@ func (d *legacyEndpointBillingDataSource) Metadata(_ context.Context, req dataso
 func (d *legacyEndpointBillingDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Description: "Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 " +
-			"billing/endpoints route. Use runpod_serverless_billing instead.",
+			"billing/endpoints route. Use runpod_serverless_billing instead." +
+			" REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_serverless_billing before that date.",
 		DeprecationMessage: legacyBillingDeprecation,
 		Attributes: withAttributes(legacyBillingWindowAttributes(), map[string]schema.Attribute{
 			"endpoint_id": schema.StringAttribute{Optional: true, Description: "Restrict the records to one endpoint."},

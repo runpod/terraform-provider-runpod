@@ -8,7 +8,19 @@ dotenv: ['.env']
 
 vars:
   NAME: terraform-provider-runpod
-  VERSION: 2.0.0
+  # The release this tree documents and ships: the git tag without its v. The
+  # only line to change at a cut (2.0.0-rc.3, then 2.0.0); task docs then
+  # rewrites every module ref, module README link, provider pin and module
+  # version pin from it, and the local build below carries the same number.
+  RELEASE: 2.0.0-rc.3
+  # A release candidate installs only through an exact pin; a final release
+  # gets the ~> MAJOR.MINOR constraint. The modules' versions.tf take this
+  # pin, so a candidate installs them from the registry.
+  RELEASE_PIN:
+    sh: case "{{.RELEASE}}" in *-*) echo "{{.RELEASE}}" ;; *) echo "~> $(echo "{{.RELEASE}}" | cut -d. -f1-2)" ;; esac
+  # The local build's version: the release number, so the modules' pin
+  # installs the local mirror.
+  VERSION: '{{.RELEASE}}'
   TERRAFORM_DOCS: go run github.com/terraform-docs/terraform-docs@v0.24.0
   GOLANGCI_LINT: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
   DIR_ARTIFACTS: '{{.ROOT_DIR}}/artifacts'
@@ -26,8 +38,8 @@ tasks:
     env:
       CGO_ENABLED: '0'
     cmds:
-      # The mirror path carries the release version, so the modules' ~> 2.0
-      # pins install this build. main.version, which goes into the User-Agent,
+      # The mirror path carries the release version, so the modules' pin
+      # installs this build. main.version, which goes into the User-Agent,
       # gets a -dev suffix: only the released binary reports the bare version,
       # so the API's request data can tell our own runs from users'.
       - |
@@ -170,6 +182,7 @@ tasks:
     env:
       TF_CLI_CONFIG_FILE: '{{.DEV_TFRC}}'
     cmds:
+      - task: release-refs
       - task: schema
       # tfplugindocs v0.25 only finds the schema under the hashicorp/<name>
       # registry key; re-key our runpod/runpod entry before rendering.
@@ -196,6 +209,32 @@ tasks:
         for dir in modules/*/; do
           {{.TERRAFORM_DOCS}} --config .terraform-docs.yml "${dir}"
         done
+
+  release-refs:
+    desc: Point module refs, module README links, provider pins and module version pins at RELEASE
+    env:
+      RELEASE: '{{.RELEASE}}'
+      RELEASE_PIN: '{{.RELEASE_PIN}}'
+    cmds:
+      # Indented `version = "..."` lines are provider blocks (in the docs, the
+      # modules' versions.tf, the test root and the leftovers root) and take
+      # the pin: a candidate build is only ever selected through an exact pin,
+      # so every root that resolves one needs it. An inline release-candidate
+      # example in prose follows RELEASE only while RELEASE is itself a
+      # candidate.
+      - |
+        perl -pi -e '
+          s{(terraform-provider-runpod//v2/modules/[a-z0-9-]+\?ref=)v[0-9][^"\s`]*}{${1}v$ENV{RELEASE}}g;
+          s{(terraform-provider-runpod/blob/)v[0-9][^/]*/}{${1}v$ENV{RELEASE}/}g;
+          if (/^\s+version\s*=\s*"(?:~> 2\.\d+|2\.\d+\.\d+(?:-rc\.\d+)?)"/) {
+            s{"(?:~> 2\.\d+|2\.\d+\.\d+(?:-rc\.\d+)?)"}{"$ENV{RELEASE_PIN}"};
+          } elsif ($ENV{RELEASE} =~ /-/) {
+            s{2\.\d+\.\d+-rc\.\d+}{$ENV{RELEASE}}g;
+          }
+        ' templates/index.md.tmpl templates/guides/*.md.tmpl examples/provider/provider.tf \
+          modules/*/versions.tf tests/main.tf scripts/leftovers/main.tf \
+          README.md modules/README.md modules/*/README.md ../README.md
+      - echo "release refs point at v{{.RELEASE}}, provider pin {{.RELEASE_PIN}}"
 
   all:
     desc: Build, unit-test, lint, and validate everything that runs offline

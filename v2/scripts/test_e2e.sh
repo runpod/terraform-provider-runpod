@@ -41,16 +41,15 @@ production_graphql="https://api.runpod.io/graphql"
 
 # Cheapest first; cost_of below says what each file bills.
 tests_in_order=(
-  catalog_discovery billing_report legacy template global_volume serverless_endpoint
+  catalog_discovery billing_report legacy template serverless_endpoint
   serverless_endpoint_cpu registry account_ssh_keys legacy_machine
-  network_volume cpu_pod pod_lifecycle logs gpu_pod cluster
+  network_volume cpu_pod pod_lifecycle logs global_volume gpu_pod cluster
 )
 
 cost_of() {
   case "$1" in
     catalog_discovery | billing_report | legacy) echo "free: reads only" ;;
     template) echo "free: a template is metadata" ;;
-    global_volume) echo "an empty global volume, billed for what it stores" ;;
     serverless_endpoint | serverless_endpoint_cpu) echo "free while idle: zero workers" ;;
     registry) echo "free: a registry login" ;;
     account_ssh_keys) echo "free, but replaces the account's SSH keys" ;;
@@ -58,6 +57,7 @@ cost_of() {
     network_volume) echo "a 10 GB network volume for the run" ;;
     cpu_pod) echo "one 4-vCPU cpu5c pod for the run" ;;
     pod_lifecycle | logs) echo "one GPU pod for the run" ;;
+    global_volume) echo "one GPU pod and an idle endpoint on an empty global volume" ;;
     gpu_pod) echo "one GPU pod and a 10 GB volume for the run" ;;
     cluster) echo "two H100 80GB pods for the run, the most expensive" ;;
     *) echo "not in the cost list, so it runs last" ;;

@@ -57,7 +57,7 @@ pin comes from `RELEASE` in the Taskfile and `task docs` rewrites it.
 
 ```hcl
 module "training_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"

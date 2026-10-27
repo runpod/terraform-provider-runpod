@@ -14,6 +14,9 @@
 #                            not read by the provider, which makes no REST v1 call;
 #                            the pre-flight warns when either is set
 #   TF_CLI_CONFIG_FILE       the dev.tfrc `task build` writes; task test-e2e sets it
+#   E2E_TESTS_DIR, E2E_LEFTOVERS_TF, E2E_RUN_PREFIX, E2E_FROM_REGISTRY=1
+#                            set by scripts/test_release.sh: the test root, the sweep
+#                            and the log folder of a run against a published release
 #   TF_VAR_registry_username, TF_VAR_registry_password
 #                            turn on the registry test; TF_VAR_ecr_resource_arn
 #                            adds its ECR delegation half
@@ -31,7 +34,8 @@
 # Written for the bash 3.2 macOS ships: no associative arrays, no mapfile.
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-tests_dir="$repo/tests"
+tests_dir="${E2E_TESTS_DIR:-$repo/tests}"
+from_registry="${E2E_FROM_REGISTRY:-}"
 provider_version="${E2E_PROVIDER_VERSION:-2.0.0}"
 
 # Production defaults of the SDK: runpod.DefaultBaseURL, and
@@ -101,7 +105,7 @@ if ! mkdir -p "$log_root" || ! log_root="$(cd "$log_root" && pwd)"; then
   echo "Cannot create the log folder under E2E_LOG_ROOT=$log_root" >&2
   exit 2
 fi
-run_dir="$log_root/$(date +%Y%m%d-%H%M%S)"
+run_dir="$log_root/${E2E_RUN_PREFIX:-}$(date +%Y%m%d-%H%M%S)"
 [ "$dry_run" = off ] || run_dir="$run_dir-dry-run"
 if [ -e "$run_dir" ]; then
   n=2
@@ -214,7 +218,13 @@ else
 fi
 
 mirror=""
-if [ -z "${TF_CLI_CONFIG_FILE:-}" ]; then
+if [ -n "$from_registry" ]; then
+  if [ -n "${TF_CLI_CONFIG_FILE:-}" ]; then
+    fail "TF_CLI_CONFIG_FILE is set: a release test installs runpod/runpod $provider_version from the registry"
+  else
+    ok "runpod/runpod $provider_version from the Terraform Registry, no CLI config override"
+  fi
+elif [ -z "${TF_CLI_CONFIG_FILE:-}" ]; then
   fail "TF_CLI_CONFIG_FILE is not set: run this through 'task test-e2e', which points it at artifacts/dev.tfrc"
 elif [ ! -r "$TF_CLI_CONFIG_FILE" ]; then
   fail "TF_CLI_CONFIG_FILE=$TF_CLI_CONFIG_FILE is not readable: run 'task build'"
@@ -430,7 +440,7 @@ sweep() {
   sweeping=1
   mkdir -p "$dir"
   rm -f "$dir/count" "$dir/note"
-  cp "$repo/scripts/leftovers/main.tf" "$dir/main.tf"
+  cp "${E2E_LEFTOVERS_TF:-$repo/scripts/leftovers/main.tf}" "$dir/main.tf"
   set -m
   sweep_job "$dir" "$include_machines" < /dev/null &
   pid=$!
@@ -502,7 +512,11 @@ finish_run() {
 
 # A lock left by an earlier build records that binary's checksum and would
 # refuse this one, so start clean, as task test-tf does.
-echo "Initialising tests/ against the local mirror (init.log)"
+if [ -n "$from_registry" ]; then
+  echo "Initialising $tests_dir against the Terraform Registry (init.log)"
+else
+  echo "Initialising tests/ against the local mirror (init.log)"
+fi
 rm -rf "$tests_dir/.terraform" "$tests_dir/.terraform.lock.hcl"
 if ! terraform -chdir="$tests_dir" init -backend=false -input=false -no-color > "$run_dir/init.log" 2>&1; then
   tail -n 20 "$run_dir/init.log"
@@ -513,6 +527,15 @@ if ! grep -q "version *= *\"$provider_version\"" "$tests_dir/.terraform.lock.hcl
   grep -n "version" "$tests_dir/.terraform.lock.hcl"
   echo "terraform init did not select provider $provider_version. Nothing live ran."
   exit 2
+fi
+if [ -n "$from_registry" ]; then
+  # A registry install records the zh: hashes of the signed SHA256SUMS; a
+  # local mirror records only h1:.
+  if ! grep -q "\"zh:" "$tests_dir/.terraform.lock.hcl"; then
+    echo "The lock has no registry checksums: runpod/runpod did not come from the registry. Nothing live ran."
+    exit 2
+  fi
+  grep "Installed runpod/runpod" "$run_dir/init.log"
 fi
 
 armed=1

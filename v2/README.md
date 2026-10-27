@@ -30,7 +30,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "2.0.0-rc.4"
+      version = "~> 2.0"
     }
   }
 }
@@ -157,7 +157,7 @@ registered resource and data source above is used by at least one of them, and
 
 ```hcl
 module "training_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"

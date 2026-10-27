@@ -30,7 +30,7 @@ module's `worker_ids`.
 
 ```hcl
 module "logs" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/logs?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/logs?ref=v2.0.0"
 
   pod_id     = "gfj8b292vyg08g"
   log_source = "container"
@@ -78,4 +78,4 @@ data "runpod_endpoint_worker_logs" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/logs/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/logs/README.md).

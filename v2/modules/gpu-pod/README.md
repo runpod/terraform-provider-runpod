@@ -32,7 +32,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -46,19 +46,19 @@ module "gpu_pod" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/pod) | resource |
+| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/pod) | resource |
 
 ## Inputs
 

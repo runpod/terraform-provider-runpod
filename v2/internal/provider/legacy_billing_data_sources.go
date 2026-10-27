@@ -7,10 +7,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	runpod "github.com/runpod/go-sdk/v2"
 	"github.com/runpod/go-sdk/v2/legacy" //nolint:staticcheck // deprecated on purpose: the shim client goes when REST v2 carries these fields
@@ -84,6 +86,9 @@ func legacyBillingWindowAttributes() map[string]schema.Attribute {
 		"bucket_size": schema.StringAttribute{
 			Optional:    true,
 			Description: "Length of each time bucket: hour, day, week, month, or year. Defaults to day.",
+			Validators: []validator.String{
+				stringvalidator.OneOf("hour", "day", "week", "month", "year"),
+			},
 		},
 		"end_time": schema.StringAttribute{
 			Optional: true,

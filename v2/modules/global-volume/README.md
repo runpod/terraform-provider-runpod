@@ -13,7 +13,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "global_volume" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/global-volume?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/global-volume?ref=v2.0.0"
 
   name = "datasets"
 }
@@ -25,20 +25,20 @@ module "global_volume" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_global_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/global_volume) | resource |
-| [runpod_global_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/global_volume) | data source |
+| [runpod_global_volume.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/global_volume) | resource |
+| [runpod_global_volume.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/global_volume) | data source |
 
 ## Inputs
 

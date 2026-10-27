@@ -20,7 +20,7 @@ change.
 
 ```hcl
 module "global_volume" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/global-volume?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/global-volume?ref=v2.0.0"
 
   name = "datasets"
 }
@@ -46,4 +46,4 @@ data "runpod_global_volume" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/global-volume/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/global-volume/README.md).

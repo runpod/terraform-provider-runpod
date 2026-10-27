@@ -26,7 +26,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "billing_report" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0-rc.4"
 
   bucket_size = "day"
   last_n      = 7
@@ -39,24 +39,24 @@ module "billing_report" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing) | data source |
-| [runpod_cluster_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/cluster_billing) | data source |
-| [runpod_endpoint_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_billing) | data source |
-| [runpod_network_volume_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/network_volume_billing) | data source |
-| [runpod_pod_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/pod_billing) | data source |
-| [runpod_serverless_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/serverless_billing) | data source |
+| [runpod_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/billing) | data source |
+| [runpod_cluster_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/cluster_billing) | data source |
+| [runpod_endpoint_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_billing) | data source |
+| [runpod_network_volume_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/network_volume_billing) | data source |
+| [runpod_pod_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/pod_billing) | data source |
+| [runpod_serverless_billing.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/serverless_billing) | data source |
 
 ## Inputs
 

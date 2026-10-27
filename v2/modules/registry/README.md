@@ -26,7 +26,7 @@ Build and run it with the shared flow in [../README.md](../README.md).
 
 ```hcl
 module "registry" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/registry?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/registry?ref=v2.0.0-rc.4"
 
   name     = "ghcr"
   username = var.registry_username
@@ -40,22 +40,22 @@ module "registry" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_registry.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/registry) | resource |
-| [runpod_registry_delegation.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/registry_delegation) | resource |
-| [runpod_registries.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/registries) | data source |
-| [runpod_registry_delegations.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/registry_delegations) | data source |
+| [runpod_registry.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/registry) | resource |
+| [runpod_registry_delegation.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/registry_delegation) | resource |
+| [runpod_registries.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/registries) | data source |
+| [runpod_registry_delegations.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/registry_delegations) | data source |
 
 ## Inputs
 

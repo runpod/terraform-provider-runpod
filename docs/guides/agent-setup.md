@@ -18,7 +18,7 @@ Follow these steps in order. The sections below explain each one.
    persists. Neither is required for the steps below.
 2. Require the provider as `source = "runpod/runpod"` with the pin shown under
    Versions: `~> 2.0` once 2.0.0 is released, an exact pin such as
-   `2.0.0-rc.3` while only release candidates exist.
+   `2.0.0-rc.4` while only release candidates exist.
 3. Read the API key from `RUNPOD_API_KEY` in the environment. Never write a key
    into a `.tf` file, a `.tfvars` file or a command line, and never print it.
    If there is no key, stop and ask the user for one.
@@ -93,7 +93,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "2.0.0-rc.3"
+      version = "2.0.0-rc.4"
     }
   }
 }
@@ -101,8 +101,8 @@ terraform {
 provider "runpod" {}
 ```
 
-`~> 2.0` takes every 2.x release. A release candidate, such as `2.0.0-rc.3`,
-installs only through an exact pin, `version = "2.0.0-rc.3"`. The use-case
+`~> 2.0` takes every 2.x release. A release candidate, such as `2.0.0-rc.4`,
+installs only through an exact pin, `version = "2.0.0-rc.4"`. The use-case
 modules carry the same pin as the block above, so they install next to it.
 
 ## Start from a module
@@ -114,7 +114,7 @@ scratch:
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
 
   name        = "agent-training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"

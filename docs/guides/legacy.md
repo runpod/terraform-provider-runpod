@@ -2,22 +2,25 @@
 page_title: "Legacy shims (deprecated)"
 subcategory: "Use-case modules"
 description: |-
-  Everything the 2.0 provider still serves from the GraphQL and REST v1 APIs because REST v2 has no route for it: machines, the account read, and the three 1.x billing data sources.
+  The deprecated 1.x surfaces the 2.0 provider still serves: machines and the account read over the GraphQL API, and the three 1.x billing data sources over REST v2.
 ---
 
 # Legacy shims (deprecated)
 
-Everything the 2.0 provider still serves from the GraphQL and REST v1 APIs
-because REST v2 has no route for it: the host machine resource and its two
-data sources, the account identity read (the GraphQL `myself` query: only
-`id` and `email` are served, REST v1 `/user` is gone), and the three 1.x billing data
-sources (`runpod_billing_pod`, `runpod_billing_network_volume`,
-`runpod_billing_endpoint`) with their per-record `gpu_type_id`,
-`disk_space_billed_gb`, `endpoint_id` and `time_billed_ms` fields. **Every
-part of this module is deprecated**, warns on each plan, and is removed once
-REST v2 reports the same thing. The billing data sources read REST v1, which is
-retired on 2026-11-15; from that date the module's default plan fails until the
-billing reads are removed. New configurations use the
+The deprecated 1.x surfaces the 2.0 provider still serves: the host machine
+resource and its two data sources and the account identity read (the GraphQL
+`myself` query: only `id` and `email` are served) over the GraphQL API, because
+REST v2 has no route for them, and the three 1.x billing data sources
+(`runpod_billing_pod`, `runpod_billing_network_volume`,
+`runpod_billing_endpoint`) in their 1.x record shape over the REST v2 billing
+routes. The endpoint records' `time_billed_ms` comes from the GraphQL API's
+serverless billing, and a `gpu_type_id` read of `runpod_billing_pod` from the
+GraphQL GPU pod billing, per GPU type as REST v1 reported it. Otherwise the pod
+and network volume records' `time_billed_ms` and `disk_space_billed_gb`, and
+the pod records' `gpu_type_id` and `endpoint_id`, read null, because no API
+reports them per pod or per volume. **Every part of
+this module is deprecated**, warns on each plan, and is removed once REST v2
+reports the same thing or the 1.x shape is dropped. New configurations use the
 [billing-report](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/billing-report)
 module and never register machines from Terraform.
 
@@ -31,22 +34,21 @@ account read and the billing reads. `create_machine = true` additionally
 registers a host machine, which needs a host account.
 
 ```bash
-terraform apply -var bucket_size=day -var gpu_type_id="NVIDIA A100 80GB PCIe"
+terraform apply -var bucket_size=day -var pod_id=pod_abc123
 terraform apply -var create_machine=true -var machine_name=host-01
 ```
 
-Point the shims elsewhere with the provider's `graphql_url` /
-`RUNPOD_GRAPHQL_URL` (machines and the account read) and `rest_v1_url` /
-`RUNPOD_REST_V1_URL` (billing) settings.
+Point the GraphQL shims elsewhere with the provider's `graphql_url` /
+`RUNPOD_GRAPHQL_URL` setting; the billing reads follow `base_url` /
+`RUNPOD_API_BASE_URL`, like every other REST v2 call.
 
 ## Usage
 
 ```hcl
 module "legacy" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.4"
 
   bucket_size = "day"
-  gpu_type_id = "NVIDIA A100 80GB PCIe"
 }
 ```
 
@@ -63,9 +65,10 @@ module "legacy" {
 ## Configuration
 
 ```terraform
-# Deprecated shims — everything here calls the GraphQL or REST v1 API through
-# the SDK's deprecated legacy client, because REST v2 has no route for it.
-# Each is removed once REST v2 reports the same thing.
+# Deprecated shims — the machines and the account read call the GraphQL API
+# through the SDK's deprecated legacy client, because REST v2 has no route for
+# them; the 1.x billing data sources read REST v2 in their 1.x record shape.
+# Each is removed once REST v2 reports the same thing or the 1.x shape goes.
 
 # Host machines have no REST v2 route. Registering one means adding hardware
 # as a Runpod host, so the resource is opt-in and needs a host account.
@@ -92,14 +95,16 @@ data "runpod_machines" "all" {
 # identity route and REST v1 /user is gone. Only id and email are served.
 data "runpod_user" "this" {}
 
-# The 1.x billing data sources over the REST v1 billing routes, kept for the
-# per-record fields REST v2 billing does not report: gpu_type_id,
-# disk_space_billed_gb, endpoint_id and time_billed_ms. New configurations use
-# the billing-report module.
+# The 1.x billing data sources, kept so a 1.x configuration still plans. They
+# read the REST v2 billing routes and map each record back into the 1.x shape.
+# The endpoint records' time_billed_ms comes from the GraphQL API's serverless
+# billing. These reads set no gpu_type_id, so the pod and network volume
+# records' time_billed_ms and disk_space_billed_gb, and the pod records'
+# gpu_type_id and endpoint_id, read null: no API reports them per pod or per
+# volume. New configurations use the billing-report module.
 data "runpod_billing_pod" "this" {
   bucket_size = var.bucket_size
   end_time    = var.end_time
-  gpu_type_id = var.gpu_type_id
   pod_id      = var.pod_id
 }
 
@@ -117,4 +122,4 @@ data "runpod_billing_endpoint" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/legacy/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/legacy/README.md).

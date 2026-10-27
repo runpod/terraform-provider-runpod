@@ -49,17 +49,17 @@ the Guides section documents each one.
 - `category` (String) Console grouping: CPU, NVIDIA, or AMD. It does not affect scheduling or billing.
 - `disk` (Number) Container disk in GB.
 - `docker_entrypoint` (List of String) Container entrypoint for containers created from the template, in exec form, e.g. ["/bin/bash", "-c"], as the API decodes it from args.
-- `earned` (Number, Deprecated) Deprecated. Earnings the template has generated in USD, read from the REST v1 template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `earned` (Number, Deprecated) Deprecated. Earnings the template has generated in USD, read from the GraphQL template; 0 for a template the account does not own. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `env` (Map of String) Environment variables set in containers created from the template.
 - `image` (String) Docker image reference.
-- `is_runpod` (Boolean, Deprecated) Deprecated. Whether Runpod publishes the template, read from the REST v1 template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `is_runpod` (Boolean, Deprecated) Deprecated. Whether Runpod publishes the template, read from the GraphQL template. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `mounts` (Attributes) Storage mounted into containers created from the template. Templates support a single persistent mount. (see [below for nested schema](#nestedatt--mounts))
 - `name` (String) Template name.
 - `ports` (List of String) Exposed ports, formatted as port/protocol.
 - `public` (Boolean) Whether the template is visible to other Runpod users.
-- `readme` (String, Deprecated) Deprecated. Template README in Markdown, read from the REST v1 template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `readme` (String, Deprecated) Deprecated. Template README in Markdown, read from the GraphQL template. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `registry` (String) Registry credential ID used to pull the image; null for public images.
-- `runtime_in_min` (Number, Deprecated) Deprecated. Minutes containers created from the template have run, read from the REST v1 template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `runtime_in_min` (Number, Deprecated) Deprecated. Minutes containers created from the template have run, read from the GraphQL template; 0 for a template the account does not own. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `serverless` (Boolean) Whether the template configures Serverless workers (true) or pods (false).
 - `start_jupyter` (Boolean) Whether containers created from the template start JupyterLab at startup.
 - `start_ssh` (Boolean) Whether containers created from the template get SSH access provisioned at startup.

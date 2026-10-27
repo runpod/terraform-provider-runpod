@@ -1,6 +1,7 @@
-# Deprecated shims — everything here calls the GraphQL or REST v1 API through
-# the SDK's deprecated legacy client, because REST v2 has no route for it.
-# Each is removed once REST v2 reports the same thing.
+# Deprecated shims — the machines and the account read call the GraphQL API
+# through the SDK's deprecated legacy client, because REST v2 has no route for
+# them; the 1.x billing data sources read REST v2 in their 1.x record shape.
+# Each is removed once REST v2 reports the same thing or the 1.x shape goes.
 
 # Host machines have no REST v2 route. Registering one means adding hardware
 # as a Runpod host, so the resource is opt-in and needs a host account.
@@ -27,14 +28,16 @@ data "runpod_machines" "all" {
 # identity route and REST v1 /user is gone. Only id and email are served.
 data "runpod_user" "this" {}
 
-# The 1.x billing data sources over the REST v1 billing routes, kept for the
-# per-record fields REST v2 billing does not report: gpu_type_id,
-# disk_space_billed_gb, endpoint_id and time_billed_ms. New configurations use
-# the billing-report module.
+# The 1.x billing data sources, kept so a 1.x configuration still plans. They
+# read the REST v2 billing routes and map each record back into the 1.x shape.
+# The endpoint records' time_billed_ms comes from the GraphQL API's serverless
+# billing. These reads set no gpu_type_id, so the pod and network volume
+# records' time_billed_ms and disk_space_billed_gb, and the pod records'
+# gpu_type_id and endpoint_id, read null: no API reports them per pod or per
+# volume. New configurations use the billing-report module.
 data "runpod_billing_pod" "this" {
   bucket_size = var.bucket_size
   end_time    = var.end_time
-  gpu_type_id = var.gpu_type_id
   pod_id      = var.pod_id
 }
 

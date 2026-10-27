@@ -54,21 +54,21 @@ func (p *runpodProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 			},
 			"graphql_url": schema.StringAttribute{
 				Description: "GraphQL endpoint for the deprecated GraphQL shims: the runpod_machine " +
-					"resource, the runpod_machine / runpod_machines data sources and the runpod_user " +
-					"data source. Falls back to the " +
-					"RUNPOD_GRAPHQL_URL environment variable, then https://api.runpod.io/graphql. " +
-					"Ignored by everything on the v2 REST API.",
+					"resource, the runpod_machine / runpod_machines data sources, the runpod_user " +
+					"data source, and the deprecated attributes on runpod_pod, runpod_template, the " +
+					"runpod_template data source and runpod_serverless_endpoint that REST v2 does not " +
+					"report. Falls back to the RUNPOD_GRAPHQL_URL environment variable, then " +
+					"https://api.runpod.io/graphql. Ignored by everything on the v2 REST API.",
 				Optional: true,
 			},
 			"rest_v1_url": schema.StringAttribute{
-				Description: "REST v1 base URL for the deprecated REST v1 shims: the runpod_billing_pod / " +
-					"runpod_billing_network_volume / runpod_billing_endpoint data sources, and the " +
-					"deprecated attributes on runpod_pod, " +
-					"runpod_template (readme and docker_entrypoint among them), the runpod_template " +
-					"data source and runpod_serverless_endpoint. Falls back to the RUNPOD_REST_V1_URL " +
-					"environment variable, then RUNPOD_BASE_URL (the 1.x name for this host), then " +
-					"https://rest.runpod.io/v1. Ignored by everything on the v2 REST API.",
-				Optional: true,
+				Description: "Deprecated and ignored. The provider makes no REST v1 calls: what the 1.x " +
+					"provider read from REST v1 now comes from REST v2 or, where REST v2 has no field, " +
+					"from the GraphQL endpoint (graphql_url). The RUNPOD_REST_V1_URL and RUNPOD_BASE_URL " +
+					"environment variables are not read either. Kept only so a configuration that sets " +
+					"it still validates; remove it.",
+				DeprecationMessage: "rest_v1_url is ignored: the provider makes no REST v1 calls. Remove it from the provider block.",
+				Optional:           true,
 			},
 		},
 	}
@@ -113,7 +113,7 @@ func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to configure the Runpod client",
-			"Creating the client for the deprecated REST v1 and GraphQL shims failed: "+err.Error()+
+			"Creating the client for the deprecated GraphQL shims failed: "+err.Error()+
 				". Set the api_key provider attribute or the RUNPOD_API_KEY environment variable.",
 		)
 		return
@@ -124,9 +124,9 @@ func (p *runpodProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	resp.ResourceData = configured
 }
 
-// userAgent is sent by the v2 client, and by the deprecated GraphQL and REST
-// v1 shims after the 1.x value (see newLegacyClient), so 2.0.0 traffic can be
-// told apart from 1.x on every host.
+// userAgent is sent by the v2 client, and by the deprecated GraphQL shims
+// after the 1.x value (see newLegacyClient), so 2.0.0 traffic can be told
+// apart from 1.x on every host.
 // WithUserAgent replaces the SDK's own string, so the SDK part is added back.
 func userAgent(providerVersion, terraformVersion string) string {
 	return "terraform-provider-runpod/" + providerVersion +
@@ -145,6 +145,7 @@ func (p *runpodProvider) DataSources(_ context.Context) []func() datasource.Data
 		NewPodsDataSource,
 		NewTemplatesDataSource,
 		NewNetworkVolumesDataSource,
+		NewGlobalVolumeDataSource,
 		NewServerlessEndpointsDataSource,
 		NewRegistriesDataSource,
 		NewPodDataSource,
@@ -179,6 +180,7 @@ func (p *runpodProvider) Resources(_ context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		NewPodResource,
 		NewNetworkVolumeResource,
+		NewGlobalVolumeResource,
 		NewTemplateResource,
 		NewRegistryResource,
 		NewRegistryDelegationResource,

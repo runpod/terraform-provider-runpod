@@ -19,7 +19,7 @@ run "create" {
       vcpu_count  = 4
     }]
     # compute_type restates the CPU choice. cpu_flavor_priority is left out:
-    # the REST v1 PATCH it goes through rejects the field.
+    # no API applies it.
     compute_type = "CPU"
   }
 
@@ -49,10 +49,10 @@ run "create" {
   }
   assert {
     condition     = output.version != null
-    error_message = "the REST v1 shim did not report the endpoint's configuration version"
+    error_message = "the v2 workers listing did not report the endpoint's configuration version"
   }
   assert {
     condition     = length(output.users) == 1
-    error_message = "the REST v1 shim must report the owning account as a one-element list"
+    error_message = "the GraphQL shim must report the owning account as a one-element list"
   }
 }

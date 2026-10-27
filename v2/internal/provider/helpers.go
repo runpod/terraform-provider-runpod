@@ -11,8 +11,9 @@ import (
 )
 
 // clients is what provider.Configure hands to every resource and data source:
-// the v2 REST client everything is built on, plus the legacy GraphQL/REST-v1
-// client the deprecated runpod_machine and runpod_user shims need.
+// the v2 REST client everything is built on, plus the legacy GraphQL client
+// the deprecated shims need (runpod_machine, runpod_user, and the attributes
+// REST v2 does not report).
 type clients struct {
 	API    *runpod.Client
 	Legacy *legacy.Client

@@ -224,8 +224,12 @@ func TestEndpointRegistryIsLeftToANewTemplate(t *testing.T) {
 					_, _ = w.Write([]byte(`{"id":"ep_abc","name":"renamed","flashboot":"OFF","createdAt":"2026-09-28T12:00:00Z",` +
 						`"scaling":{"type":"QUEUE_DELAY","queueDelay":4},"workers":{"min":0,"max":3},` +
 						`"gpu":{"pools":["ADA_24"]},"registry":"` + keptRegistry + `","dataCenterIds":[],"networkVolumes":[]}`))
-				case r.Method == http.MethodGet && r.URL.Path == "/endpoints/ep_abc":
-					_, _ = w.Write([]byte(`{"computeType":"GPU","userId":"user-1","version":4,"workers":[]}`))
+				case r.Method == http.MethodGet && r.URL.Path == "/v2/serverless/ep_abc/workers":
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"endpointVersion":4,"summary":{"total":0,"running":0,"idle":0,"initializing":0,"throttled":0,"unhealthy":0},"workers":[]}`))
+				case r.Method == http.MethodPost && r.URL.Path == "/graphql":
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"data":{"myself":{"endpoint":{"userId":"user-1"}}}}`))
 				default:
 					t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 					w.WriteHeader(http.StatusInternalServerError)
@@ -235,7 +239,7 @@ func TestEndpointRegistryIsLeftToANewTemplate(t *testing.T) {
 
 			r := &serverlessEndpointResource{
 				client: shimTestClient(t, srv.URL),
-				legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL}),
+				legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", GraphQLURL: srv.URL + "/graphql"}),
 			}
 			pools, diags := types.ListValueFrom(ctx, types.StringType, []string{"ADA_24"})
 			if diags.HasError() {

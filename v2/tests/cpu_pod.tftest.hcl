@@ -44,9 +44,9 @@ run "create" {
     condition     = output.memory_in_gb > 0
     error_message = "the pod's allocated system RAM was not read back"
   }
-  # The deprecated REST v1 shim, as on the GPU pod: machine_id only.
+  # The deprecated GraphQL shim: machine_id only.
   assert {
     condition     = output.machine_id != null
-    error_message = "the REST v1 shim did not report the pod's host machine"
+    error_message = "the GraphQL shim did not report the pod's host machine"
   }
 }

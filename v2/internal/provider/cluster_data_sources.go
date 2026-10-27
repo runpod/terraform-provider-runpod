@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	runpod "github.com/runpod/go-sdk/v2"
+	"github.com/runpod/go-sdk/v2/lib/clusters"
 	sdktypes "github.com/runpod/go-sdk/v2/lib/types"
 )
 
@@ -188,19 +189,24 @@ func (d *clustersDataSource) Configure(_ context.Context, req datasource.Configu
 }
 
 func (d *clustersDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	apiResp, err := d.client.Clusters.ListClustersWithResponse(ctx)
+	allClusters, err := listAllPages(ctx, func(ctx context.Context, cursor *string) ([]sdktypes.Cluster, sdktypes.Pagination, error) {
+		apiResp, err := d.client.Clusters.ListClustersWithResponse(ctx, &clusters.ListClustersParams{Cursor: cursor})
+		if err != nil {
+			return nil, sdktypes.Pagination{}, err
+		}
+		if apiResp.JSON200 == nil {
+			return nil, sdktypes.Pagination{}, fmt.Errorf("API returned status %d: %s",
+				apiResp.HTTPResponse.StatusCode, boundedBody(apiResp.Body))
+		}
+		return apiResp.JSON200.Clusters, apiResp.JSON200.Pagination, nil
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Listing clusters failed", err.Error())
 		return
 	}
-	if apiResp.JSON200 == nil {
-		resp.Diagnostics.AddError("Listing clusters failed",
-			fmt.Sprintf("API returned status %d: %s", apiResp.HTTPResponse.StatusCode, boundedBody(apiResp.Body)))
-		return
-	}
 
 	state := clustersDataSourceModel{Clusters: []clusterSummaryModel{}}
-	for _, cluster := range apiResp.JSON200.Clusters {
+	for _, cluster := range allClusters {
 		model, diags := flattenClusterSummary(ctx, cluster)
 		resp.Diagnostics.Append(diags...)
 		state.Clusters = append(state.Clusters, model)

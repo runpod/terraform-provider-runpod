@@ -1,13 +1,18 @@
 # Legacy shims (deprecated)
 
-Everything the 2.0 provider still serves from the GraphQL and REST v1 APIs
-because REST v2 has no route for it: the host machine resource and its two
-data sources, the account identity read, and the three 1.x billing data
-sources (`runpod_billing_pod`, `runpod_billing_network_volume`,
-`runpod_billing_endpoint`) with their per-record `gpu_type_id`,
-`disk_space_billed_gb`, `endpoint_id` and `time_billed_ms` fields. **Every
-part of this module is deprecated**, warns on each plan, and is removed once
-REST v2 reports the same thing. New configurations use the
+The deprecated 1.x surfaces the 2.0 provider still serves: the host machine
+resource and its two data sources and the account identity read over the
+GraphQL API, because REST v2 has no route for them, and the three 1.x billing
+data sources (`runpod_billing_pod`, `runpod_billing_network_volume`,
+`runpod_billing_endpoint`) in their 1.x record shape over the REST v2 billing
+routes. The endpoint records' `time_billed_ms` comes from the GraphQL API's
+serverless billing, and a `gpu_type_id` read of `runpod_billing_pod` from the
+GraphQL GPU pod billing, per GPU type as REST v1 reported it. Otherwise the pod
+and network volume records' `time_billed_ms` and `disk_space_billed_gb`, and
+the pod records' `gpu_type_id` and `endpoint_id`, read null, because no API
+reports them per pod or per volume. **Every part of
+this module is deprecated**, warns on each plan, and is removed once REST v2
+reports the same thing or the 1.x shape is dropped. New configurations use the
 [billing-report](../billing-report) module and never register machines from
 Terraform.
 
@@ -19,13 +24,13 @@ account read and the billing reads. `create_machine = true` additionally
 registers a host machine, which needs a host account.
 
 ```bash
-terraform apply -var bucket_size=day -var gpu_type_id="NVIDIA A100 80GB PCIe"
+terraform apply -var bucket_size=day -var pod_id=pod_abc123
 terraform apply -var create_machine=true -var machine_name=host-01
 ```
 
-Point the shims elsewhere with the provider's `graphql_url` /
-`RUNPOD_GRAPHQL_URL` (machines and the account read) and `rest_v1_url` /
-`RUNPOD_REST_V1_URL` (billing) settings.
+Point the GraphQL shims elsewhere with the provider's `graphql_url` /
+`RUNPOD_GRAPHQL_URL` setting; the billing reads follow `base_url` /
+`RUNPOD_API_BASE_URL`, like every other REST v2 call.
 
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy` if a machine was registered.
@@ -34,10 +39,9 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "legacy" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.4"
 
   bucket_size = "day"
-  gpu_type_id = "NVIDIA A100 80GB PCIe"
 }
 ```
 
@@ -47,25 +51,25 @@ module "legacy" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/machine) | resource |
-| [runpod_billing_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_endpoint) | data source |
-| [runpod_billing_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_network_volume) | data source |
-| [runpod_billing_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/billing_pod) | data source |
-| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/machine) | data source |
-| [runpod_machines.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/machines) | data source |
-| [runpod_user.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/user) | data source |
+| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/machine) | resource |
+| [runpod_billing_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/billing_endpoint) | data source |
+| [runpod_billing_network_volume.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/billing_network_volume) | data source |
+| [runpod_billing_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/billing_pod) | data source |
+| [runpod_machine.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/machine) | data source |
+| [runpod_machines.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/machines) | data source |
+| [runpod_user.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/user) | data source |
 
 ## Inputs
 
@@ -73,9 +77,8 @@ module "legacy" {
 | ---- | ----------- | ---- | ------- | :------: |
 | bucket\_size | Length of each 1.x billing bucket: hour, day, week, month, or year. | `string` | `"day"` | no |
 | create\_machine | Register a host machine through the deprecated GraphQL shim. Needs a host account; a plain account cannot add machines. | `bool` | `false` | no |
-| end\_time | End of the reported 1.x billing window as an ISO datetime; null ends it at the current time. There is no start time: the route decides how far back the buckets go. | `string` | `null` | no |
+| end\_time | End of the reported 1.x billing window: an RFC 3339 timestamp, or a date or a datetime without a zone, read as UTC; null ends it at the current time. The window is the 30 days before it. | `string` | `null` | no |
 | endpoint\_id | Restrict 1.x Serverless endpoint billing to one endpoint; null reports every endpoint. | `string` | `null` | no |
-| gpu\_type\_id | Restrict 1.x pod billing to pods running one GPU type, the one filter REST v2 billing cannot do. Null reports every GPU type. | `string` | `null` | no |
 | list\_machines | List the account's host machines through the deprecated GraphQL shim. Needs a host account; creating a machine lists them too. | `bool` | `false` | no |
 | machine\_name | Machine name, the only attribute the deprecated machineAdd mutation accepts. | `string` | `"example-machine"` | no |
 | network\_volume\_id | Restrict 1.x network volume billing to one volume; null reports every volume. | `string` | `null` | no |
@@ -93,10 +96,7 @@ module "legacy" {
 | machine\_id | Deprecated. Identifier of the registered machine; null unless create\_machine is set. |
 | machine\_name | Deprecated. Name of the registered machine; null unless create\_machine is set. |
 | machine\_names | Deprecated. Name per machine on the account, keyed by machine id. Null unless list\_machines or create\_machine is set. |
-| network\_volume\_disk\_gb | Deprecated. Disk space billed across the network volume records, in GB. REST v2 billing does not report it. |
 | network\_volume\_record\_count | Deprecated. Number of 1.x network volume billing records in the window. |
-| pod\_gpu\_types | Deprecated. GPU types the pod records bill, deduplicated. REST v2 billing does not report them. |
 | pod\_record\_count | Deprecated. Number of 1.x pod billing records in the window. |
 | pod\_spend | Deprecated. Pod spend over the window, in USD. |
-| pod\_time\_billed\_ms | Deprecated. Pod time billed over the window, in milliseconds. REST v2 billing does not report it. |
 <!-- END_TF_DOCS -->

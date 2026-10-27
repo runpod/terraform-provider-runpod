@@ -42,9 +42,9 @@ run "create" {
     condition     = alltrue([for id in output.template_ids : id != ""])
     error_message = "templates listing returned an entry with an empty id"
   }
-  # The deprecated REST v1 shim reads back a private template's counters. They
-  # can be null for a template created through v2 (a failed shim read is a
-  # warning and a null); when present they must be the fresh values.
+  # The deprecated GraphQL shim reads back a private template's counters. They
+  # can be null (a failed shim read is a warning and a null); when present they
+  # must be the fresh values.
   assert {
     condition     = output.is_runpod == null || output.is_runpod == false
     error_message = "a template created by this account must not be reported as a Runpod one"
@@ -71,7 +71,8 @@ run "create_with_container_settings" {
       size = 20
       path = "/workspace"
     }
-    # Applied through the deprecated REST v1 shim, then read back from it.
+    # docker_entrypoint is the v2 template's entrypoint; readme is written
+    # through the deprecated GraphQL shim and read back from it.
     docker_entrypoint = ["/bin/bash"]
     readme            = "created by the acceptance test"
   }
@@ -90,11 +91,11 @@ run "create_with_container_settings" {
   }
   assert {
     condition     = length(output.docker_entrypoint) == 1 && output.docker_entrypoint[0] == "/bin/bash"
-    error_message = "the entrypoint did not round-trip through the REST v1 shim"
+    error_message = "the entrypoint did not round-trip through the v2 template"
   }
   assert {
     condition     = output.readme == "created by the acceptance test"
-    error_message = "the readme did not round-trip through the REST v1 shim"
+    error_message = "the readme did not round-trip through the GraphQL shim"
   }
   assert {
     condition     = output.lookup_docker_entrypoint[0] == "/bin/bash"
@@ -136,10 +137,10 @@ run "update_container_settings" {
   }
   assert {
     condition     = output.docker_entrypoint[0] == "/bin/sh"
-    error_message = "in-place entrypoint update did not round-trip through the REST v1 shim"
+    error_message = "in-place entrypoint update did not round-trip through the v2 template"
   }
   assert {
     condition     = output.readme == "updated by the acceptance test"
-    error_message = "in-place readme update did not round-trip through the REST v1 shim"
+    error_message = "in-place readme update did not round-trip through the GraphQL shim"
   }
 }

@@ -123,6 +123,7 @@ the Guides section documents each one.
 - `disk` (Number) Container disk in GB (ephemeral).
 - `env` (Map of String) Environment variables. An update merges the configured keys into the pod's environment: a configured key is set, including a configured PUBLIC_KEY or JUPYTER_PASSWORD, and a key removed from the configuration is removed from the pod. Keys the configuration never held, such as a template's env and the PUBLIC_KEY / JUPYTER_PASSWORD that start_ssh / start_jupyter added, stay on the pod. The exception is the first apply that configures env after an import, or after env was left unset: state then holds the pod's whole environment, so every key the configuration leaves out is removed from the pod, template keys included, and only PUBLIC_KEY and JUPYTER_PASSWORD stay. The plan lists those removals.
 - `global_networking` (Boolean) Enable global networking (private cross-datacenter IP). Requires an NVIDIA GPU and an eligible data center. Changes take effect on the next pod start/restart.
+- `global_volumes` (Attributes List) Global volumes (runpod_global_volume) mounted into the pod. A global volume has no data center, so the pod can run anywhere. At most one, combinable with network_volumes and mutually exclusive with persistent_volume. The REST v2 specification allows it on GPU and CPU pods; some Runpod documentation says CPU pods are not supported, and the API's own validation decides. Like network_volumes, the mount is fixed at create: adding it replaces the pod, the volume cannot change, and only the path can. (see [below for nested schema](#nestedatt--global_volumes))
 - `gpu_count` (Number) Number of GPUs. Server default is 1. Changing it replaces the pod.
 - `gpu_type_id` (String) GPU type identifier from the catalog, e.g. "NVIDIA GeForce RTX 4090". Exactly one of gpu_type_id or cpu_type_id must be set. Changing it replaces the pod.
 - `image` (String) Docker image reference. Optional when template_id supplies one; at least one of image or template_id is required.
@@ -150,12 +151,24 @@ the Guides section documents each one.
 - `docker_start_cmd` (List of String) Container start command the pod runs, in exec form, as the API decodes it from args; when there is an entrypoint, this is the argument list passed to it. Read-only. Set the command through args.
 - `id` (String) Pod identifier assigned by the API.
 - `locked` (Boolean) Whether the pod is locked, which prevents stopping or resetting it.
-- `machine_id` (String, Deprecated) Deprecated. Host machine the pod is placed on, read from the REST v1 pod. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `machine_id` (String, Deprecated) Deprecated. Host machine the pod is placed on, read from the GraphQL API's pod. Null when that API does not report the pod, reports an empty machine id, or cannot be reached. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `memory_in_gb` (Number) System RAM in GB allocated to the pod: across all requested GPUs on a GPU pod, or the flavor's allocation on a CPU pod.
 - `runtime` (Attributes) Live utilization the API reports for a RUNNING pod; null in every other status. (see [below for nested schema](#nestedatt--runtime))
 - `started_at` (String) When the pod last started, in RFC 3339 format. Null until it has run.
 - `status` (String) Pod lifecycle status as reported by the API, e.g. RUNNING, EXITED, PROVISIONING.
-- `volume_encrypted` (Boolean, Deprecated) Deprecated. Whether the pod's volume is encrypted, read from the REST v1 pod. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `volume_encrypted` (Boolean, Deprecated) Deprecated. Whether the pod's volume is encrypted, read from the GraphQL API's pod: false for an unencrypted volume, null only when that API does not report the pod or cannot be reached. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
+
+<a id="nestedatt--global_volumes"></a>
+### Nested Schema for `global_volumes`
+
+Required:
+
+- `volume_id` (String) ID of an existing runpod_global_volume. Changing it replaces the pod.
+
+Optional:
+
+- `path` (String) Mount path inside the container, e.g. "/data". The API chooses one when it is left out.
+
 
 <a id="nestedatt--network_volumes"></a>
 ### Nested Schema for `network_volumes`

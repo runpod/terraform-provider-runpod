@@ -22,7 +22,7 @@ their `network_volumes` list. Size can grow in place but never shrink.
 
 ```hcl
 module "network_volume" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/network-volume?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/network-volume?ref=v2.0.0-rc.4"
 
   name        = "datasets"
   size        = 100
@@ -52,4 +52,4 @@ data "runpod_network_volumes" "all" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/network-volume/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/network-volume/README.md).

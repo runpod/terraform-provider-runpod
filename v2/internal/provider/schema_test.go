@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -60,6 +59,7 @@ func TestResourceSchemas(t *testing.T) {
 	want := []string{
 		"runpod_account_ssh_keys",
 		"runpod_cluster",
+		"runpod_global_volume",
 		"runpod_machine",
 		"runpod_network_volume",
 		"runpod_pod",
@@ -132,6 +132,7 @@ func TestDataSourceSchemas(t *testing.T) {
 		"runpod_endpoint_releases",
 		"runpod_endpoint_worker_logs",
 		"runpod_endpoint_workers",
+		"runpod_global_volume",
 		"runpod_gpu_type",
 		"runpod_gpu_types",
 		"runpod_machine",
@@ -210,51 +211,5 @@ func assertTypeNames(t *testing.T, kind string, got, want []string) {
 		if got[i] != want[i] {
 			t.Fatalf("%s: registered %v, want %v", kind, got, want)
 		}
-	}
-}
-
-func TestLegacyShimWrittenAttributesDocumentTheUnverifiedMerge(t *testing.T) {
-	ctx := context.Background()
-
-	// The four attributes the shim PATCHes. v1.0.8 sent the whole resource body
-	// on every update, so a body carrying only these keys is a shape that
-	// release never sent: applying one relies on the REST v1 route merging a
-	// partial request, which is unverified against the live host. The attribute
-	// text is where a user reads that, so it is pinned here.
-	want := map[string][]string{
-		"runpod_template":            {"docker_entrypoint", "readme"},
-		"runpod_serverless_endpoint": {"cpu_flavor_priority", "gpu_type_priority"},
-	}
-
-	for _, newResource := range New("test")().Resources(ctx) {
-		r := newResource()
-
-		var metaResp resource.MetadataResponse
-		r.Metadata(ctx, resource.MetadataRequest{ProviderTypeName: "runpod"}, &metaResp)
-		names, ok := want[metaResp.TypeName]
-		if !ok {
-			continue
-		}
-		delete(want, metaResp.TypeName)
-
-		var schemaResp resource.SchemaResponse
-		r.Schema(ctx, resource.SchemaRequest{}, &schemaResp)
-		if schemaResp.Diagnostics.HasError() {
-			t.Fatalf("%s: schema: %v", metaResp.TypeName, schemaResp.Diagnostics)
-		}
-		for _, name := range names {
-			attribute, ok := schemaResp.Schema.Attributes[name]
-			if !ok {
-				t.Fatalf("%s has no %s attribute", metaResp.TypeName, name)
-			}
-			if !strings.Contains(attribute.GetDescription(), legacyShimPartialPatchCaveat) {
-				t.Errorf("%s.%s must document the unverified merge semantics: %q",
-					metaResp.TypeName, name, attribute.GetDescription())
-			}
-		}
-	}
-
-	if len(want) != 0 {
-		t.Fatalf("resources never reached: %v", want)
 	}
 }

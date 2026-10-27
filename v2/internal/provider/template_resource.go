@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/listvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -22,9 +23,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = (*templateResource)(nil)
-	_ resource.ResourceWithConfigure   = (*templateResource)(nil)
-	_ resource.ResourceWithImportState = (*templateResource)(nil)
+	_ resource.Resource                   = (*templateResource)(nil)
+	_ resource.ResourceWithConfigure      = (*templateResource)(nil)
+	_ resource.ResourceWithImportState    = (*templateResource)(nil)
+	_ resource.ResourceWithValidateConfig = (*templateResource)(nil)
 )
 
 func NewTemplateResource() resource.Resource { return &templateResource{} }
@@ -163,22 +165,25 @@ func (r *templateResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 				ElementType: types.StringType,
 				Optional:    true,
 				Computed:    true,
-				Description: "Deprecated. Container entrypoint for containers created from this template, e.g. [\"/bin/bash\"], preserving the 1.x docker_entrypoint attribute. Applied through the REST v1 shim on create and update, and read back from it, so the template's own value fills it in when the configuration leaves it out. " +
-					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
-				PlanModifiers:      []planmodifier.List{legacyShimUnknownList(types.StringType)},
+				Description: "Container entrypoint for containers created from this template, in exec form, e.g. [\"/bin/bash\"], preserving the 1.x docker_entrypoint attribute. Sent as the v2 template's entrypoint on create and update and read back from it, so the template's own value fills it in when the configuration leaves it out; set it to [] to clear it. " +
+					"The API stores the entrypoint inside args, so the two cannot both be set: to set an entrypoint and a command together, write args in its JSON form, e.g. {\"entrypoint\":[\"/bin/bash\",\"-c\"],\"cmd\":[\"python -u main.py\"]}.",
+				Validators: []validator.List{
+					listvalidator.ConflictsWith(path.MatchRoot("args")),
+				},
+				PlanModifiers: []planmodifier.List{usePodCommandStateUnlessArgsChanges()},
 			},
 			"readme": schema.StringAttribute{
 				Optional: true,
 				Computed: true,
-				Description: "Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Applied through the REST v1 shim on create and update, and read back from it; set it to \"\" to clear the text. " +
-					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
+				Description: "Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Written through the GraphQL API's saveTemplate on create and update, and read back from it. " +
+					"The API trims surrounding whitespace and ignores an empty value, so the text cannot be cleared: an empty or whitespace-only readme is rejected at plan time. " +
+					legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				PlanModifiers:      []planmodifier.String{legacyShimUnknownString()},
 			},
 			"earned": schema.Float64Attribute{
 				Computed: true,
-				Description: "Deprecated. Total earnings in USD credited to this template through the Runpod creator programme, preserving the 1.x earned attribute. Zero for a private template. " +
+				Description: "Deprecated. Total earnings in USD credited to this template through the Runpod creator programme, preserving the 1.x earned attribute. Reads 0 for a template the account does not own. " +
 					legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				PlanModifiers:      []planmodifier.Float64{legacyShimUnknownFloat64()},
@@ -192,7 +197,7 @@ func (r *templateResource) Schema(_ context.Context, _ resource.SchemaRequest, r
 			},
 			"runtime_in_min": schema.Int64Attribute{
 				Computed: true,
-				Description: "Deprecated. Total minutes containers created from this template have run, preserving the 1.x runtime_in_min attribute. " +
+				Description: "Deprecated. Total minutes containers created from this template have run, preserving the 1.x runtime_in_min attribute. Reads 0 for a template the account does not own. " +
 					legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				PlanModifiers:      []planmodifier.Int64{legacyShimUnknownInt64()},
@@ -206,42 +211,56 @@ func (r *templateResource) Configure(_ context.Context, req resource.ConfigureRe
 	r.legacy = configuredLegacyClient(req.ProviderData, &resp.Diagnostics)
 }
 
-// applyLegacyTemplateFields settles every REST v1 shim attribute in one step.
-// A configuration that sets docker_entrypoint or readme turns the write into a
-// PATCH whose response already carries the read-backs; anything else just
-// reads. A failed write is an error, since the configuration asked for it; a
-// failed read warns. Either way the three read-backs go null and the two
-// configured inputs keep what the configuration set, so the resource still
-// converges on the next plan instead of diffing against a null forever; see
-// clearLegacyTemplateFieldsInto.
-func (r *templateResource) applyLegacyTemplateFields(ctx context.Context, model *templateResourceModel, patch legacy.TemplatePatchV1) diag.Diagnostics {
+// ValidateConfig rejects a readme the GraphQL shim cannot apply; see
+// validateTemplateReadme.
+func (r *templateResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var readme types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("readme"), &readme)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	validateTemplateReadme(&resp.Diagnostics, readme)
+}
+
+// applyLegacyTemplateFields settles the four GraphQL shim attributes in one
+// step. A configured readme is written through saveTemplate, whose answer
+// already carries the read-backs; anything else just reads. A failed write is
+// an error, since the configuration asked for it; a failed read warns, and a
+// template the GraphQL API does not report to the caller reads as null
+// silently. Whenever the shim did not answer, the three read-backs go null and
+// readme keeps what was planned, so the resource still converges on the next
+// plan instead of diffing against a null forever; see
+// clearLegacyTemplateFields.
+func (r *templateResource) applyLegacyTemplateFields(ctx context.Context, model *templateResourceModel, readme *string) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if r.legacy == nil {
 		clearLegacyTemplateFields(model)
 		return diags
 	}
 
-	if !patch.IsEmpty() {
-		template, err := r.legacy.PatchTemplateV1(ctx, model.Id.ValueString(), patch)
+	var template *legacyTemplateFields
+	var err error
+	if readme != nil {
+		template, err = saveLegacyTemplateReadme(ctx, r.legacy, model.Id.ValueString(), *readme)
 		if err != nil {
 			clearLegacyTemplateFields(model)
 			appendLegacyWriteFailure(&diags, "template", err)
 			return diags
 		}
-		diags.Append(flattenLegacyTemplate(ctx, template, true, model)...)
-		return diags
+	} else {
+		template, err = fetchLegacyTemplateFields(ctx, r.legacy, model.Id.ValueString())
+		if err != nil {
+			clearLegacyTemplateFields(model)
+			appendLegacyReadFailure(&diags, "template", err)
+			return diags
+		}
+		if template == nil {
+			clearLegacyTemplateFields(model)
+			return diags
+		}
 	}
 
-	template, err := r.legacy.GetTemplateV1(ctx, model.Id.ValueString())
-	if err != nil {
-		clearLegacyTemplateFields(model)
-		appendLegacyReadFailure(&diags, "template", err)
-		return diags
-	}
-	// A GET reports the template as it is, so a field it does not carry has
-	// been cleared, on the console say, and the attribute follows it to
-	// null instead of holding the old value against every later plan.
-	diags.Append(flattenLegacyTemplate(ctx, template, false, model)...)
+	flattenLegacyTemplateInto(template, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
 	return diags
 }
 
@@ -255,10 +274,9 @@ func (r *templateResource) Create(ctx context.Context, req resource.CreateReques
 
 	body, diags := expandCreateTemplate(ctx, plan)
 	resp.Diagnostics.Append(diags...)
-	// The legacy patch carries only what the configuration set; see
-	// expandLegacyTemplatePatch.
-	patch, patchDiags := expandLegacyTemplatePatch(ctx, config)
-	resp.Diagnostics.Append(patchDiags...)
+	entrypoint, entrypointDiags := expandTemplateEntrypoint(ctx, config)
+	resp.Diagnostics.Append(entrypointDiags...)
+	body.Entrypoint = entrypoint
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -284,7 +302,7 @@ func (r *templateResource) Create(ctx context.Context, req resource.CreateReques
 	// legacy failure is reported: returning first would leave it in the
 	// account with nothing in state, and the next apply would create a second
 	// one.
-	legacyDiags := r.applyLegacyTemplateFields(ctx, &plan, patch)
+	legacyDiags := r.applyLegacyTemplateFields(ctx, &plan, configuredTemplateReadme(config))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	resp.Diagnostics.Append(legacyDiags...)
 }
@@ -319,7 +337,7 @@ func (r *templateResource) Read(ctx context.Context, req resource.ReadRequest, r
 	}
 	// A refresh only reads: whatever the configuration set is re-applied by the
 	// next update, not by this call.
-	resp.Diagnostics.Append(r.applyLegacyTemplateFields(ctx, &state, legacy.TemplatePatchV1{})...)
+	resp.Diagnostics.Append(r.applyLegacyTemplateFields(ctx, &state, nil)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -335,15 +353,13 @@ func (r *templateResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	// From the configuration, so an update of a template that sets neither
-	// shim input never reaches the legacy host; see expandLegacyTemplatePatch.
-	patch, patchDiags := expandLegacyTemplatePatch(ctx, config)
-	resp.Diagnostics.Append(patchDiags...)
-
 	body := templates.UpdateTemplateJSONRequestBody{
 		Name:  plan.Name.ValueStringPointer(),
 		Image: plan.Image.ValueStringPointer(),
 	}
+	entrypoint, entrypointDiags := expandTemplateEntrypoint(ctx, config)
+	resp.Diagnostics.Append(entrypointDiags...)
+	body.Entrypoint = entrypoint
 	if !plan.Category.IsNull() && !plan.Category.IsUnknown() {
 		category := sdktypes.TemplateCategory(plan.Category.ValueString())
 		body.Category = &category
@@ -412,7 +428,7 @@ func (r *templateResource) Update(ctx context.Context, req resource.UpdateReques
 	// As on Create: the v2 update has already landed, so the state is written
 	// before a legacy failure is reported. Returning first would leave state
 	// describing the template as it was before the rename.
-	legacyDiags := r.applyLegacyTemplateFields(ctx, &plan, patch)
+	legacyDiags := r.applyLegacyTemplateFields(ctx, &plan, configuredTemplateReadme(config))
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	resp.Diagnostics.Append(legacyDiags...)
 }

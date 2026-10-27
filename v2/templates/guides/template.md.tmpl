@@ -21,15 +21,20 @@ credential (see
 `persistent_volume` gives every container created from the template a
 host-local mount.
 
-The deprecated inputs and outputs (`docker_entrypoint`, `readme`, `earned`,
-`is_runpod`, `runtime_in_min`) go through the REST v1 compatibility shim and
-exist for 1.x configurations.
+`docker_entrypoint` is the v2 template's entrypoint. The API stores it inside
+`args`, so the two cannot both be set; to set an entrypoint and a command
+together, write `args` in its JSON form.
+
+The deprecated inputs and outputs (`readme`, `earned`, `is_runpod`,
+`runtime_in_min`) go through the GraphQL compatibility shim and exist for 1.x
+configurations. `readme` cannot be cleared once set: an empty value is
+rejected at plan time.
 
 ## Usage
 
 ```hcl
 module "template" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.4"
 
   name  = "pytorch-base"
   image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -48,4 +53,4 @@ module "template" {
 {{ tffile "modules/template/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/template/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/template/README.md).

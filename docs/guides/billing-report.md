@@ -33,7 +33,7 @@ module.
 
 ```hcl
 module "billing_report" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/billing-report?ref=v2.0.0-rc.4"
 
   bucket_size = "day"
   last_n      = 7
@@ -90,4 +90,4 @@ data "runpod_cluster_billing" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/billing-report/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/billing-report/README.md).

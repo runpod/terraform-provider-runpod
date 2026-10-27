@@ -32,13 +32,15 @@ use
 [pod-lifecycle](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/pod-lifecycle).
 
 The two deprecated outputs (`machine_id`, `volume_encrypted`) come from the
-REST v1 compatibility shim and read null when that host does not answer.
+GraphQL compatibility shim and read null when that API does not answer or
+does not report the pod. `volume_encrypted` reads `false`, not null, for an
+unencrypted volume.
 
 ## Usage
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -87,4 +89,4 @@ resource "runpod_pod" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/gpu-pod/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/gpu-pod/README.md).

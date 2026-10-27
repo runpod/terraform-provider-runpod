@@ -21,15 +21,20 @@ credential (see
 `persistent_volume` gives every container created from the template a
 host-local mount.
 
-The deprecated inputs and outputs (`docker_entrypoint`, `readme`, `earned`,
-`is_runpod`, `runtime_in_min`) go through the REST v1 compatibility shim and
-exist for 1.x configurations.
+`docker_entrypoint` is the v2 template's entrypoint. The API stores it inside
+`args`, so the two cannot both be set; to set an entrypoint and a command
+together, write `args` in its JSON form.
+
+The deprecated inputs and outputs (`readme`, `earned`, `is_runpod`,
+`runtime_in_min`) go through the GraphQL compatibility shim and exist for 1.x
+configurations. `readme` cannot be cleared once set: an empty value is
+rejected at plan time.
 
 ## Usage
 
 ```hcl
 module "template" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.4"
 
   name  = "pytorch-base"
   image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -66,11 +71,14 @@ resource "runpod_template" "this" {
   # replacing the 1.x volume_in_gb and volume_mount_path pair.
   persistent_volume = var.persistent_volume
 
-  # Deprecated, served by the REST v1 shim: the 1.x docker_entrypoint and
-  # readme attributes. Both are applied on create and update, and both are read
-  # back, so a template that already has them fills them in.
+  # The 1.x docker_entrypoint, now the v2 template's entrypoint. The API stores
+  # it inside args, so it cannot be set together with args.
   docker_entrypoint = var.docker_entrypoint
-  readme            = var.readme
+
+  # Deprecated, served by the GraphQL shim: the 1.x readme, written through
+  # saveTemplate on create and update and read back, so a template that already
+  # has one fills it in.
+  readme = var.readme
 }
 
 # The template read back by id — what a pod or endpoint pointing at it sees.
@@ -85,4 +93,4 @@ data "runpod_templates" "all" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/template/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/template/README.md).

@@ -48,13 +48,14 @@ output "template_ids" {
   value       = [for t in data.runpod_templates.all.templates : t.id]
 }
 
-# Deprecated attributes served by the REST v1 shim, preserving the 1.x
-# docker_entrypoint, readme, earned, is_runpod and runtime_in_min attributes.
+# The 1.x docker_entrypoint, read back from the v2 template.
 output "docker_entrypoint" {
-  description = "Deprecated. Container entrypoint containers from this template run."
+  description = "Container entrypoint containers from this template run."
   value       = runpod_template.this.docker_entrypoint
 }
 
+# Deprecated attributes served by the GraphQL shim, preserving the 1.x readme,
+# earned, is_runpod and runtime_in_min attributes.
 output "readme" {
   description = "Deprecated. Markdown description shown on the template's console page."
   value       = runpod_template.this.readme

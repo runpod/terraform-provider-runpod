@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	runpod "github.com/runpod/go-sdk/v2"
+	"github.com/runpod/go-sdk/v2/lib/networkvolumes"
 	"github.com/runpod/go-sdk/v2/lib/pods"
 	"github.com/runpod/go-sdk/v2/lib/serverless"
 	"github.com/runpod/go-sdk/v2/lib/templates"
@@ -268,19 +269,24 @@ func (d *networkVolumesDataSource) Configure(_ context.Context, req datasource.C
 }
 
 func (d *networkVolumesDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
-	apiResp, err := d.client.NetworkVolumes.ListNetworkVolumesWithResponse(ctx)
+	allVolumes, err := listAllPages(ctx, func(ctx context.Context, cursor *string) ([]sdktypes.NetworkVolume, sdktypes.Pagination, error) {
+		apiResp, err := d.client.NetworkVolumes.ListNetworkVolumesWithResponse(ctx, &networkvolumes.ListNetworkVolumesParams{Cursor: cursor})
+		if err != nil {
+			return nil, sdktypes.Pagination{}, err
+		}
+		if apiResp.JSON200 == nil {
+			return nil, sdktypes.Pagination{}, fmt.Errorf("API returned status %d: %s",
+				apiResp.HTTPResponse.StatusCode, boundedBody(apiResp.Body))
+		}
+		return apiResp.JSON200.NetworkVolumes, apiResp.JSON200.Pagination, nil
+	})
 	if err != nil {
 		resp.Diagnostics.AddError("Listing network volumes failed", err.Error())
 		return
 	}
-	if apiResp.JSON200 == nil {
-		resp.Diagnostics.AddError("Listing network volumes failed",
-			fmt.Sprintf("API returned status %d: %s", apiResp.HTTPResponse.StatusCode, boundedBody(apiResp.Body)))
-		return
-	}
 
 	state := networkVolumesDataSourceModel{NetworkVolumes: []networkVolumeResourceModel{}}
-	for _, volume := range apiResp.JSON200.NetworkVolumes {
+	for _, volume := range allVolumes {
 		var model networkVolumeResourceModel
 		flattenNetworkVolume(&volume, &model)
 		state.NetworkVolumes = append(state.NetworkVolumes, model)

@@ -27,8 +27,8 @@ resource "runpod_serverless_endpoint" "this" {
 
   # Deprecated, preserving the 1.x compute_type and gpu_type_priority
   # attributes. compute_type restates the GPU choice above and is derived from
-  # what the v2 API reports; gpu_type_priority is rejected by REST v1 and
-  # stays null.
+  # what the v2 API reports; gpu_type_priority has no setting in any API, so a
+  # value is kept in state, never sent, and warned about at plan time.
   compute_type      = var.compute_type
   gpu_type_priority = var.gpu_type_priority
 }

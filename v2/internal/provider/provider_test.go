@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -15,10 +16,11 @@ import (
 )
 
 func TestConfigureSendsTheProviderUserAgentToEveryHost(t *testing.T) {
-	// The v2 client and both deprecated shims must identify the provider and
-	// the Terraform release: 1.x sent Terraform/RunPodProvider to the legacy
-	// hosts, and the plain SDK string says nothing about Terraform at all. The
-	// shims keep the 1.x value first, so filters that match it still match.
+	// The v2 client and the deprecated GraphQL shim must identify the provider
+	// and the Terraform release: 1.x sent Terraform/RunPodProvider to the
+	// legacy hosts, and the plain SDK string says nothing about Terraform at
+	// all. The shim keeps the 1.x value first, so filters that match it still
+	// match.
 	ctx := context.Background()
 
 	var mu sync.Mutex
@@ -70,18 +72,21 @@ func TestConfigureSendsTheProviderUserAgentToEveryHost(t *testing.T) {
 	if _, err := configured.Legacy.Query(ctx, "query { myself { id } }", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := configured.Legacy.Get(ctx, "user", nil); err != nil {
-		t.Fatal(err)
-	}
 
 	v2 := "terraform-provider-runpod/2.0.0-test (terraform 1.16.3; " + runtime.Version() + ") runpod-go-sdk/" + runpod.Version
 	shim := "Terraform/RunPodProvider " + v2
 	mu.Lock()
 	defer mu.Unlock()
+	// rest_v1_url is set above and must route nothing: the provider has no
+	// REST v1 client.
+	for route := range agents {
+		if strings.HasPrefix(route, "/v1") {
+			t.Errorf("a request reached the REST v1 path %s", route)
+		}
+	}
 	for _, tc := range []struct{ route, host, want string }{
 		{"/v2/account/ssh-keys", "REST v2", v2},
 		{"/graphql", "GraphQL", shim},
-		{"/v1/user", "REST v1", shim},
 	} {
 		if got, called := agents[tc.route]; !called {
 			t.Errorf("%s: %s was never called", tc.host, tc.route)

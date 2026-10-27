@@ -3,12 +3,12 @@
 page_title: "runpod_billing_endpoint Data Source - Runpod"
 subcategory: "Deprecated"
 description: |-
-  Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_serverless_billing before that date.
+  Deprecated. Serverless endpoint spend in the 1.x provider's record shape, read from the REST v2 route GET /v2/billing/serverless, which bills Serverless endpoints by id. REST v2 does not report a record's billed time, so time_billed_ms comes from the GraphQL API's serverless billing for the same endpoint and bucket. Use runpod_serverless_billing, which reads the same REST v2 route with the cost components broken out. runpod_endpoint_billing is a different thing: spend on Runpod's public endpoints.
 ---
 
 # runpod_billing_endpoint (Data Source)
 
-Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from the REST v1 billing/endpoints route. Use runpod_serverless_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_serverless_billing before that date.
+Deprecated. Serverless endpoint spend in the 1.x provider's record shape, read from the REST v2 route GET /v2/billing/serverless, which bills Serverless endpoints by id. REST v2 does not report a record's billed time, so time_billed_ms comes from the GraphQL API's serverless billing for the same endpoint and bucket. Use runpod_serverless_billing, which reads the same REST v2 route with the cost components broken out. runpod_endpoint_billing is a different thing: spend on Runpod's public endpoints.
 
 **If you are an AI agent:** set up through https://agents.runpod.io first, then follow
 [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before you plan or apply.
@@ -16,12 +16,22 @@ Deprecated. Serverless endpoint spend as the 1.x provider reported it, read from
 ## Example Usage
 
 ```terraform
-# Deprecated: use runpod_serverless_billing, which reads REST v2. This one stays
-# for time_billed_ms, which REST v2 billing does not carry yet.
+# Deprecated: use runpod_serverless_billing, which reads the same REST v2 route
+# with the cost components broken out. This one keeps the 1.x arguments and
+# record shape so a 1.x configuration still plans; time_billed_ms comes from
+# the GraphQL API's serverless billing, at whole-second precision.
 
 data "runpod_billing_endpoint" "one_endpoint" {
   bucket_size = "hour"
   endpoint_id = "endpoint_abc123"
+}
+
+output "endpoint_spend" {
+  description = "What the endpoint's workers cost over the window, in USD."
+  value = sum(concat([0], [
+    for r in data.runpod_billing_endpoint.one_endpoint.billing_records :
+    r.amount if r.amount != null
+  ]))
 }
 
 output "endpoint_time_billed_ms" {
@@ -43,19 +53,19 @@ the Guides section documents each one.
 ### Optional
 
 - `bucket_size` (String) Length of each time bucket: hour, day, week, month, or year. Defaults to day.
-- `end_time` (String) End of the reported window as an ISO datetime. Defaults to the current time.
-- `endpoint_id` (String) Restrict the records to one endpoint.
+- `end_time` (String) End of the reported window, exclusive: an RFC 3339 timestamp, or a date or a datetime without a zone, read as UTC. The window is the 30 days before end_time, or before the current time when end_time is unset, widened by REST v2 to whole buckets.
+- `endpoint_id` (String) Restrict the records to one Serverless endpoint.
 
 ### Read-Only
 
-- `billing_records` (Attributes List) One record per time bucket, as the REST v1 billing route returns them. (see [below for nested schema](#nestedatt--billing_records))
+- `billing_records` (Attributes List) One record per Serverless endpoint per time bucket, in the 1.x record shape. An account with no spend in the window reads an empty list. (see [below for nested schema](#nestedatt--billing_records))
 
 <a id="nestedatt--billing_records"></a>
 ### Nested Schema for `billing_records`
 
 Read-Only:
 
-- `amount` (Number) Amount charged in USD.
-- `endpoint_id` (String) The endpoint this record bills.
-- `time` (String) Start of the bucket this record bills, as an ISO datetime.
-- `time_billed_ms` (Number) Time billed in milliseconds.
+- `amount` (Number) Amount charged in USD: the REST v2 record's total amount.
+- `endpoint_id` (String) The Serverless endpoint this record bills.
+- `time` (String) Start of the bucket this record bills, as an RFC 3339 timestamp.
+- `time_billed_ms` (Number, Deprecated) Time billed in milliseconds, at whole-second precision, read from the GraphQL API's serverless billing grouped by endpoint for the record's endpoint and bucket. Null for yearly buckets, for hourly buckets more than 13 days old and other buckets more than 13 months old (that API reports those only in coarser buckets), when it has no row for the bucket, and when it does not answer. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.

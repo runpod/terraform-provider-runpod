@@ -2,16 +2,14 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/runpod/go-sdk/v2/legacy" //nolint:staticcheck // deprecated on purpose: the shim client goes when REST v2 carries these fields
 	sdktypes "github.com/runpod/go-sdk/v2/lib/types"
 )
 
@@ -241,6 +239,59 @@ func TestExpandPodMounts(t *testing.T) {
 	}
 }
 
+func TestExpandPodMountsGlobal(t *testing.T) {
+	ctx := context.Background()
+	network, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("vol_xyz"),
+		Path:     types.StringValue("/runpod-volume"),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	global, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("gsb_abc"),
+		Path:     types.StringValue("/data"),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	globalNoPath, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("gsb_abc"),
+		Path:     types.StringNull(),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+
+	mounts, diags := expandPodMounts(ctx, podResourceModel{GlobalVolumes: global})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts == nil || mounts.Global == nil || len(*mounts.Global) != 1 || (*mounts.Global)[0].VolumeId != "gsb_abc" ||
+		(*mounts.Global)[0].Path == nil || *(*mounts.Global)[0].Path != "/data" || mounts.Network != nil || mounts.Persistent != nil {
+		t.Fatalf("global mount: %+v", mounts)
+	}
+
+	// A global volume combines with a network volume in one mounts object.
+	mounts, diags = expandPodMounts(ctx, podResourceModel{NetworkVolumes: network, GlobalVolumes: global})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts == nil || mounts.Global == nil || mounts.Network == nil || len(*mounts.Network) != 1 || len(*mounts.Global) != 1 {
+		t.Fatalf("network and global mounts: %+v", mounts)
+	}
+
+	// An unset path is left off, so the API picks one on create and keeps
+	// the current one on a PATCH.
+	mounts, diags = expandPodMounts(ctx, podResourceModel{GlobalVolumes: globalNoPath})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts == nil || mounts.Global == nil || (*mounts.Global)[0].Path != nil {
+		t.Fatalf("global mount without a path: %+v", mounts)
+	}
+}
+
 func TestFlattenPodCpuAndMounts(t *testing.T) {
 	ctx := context.Background()
 	template := "30zmvf89kd"
@@ -282,6 +333,25 @@ func TestFlattenPodCpuAndMounts(t *testing.T) {
 	if len(volumes) != 1 || volumes[0].VolumeId.ValueString() != "vol_xyz" ||
 		volumes[0].Path.ValueString() != "/runpod-volume" {
 		t.Fatalf("network volumes: %+v", volumes)
+	}
+	if !model.GlobalVolumes.IsNull() {
+		t.Fatalf("no global mount, got %+v", model.GlobalVolumes)
+	}
+
+	// A global mount next to the network one, read back with the path the
+	// API chose.
+	globalPath := "/global"
+	pod.Mounts.Global = &[]sdktypes.GlobalMount{{VolumeId: "gsb_abc", Path: &globalPath}}
+	model = podResourceModel{}
+	if diags := flattenPod(ctx, pod, &model); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var globals []networkMountModel
+	if d := model.GlobalVolumes.ElementsAs(ctx, &globals, false); d.HasError() {
+		t.Fatal(d)
+	}
+	if len(globals) != 1 || globals[0].VolumeId.ValueString() != "gsb_abc" || globals[0].Path.ValueString() != "/global" {
+		t.Fatalf("global volumes: %+v", globals)
 	}
 
 	// A persistent mount, and a pod with no template: an unknown template_id
@@ -1475,228 +1545,6 @@ func TestExpandCreateEndpointOmitsUnknownWorkers(t *testing.T) {
 	}
 }
 
-// The deprecated REST v1 shims. Each attribute here worked in the 1.0.8
-// provider and has no REST v2 equivalent, so these tests pin the v1 wire
-// shape onto the state shape and the failure semantics onto the diagnostics.
-
-func TestFlattenLegacyPod(t *testing.T) {
-	machineId := "machine-1"
-	encrypted := true
-	pod := &legacy.PodV1{
-		MachineID:        &machineId,
-		DockerEntrypoint: []string{"/bin/bash"},
-		DockerStartCmd:   []string{"-c", "sleep infinity"},
-		VolumeEncrypted:  &encrypted,
-	}
-
-	// The v1 command lists are not read: docker_entrypoint and
-	// docker_start_cmd come from the v2 pod, so whatever flattenPod set stays.
-	model := podResourceModel{
-		DockerEntrypoint: types.ListNull(types.StringType),
-		DockerStartCmd:   types.ListNull(types.StringType),
-	}
-	flattenLegacyPod(pod, &model)
-	if model.MachineId.ValueString() != "machine-1" || !model.VolumeEncrypted.ValueBool() {
-		t.Fatalf("machine_id/volume_encrypted: %+v", model)
-	}
-	if !model.DockerEntrypoint.IsNull() || !model.DockerStartCmd.IsNull() {
-		t.Fatalf("the REST v1 command lists must not reach the model: %+v", model)
-	}
-}
-
-func TestFlattenLegacyPodEmptyResponse(t *testing.T) {
-	// A pod the v1 host reports with none of these fields set.
-	var model podResourceModel
-	flattenLegacyPod(&legacy.PodV1{}, &model)
-	if !model.MachineId.IsNull() || !model.VolumeEncrypted.IsNull() {
-		t.Fatalf("empty pod: %+v", model)
-	}
-}
-
-func TestClearLegacyPodFieldsNullsEveryShimAttribute(t *testing.T) {
-	ctx := context.Background()
-	machineId := "machine-1"
-	encrypted := true
-	entrypoint, diags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
-	model := podResourceModel{DockerEntrypoint: entrypoint}
-	flattenLegacyPod(&legacy.PodV1{MachineID: &machineId, VolumeEncrypted: &encrypted}, &model)
-
-	// A failed REST v1 read nulls the shim attributes and leaves the command
-	// lists the v2 read already filled.
-	clearLegacyPodFields(&model)
-	if !model.MachineId.IsNull() || !model.VolumeEncrypted.IsNull() {
-		t.Fatalf("every shim attribute must be null after a failed read: %+v", model)
-	}
-	if len(model.DockerEntrypoint.Elements()) != 1 {
-		t.Fatalf("docker_entrypoint = %v, want the v2 value kept", model.DockerEntrypoint)
-	}
-}
-
-func TestAppendLegacyReadFailureWarnsAndWriteFailureErrors(t *testing.T) {
-	var readDiags diag.Diagnostics
-	appendLegacyReadFailure(&readDiags, "pod", errors.New("rest v1 is gone"))
-	if readDiags.HasError() {
-		t.Fatalf("a shim read failure must not break the apply: %v", readDiags)
-	}
-	if readDiags.WarningsCount() != 1 {
-		t.Fatalf("want one warning, got %v", readDiags)
-	}
-	if !strings.Contains(readDiags.Warnings()[0].Detail(), "rest v1 is gone") {
-		t.Fatalf("the warning must carry the cause: %q", readDiags.Warnings()[0].Detail())
-	}
-
-	var writeDiags diag.Diagnostics
-	appendLegacyWriteFailure(&writeDiags, "template", errors.New("rest v1 rejected the patch"))
-	if !writeDiags.HasError() {
-		t.Fatalf("a configured shim input that cannot be applied must be an error: %v", writeDiags)
-	}
-}
-
-func TestExpandLegacyEndpointPatchCarriesOnlySetFields(t *testing.T) {
-	// The patch is built from the configuration, where an unset attribute is
-	// null on every operation.
-	empty := expandLegacyEndpointPatch(serverlessEndpointResourceModel{
-		ComputeType:       types.StringNull(),
-		GpuTypePriority:   types.StringNull(),
-		CpuFlavorPriority: types.StringNull(),
-	})
-	if !empty.IsEmpty() {
-		t.Fatalf("an endpoint configuring no shim input must send nothing: %+v", empty)
-	}
-
-	// A configuration value that is not resolved yet is not a value to send.
-	unresolved := expandLegacyEndpointPatch(serverlessEndpointResourceModel{
-		GpuTypePriority:   types.StringUnknown(),
-		CpuFlavorPriority: types.StringNull(),
-	})
-	if !unresolved.IsEmpty() {
-		t.Fatalf("an unresolved shim input must send nothing: %+v", unresolved)
-	}
-
-	gpu := expandLegacyEndpointPatch(serverlessEndpointResourceModel{
-		ComputeType:       types.StringValue("GPU"),
-		GpuTypePriority:   types.StringValue("availability"),
-		CpuFlavorPriority: types.StringNull(),
-	})
-	if gpu.CpuFlavorPriority != nil {
-		t.Fatalf("cpu_flavor_priority must stay out of a GPU patch: %v", *gpu.CpuFlavorPriority)
-	}
-	if gpu.GpuTypePriority == nil || *gpu.GpuTypePriority != "availability" {
-		t.Fatalf("gpu_type_priority: %+v", gpu)
-	}
-
-	cpu := expandLegacyEndpointPatch(serverlessEndpointResourceModel{
-		ComputeType:       types.StringNull(),
-		GpuTypePriority:   types.StringNull(),
-		CpuFlavorPriority: types.StringValue("availability"),
-	})
-	if cpu.GpuTypePriority != nil {
-		t.Fatalf("only cpu_flavor_priority was configured: %+v", cpu)
-	}
-	if cpu.CpuFlavorPriority == nil || *cpu.CpuFlavorPriority != "availability" {
-		t.Fatalf("cpu_flavor_priority: %+v", cpu)
-	}
-}
-
-func TestExpandLegacyEndpointPatchNeverCarriesComputeType(t *testing.T) {
-	// compute_type is derived from the GPU or CPU block REST v2 reports and
-	// policed against it, so a v1 PATCH carrying it could change nothing,
-	// while its failure is an error. The canonical 1.x migration shape is
-	// gpu_pools plus compute_type and no priority, and that must reach the
-	// deprecated host with nothing to send.
-	for _, family := range []string{"GPU", "CPU"} {
-		patch := expandLegacyEndpointPatch(serverlessEndpointResourceModel{
-			ComputeType:       types.StringValue(family),
-			GpuTypePriority:   types.StringNull(),
-			CpuFlavorPriority: types.StringNull(),
-		})
-		if !patch.IsEmpty() {
-			t.Fatalf("compute_type = %q built a patch %+v, want nothing to send", family, patch)
-		}
-	}
-}
-
-func TestFlattenLegacyEndpoint(t *testing.T) {
-	ctx := context.Background()
-	templateVersion := 7
-	version := 3
-	uptime := 1200.0
-	lastBusy := 45.0
-	workerId := "worker-1"
-	podId := "pod-1"
-	status := "RUNNING"
-	startTime := "2026-09-17T09:00:00Z"
-
-	var model serverlessEndpointResourceModel
-	diags := flattenLegacyEndpoint(ctx, &legacy.EndpointV1{
-		TemplateVersion: &templateVersion,
-		UserID:          "user-1",
-		Version:         &version,
-		Workers: []legacy.EndpointWorkerV1{{
-			ID:         &workerId,
-			PodID:      &podId,
-			Status:     &status,
-			UptimeMs:   &uptime,
-			StartTime:  &startTime,
-			LastBusyMs: &lastBusy,
-		}},
-	}, &model)
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
-
-	if model.TemplateVersion.ValueInt64() != 7 || model.Version.ValueInt64() != 3 {
-		t.Fatalf("template_version/version: %+v", model)
-	}
-	var users []string
-	if d := model.Users.ElementsAs(ctx, &users, false); d.HasError() {
-		t.Fatal(d)
-	}
-	if len(users) != 1 || users[0] != "user-1" {
-		t.Fatalf("users must be the owner wrapped in a one-element list: %v", users)
-	}
-	var workers []endpointLegacyWorkerModel
-	if d := model.Workers.ElementsAs(ctx, &workers, false); d.HasError() {
-		t.Fatal(d)
-	}
-	if len(workers) != 1 {
-		t.Fatalf("len(workers) = %d, want 1", len(workers))
-	}
-	worker := workers[0]
-	if worker.Id.ValueString() != "worker-1" || worker.PodId.ValueString() != "pod-1" ||
-		worker.Status.ValueString() != "RUNNING" || worker.UptimeMs.ValueInt64() != 1200 ||
-		worker.StartTime.ValueString() != "2026-09-17T09:00:00Z" || worker.LastBusyMs.ValueInt64() != 45 {
-		t.Fatalf("worker: %+v", worker)
-	}
-}
-
-func TestFlattenLegacyEndpointEmptyAndCleared(t *testing.T) {
-	ctx := context.Background()
-
-	// An endpoint built from an image has no template version, a fresh one has
-	// no workers, and neither is an error: every absent read-back goes null,
-	// the same null a failed read produces, so "nothing here" has one shape.
-	var model serverlessEndpointResourceModel
-	if diags := flattenLegacyEndpoint(ctx, &legacy.EndpointV1{}, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if !model.TemplateVersion.IsNull() || !model.Version.IsNull() || !model.Users.IsNull() {
-		t.Fatalf("absent v1 fields must flatten to null: %+v", model)
-	}
-	if !model.Workers.IsNull() {
-		t.Fatalf("an endpoint with no workers must report null, not an empty list: %+v", model.Workers)
-	}
-
-	clearLegacyEndpointFields(&model)
-	if !model.TemplateVersion.IsNull() || !model.Users.IsNull() ||
-		!model.Version.IsNull() || !model.Workers.IsNull() {
-		t.Fatalf("every shim read-back must be null after a failed read: %+v", model)
-	}
-}
-
 func TestFlattenEndpointDerivesComputeType(t *testing.T) {
 	ctx := context.Background()
 	var scaling sdktypes.EndpointScaling
@@ -1733,231 +1581,186 @@ func TestFlattenEndpointDerivesComputeType(t *testing.T) {
 	}
 }
 
-func TestExpandLegacyTemplatePatchCarriesOnlySetFields(t *testing.T) {
-	ctx := context.Background()
-
-	// The patch is built from the configuration, where an unset attribute is
-	// null on every operation. On an update the plan carries the prior state
-	// value for both, because they are Optional + Computed, and a patch built
-	// from that would write to the deprecated host on every apply.
-	empty, diags := expandLegacyTemplatePatch(ctx, templateResourceModel{
-		DockerEntrypoint: types.ListNull(types.StringType),
-		Readme:           types.StringNull(),
-	})
-	if diags.HasError() {
-		t.Fatal(diags)
+func TestConfiguredTemplateReadmeReadsOnlyTheConfiguration(t *testing.T) {
+	// readme is Optional+Computed, so on an update the plan carries the prior
+	// state value even when the configuration never set it. The write is
+	// decided from the configuration, where an unset readme is null on every
+	// operation.
+	if got := configuredTemplateReadme(templateResourceModel{Readme: types.StringNull()}); got != nil {
+		t.Fatalf("unset readme = %q, want nothing to write", *got)
 	}
-	if !empty.IsEmpty() {
-		t.Fatalf("a template configuring no shim input must send nothing: %+v", empty)
+	if got := configuredTemplateReadme(templateResourceModel{Readme: types.StringUnknown()}); got != nil {
+		t.Fatalf("unknown readme = %q, want nothing to write", *got)
 	}
-
-	// A configuration value that is not resolved yet is not a value to send.
-	unresolved, diags := expandLegacyTemplatePatch(ctx, templateResourceModel{
-		DockerEntrypoint: types.ListUnknown(types.StringType),
-		Readme:           types.StringUnknown(),
-	})
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
-	if !unresolved.IsEmpty() {
-		t.Fatalf("an unresolved shim input must send nothing: %+v", unresolved)
-	}
-
-	entrypoint, listDiags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})
-	if listDiags.HasError() {
-		t.Fatal(listDiags)
-	}
-	patch, diags := expandLegacyTemplatePatch(ctx, templateResourceModel{
-		DockerEntrypoint: entrypoint,
-		Readme:           types.StringNull(),
-	})
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
-	if patch.Readme != nil {
-		t.Fatalf("an unset readme must stay out of the patch: %q", *patch.Readme)
-	}
-	if patch.DockerEntrypoint == nil || len(*patch.DockerEntrypoint) != 1 ||
-		(*patch.DockerEntrypoint)[0] != "/bin/bash" {
-		t.Fatalf("docker_entrypoint: %+v", patch)
-	}
-
-	// An explicitly empty readme clears the text, so it is sent rather than
-	// treated as unset.
-	cleared, diags := expandLegacyTemplatePatch(ctx, templateResourceModel{
-		DockerEntrypoint: types.ListNull(types.StringType),
-		Readme:           types.StringValue(""),
-	})
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
-	if cleared.Readme == nil || *cleared.Readme != "" {
-		t.Fatalf("an empty readme must be sent: %+v", cleared)
+	got := configuredTemplateReadme(templateResourceModel{Readme: types.StringValue("# trainer")})
+	if got == nil || *got != "# trainer" {
+		t.Fatalf("configured readme = %v, want # trainer", got)
 	}
 }
 
-func TestFlattenLegacyTemplate(t *testing.T) {
-	ctx := context.Background()
-	readme := "hello"
-	earned := 1.25
-	isRunpod := true
-	runtime := 90.0
+func TestValidateTemplateReadmeRejectsAReadmeThatCannotApply(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		readme    types.String
+		wantError bool
+	}{
+		{"unset", types.StringNull(), false},
+		{"not known until apply", types.StringUnknown(), false},
+		{"text", types.StringValue("# trainer\n"), false},
+		{"empty", types.StringValue(""), true},
+		{"whitespace only", types.StringValue(" \n\t"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var diags diag.Diagnostics
+			validateTemplateReadme(&diags, tc.readme)
+			if diags.HasError() != tc.wantError {
+				t.Fatalf("error = %v, want %v: %v", diags.HasError(), tc.wantError, diags)
+			}
+			if !tc.wantError {
+				return
+			}
+			withPath, ok := diags.Errors()[0].(diag.DiagnosticWithPath)
+			if !ok || !withPath.Path().Equal(path.Root("readme")) {
+				t.Fatalf("error = %v, want it on readme", diags.Errors()[0])
+			}
+		})
+	}
+}
 
-	var model templateResourceModel
-	diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{
-		DockerEntrypoint: []string{"/bin/bash"},
-		Readme:           &readme,
-		Earned:           &earned,
-		IsRunpod:         &isRunpod,
-		RuntimeInMin:     &runtime,
-	}, false, &model)
+func TestExpandTemplateEntrypointSendsOnlyAConfiguredList(t *testing.T) {
+	ctx := context.Background()
+
+	// The plan carries the prior entrypoint when the configuration leaves it
+	// out, so only the configuration decides what is sent.
+	for _, unset := range []types.List{types.ListNull(types.StringType), types.ListUnknown(types.StringType)} {
+		got, diags := expandTemplateEntrypoint(ctx, templateResourceModel{DockerEntrypoint: unset})
+		if diags.HasError() {
+			t.Fatal(diags)
+		}
+		if got != nil {
+			t.Fatalf("entrypoint for %v = %v, want it left out", unset, *got)
+		}
+	}
+
+	// [] is how the API clears the entrypoint, so it is sent, not omitted.
+	cleared, diags := types.ListValueFrom(ctx, types.StringType, []string{})
 	if diags.HasError() {
 		t.Fatal(diags)
 	}
+	got, diags := expandTemplateEntrypoint(ctx, templateResourceModel{DockerEntrypoint: cleared})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if got == nil || len(*got) != 0 {
+		t.Fatalf("entrypoint = %v, want an empty list to send", got)
+	}
 
+	configured, diags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash", "-c"})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	got, diags = expandTemplateEntrypoint(ctx, templateResourceModel{DockerEntrypoint: configured})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if got == nil || !slices.Equal(*got, []string{"/bin/bash", "-c"}) {
+		t.Fatalf("entrypoint = %v, want [/bin/bash -c]", got)
+	}
+}
+
+func TestFlattenTemplateEntrypointKeepsAPlannedClear(t *testing.T) {
+	ctx := context.Background()
+
+	reported := []string{"/bin/bash", "-c"}
+	got, diags := flattenTemplateEntrypoint(ctx, &reported, types.ListUnknown(types.StringType))
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
 	var entrypoint []string
-	if d := model.DockerEntrypoint.ElementsAs(ctx, &entrypoint, false); d.HasError() {
-		t.Fatal(d)
-	}
-	if len(entrypoint) != 1 || entrypoint[0] != "/bin/bash" {
-		t.Fatalf("docker_entrypoint: %v", entrypoint)
-	}
-	if model.Readme.ValueString() != "hello" || model.Earned.ValueFloat64() != 1.25 ||
-		!model.IsRunpod.ValueBool() || model.RuntimeInMin.ValueInt64() != 90 {
-		t.Fatalf("template shim fields: %+v", model)
-	}
-
-	// A template the v1 host reports bare, onto a model holding nothing: every
-	// absent field is null, the way 1.0.8 left an attribute unset when the
-	// response did not carry it. A zero is a reported earning, not a silence.
-	var bare templateResourceModel
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, false, &bare); diags.HasError() {
+	if diags := got.ElementsAs(ctx, &entrypoint, false); diags.HasError() {
 		t.Fatal(diags)
 	}
-	if !bare.DockerEntrypoint.IsNull() || !bare.Readme.IsNull() {
-		t.Fatalf("absent configurable fields must stay null: %+v", bare)
-	}
-	if !bare.Earned.IsNull() || !bare.IsRunpod.IsNull() || !bare.RuntimeInMin.IsNull() {
-		t.Fatalf("absent counters must be null, not zero: %+v", bare)
+	if !slices.Equal(entrypoint, reported) {
+		t.Fatalf("docker_entrypoint = %v, want %v", entrypoint, reported)
 	}
 
-	// The read-backs go null on a failed call; the two configured inputs are
-	// kept, which TestClearLegacyTemplateFieldsKeepsTheConfiguredInputs covers.
-	clearLegacyTemplateFields(&model)
-	if !model.Earned.IsNull() || !model.IsRunpod.IsNull() || !model.RuntimeInMin.IsNull() {
-		t.Fatalf("every shim read-back must be null after a failed read: %+v", model)
+	// A cleared entrypoint can come back absent or empty; a planned [] must
+	// stay [] either way, or the apply fails against a null.
+	planned, diags := types.ListValueFrom(ctx, types.StringType, []string{})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	empty := []string{}
+	for _, answer := range []*[]string{nil, &empty} {
+		got, diags := flattenTemplateEntrypoint(ctx, answer, planned)
+		if diags.HasError() {
+			t.Fatal(diags)
+		}
+		if got.IsNull() || len(got.Elements()) != 0 {
+			t.Fatalf("docker_entrypoint = %v, want the planned []", got)
+		}
+	}
+
+	// Nothing planned: an absent entrypoint is null, typed as a list of
+	// strings so the state can hold it.
+	for _, unset := range []types.List{types.ListNull(types.StringType), types.ListUnknown(types.StringType)} {
+		got, diags := flattenTemplateEntrypoint(ctx, nil, unset)
+		if diags.HasError() {
+			t.Fatal(diags)
+		}
+		if !got.IsNull() || got.ElementType(ctx) != types.StringType {
+			t.Fatalf("docker_entrypoint = %v, want a null list of strings", got)
+		}
 	}
 }
 
-func TestFlattenLegacyTemplateKeepsThePlannedValueTheResponseOmits(t *testing.T) {
-	ctx := context.Background()
-
-	// A v1 PATCH that answers with a partial body must not report a configured
-	// readme as cleared: that would be an inconsistent result after apply.
-	planned, listDiags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})
-	if listDiags.HasError() {
-		t.Fatal(listDiags)
-	}
-	model := templateResourceModel{
-		DockerEntrypoint: planned,
-		Readme:           types.StringValue("hello"),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, true, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.Readme.ValueString() != "hello" {
-		t.Fatalf("readme = %v, want the planned value kept", model.Readme)
-	}
-	if len(model.DockerEntrypoint.Elements()) != 1 {
-		t.Fatalf("docker_entrypoint = %v, want the planned value kept", model.DockerEntrypoint)
-	}
-
-	// An empty string and an empty list are answers, not omissions: a
-	// configuration clearing either one round trips.
-	cleared := ""
-	model = templateResourceModel{
-		DockerEntrypoint: planned,
-		Readme:           types.StringValue("hello"),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{
-		DockerEntrypoint: []string{},
-		Readme:           &cleared,
-	}, true, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.Readme.ValueString() != "" || model.Readme.IsNull() {
-		t.Fatalf("readme = %v, want the cleared empty string", model.Readme)
-	}
-	if model.DockerEntrypoint.IsNull() || len(model.DockerEntrypoint.Elements()) != 0 {
-		t.Fatalf("docker_entrypoint = %v, want an empty list", model.DockerEntrypoint)
-	}
-
-	// State cannot hold unknown, so an unresolved planned value the response
-	// does not carry resolves to null.
-	model = templateResourceModel{
-		DockerEntrypoint: types.ListUnknown(types.StringType),
-		Readme:           types.StringUnknown(),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, true, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if !model.Readme.IsNull() || !model.DockerEntrypoint.IsNull() {
-		t.Fatalf("an unknown planned value must resolve to null: %+v", model)
-	}
-}
-
-func TestFlattenLegacyTemplateFollowsAGetThatNoLongerReportsTheField(t *testing.T) {
-	ctx := context.Background()
-
-	// The keep-the-planned-value rule belongs to the PATCH response alone. A
-	// GET reports the template as it is, and `"readme": null` decodes to the
-	// same nil an omitted field does, so keeping "hi" here would leave a
-	// readme cleared in the console invisible to every later plan.
-	planned, listDiags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})
-	if listDiags.HasError() {
-		t.Fatal(listDiags)
-	}
-	model := templateResourceModel{
-		DockerEntrypoint: planned,
-		Readme:           types.StringValue("hi"),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, false, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if !model.Readme.IsNull() {
-		t.Fatalf("readme = %v, want null so the cleared readme shows in the next plan", model.Readme)
-	}
-	if !model.DockerEntrypoint.IsNull() {
-		t.Fatalf("docker_entrypoint = %v, want null", model.DockerEntrypoint)
-	}
-
-	// What the GET does report still lands.
+func TestFlattenLegacyTemplateInto(t *testing.T) {
 	readme := "# trainer"
-	model = templateResourceModel{Readme: types.StringValue("hi")}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{
-		DockerEntrypoint: []string{"/bin/bash"},
-		Readme:           &readme,
-	}, false, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.Readme.ValueString() != "# trainer" || len(model.DockerEntrypoint.Elements()) != 1 {
-		t.Fatalf("a reported field must land: %+v", model)
-	}
-}
+	earned := 12.5
+	yes := true
+	minutes := int64(900)
+	answer := &legacyTemplateFields{Readme: &readme, Earned: &earned, IsRunpod: &yes, RuntimeInMin: &minutes}
 
-func TestAppendLegacyReadFailureStaysSilentOnANotFound(t *testing.T) {
-	// The v1 route does not know a CPU pod, a cluster pod, or a template
-	// created through v2. That is missing legacy data, not a failed read, and
-	// warning about it on every refresh forever is noise nobody can act on.
-	var diags diag.Diagnostics
-	appendLegacyReadFailure(&diags, "template", &legacy.NotFoundError{Path: "/templates/tpl_abc"})
-	if diags.HasError() || diags.WarningsCount() != 0 {
-		t.Fatalf("a 404 must produce no diagnostic: %v", diags)
+	model := templateResourceModel{Readme: types.StringUnknown()}
+	flattenLegacyTemplateInto(answer, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
+	if model.Readme.ValueString() != "# trainer" || model.Earned.ValueFloat64() != 12.5 ||
+		!model.IsRunpod.ValueBool() || model.RuntimeInMin.ValueInt64() != 900 {
+		t.Fatalf("model = %+v, want the four answered values", model)
 	}
 
-	appendLegacyReadFailure(&diags, "template", errors.New("rest v1 is gone"))
-	if diags.WarningsCount() != 1 {
-		t.Fatalf("every other failure still warns: %v", diags)
+	// saveTemplate stores the trimmed text: a heredoc readme's trailing
+	// newline is not a change, so the planned value stays.
+	model.Readme = types.StringValue("# trainer\n")
+	flattenLegacyTemplateInto(answer, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
+	if model.Readme.ValueString() != "# trainer\n" {
+		t.Fatalf("readme = %q, want the planned text kept", model.Readme.ValueString())
+	}
+
+	// Different text is a change made elsewhere, and the answer wins.
+	model.Readme = types.StringValue("# old")
+	flattenLegacyTemplateInto(answer, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
+	if model.Readme.ValueString() != "# trainer" {
+		t.Fatalf("readme = %q, want the answered text", model.Readme.ValueString())
+	}
+
+	// A reported zero is an answer; an absent field is null.
+	zero := 0.0
+	no := false
+	none := int64(0)
+	model = templateResourceModel{Readme: types.StringValue("# trainer")}
+	flattenLegacyTemplateInto(&legacyTemplateFields{Earned: &zero, IsRunpod: &no, RuntimeInMin: &none},
+		&model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
+	if !model.Readme.IsNull() {
+		t.Fatalf("readme = %v, want null for a template with none", model.Readme)
+	}
+	if model.Earned.IsNull() || model.Earned.ValueFloat64() != 0 || model.IsRunpod.IsNull() || model.IsRunpod.ValueBool() ||
+		model.RuntimeInMin.IsNull() || model.RuntimeInMin.ValueInt64() != 0 {
+		t.Fatalf("model = %+v, want the reported zeros", model)
+	}
+
+	flattenLegacyTemplateInto(&legacyTemplateFields{}, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
+	if !model.Earned.IsNull() || !model.IsRunpod.IsNull() || !model.RuntimeInMin.IsNull() {
+		t.Fatalf("model = %+v, want null for absent fields", model)
 	}
 }
 
@@ -2051,24 +1854,16 @@ func TestResyncConfiguredEnvTracksOnlyTheConfiguredKeys(t *testing.T) {
 	}
 }
 
-func TestClearLegacyTemplateFieldsKeepsTheConfiguredInputs(t *testing.T) {
-	ctx := context.Background()
-
-	// The v1 host refusing a template REST v2 created, a 404 the read path
-	// passes over in silence, must not null what the configuration set. State
-	// would then disagree with the configuration on every later plan, and every
-	// later apply would re-run the same failing write, forever. Only the three
-	// read-backs go null.
-	entrypoint, diags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})
-	if diags.HasError() {
-		t.Fatal(diags)
-	}
+func TestClearLegacyTemplateFieldsKeepsTheConfiguredReadme(t *testing.T) {
+	// A shim call that did not answer must not null what the configuration
+	// set. State would then disagree with the configuration on every later
+	// plan, and every later apply would re-run the same failing write. Only
+	// the three read-backs go null.
 	model := templateResourceModel{
-		DockerEntrypoint: entrypoint,
-		Readme:           types.StringValue("# trainer"),
-		Earned:           types.Float64Value(12.5),
-		IsRunpod:         types.BoolValue(true),
-		RuntimeInMin:     types.Int64Value(900),
+		Readme:       types.StringValue("# trainer"),
+		Earned:       types.Float64Value(12.5),
+		IsRunpod:     types.BoolValue(true),
+		RuntimeInMin: types.Int64Value(900),
 	}
 
 	clearLegacyTemplateFields(&model)
@@ -2076,27 +1871,20 @@ func TestClearLegacyTemplateFieldsKeepsTheConfiguredInputs(t *testing.T) {
 	if model.Readme.ValueString() != "# trainer" {
 		t.Fatalf("readme = %v, want the configured value so the next plan converges", model.Readme)
 	}
-	if len(model.DockerEntrypoint.Elements()) != 1 {
-		t.Fatalf("docker_entrypoint = %v, want the configured value", model.DockerEntrypoint)
-	}
 	if !model.Earned.IsNull() || !model.IsRunpod.IsNull() || !model.RuntimeInMin.IsNull() {
 		t.Fatalf("the read-backs must be null after a failed call: %+v", model)
 	}
 
-	// State cannot hold unknown: an input planned unknown, which is every
-	// create the configuration does not set, still resolves to null.
-	unset := templateResourceModel{
-		DockerEntrypoint: types.ListUnknown(types.StringType),
-		Readme:           types.StringUnknown(),
-	}
+	// State cannot hold unknown: a readme planned unknown, which is every
+	// create the configuration does not set it on, resolves to null.
+	unset := templateResourceModel{Readme: types.StringUnknown()}
 	clearLegacyTemplateFields(&unset)
-	if !unset.DockerEntrypoint.IsNull() || !unset.Readme.IsNull() {
-		t.Fatalf("an unresolved input must resolve to null: %+v", unset)
+	if !unset.Readme.IsNull() {
+		t.Fatalf("an unresolved readme must resolve to null: %+v", unset)
 	}
 
-	// The resource keeps a configured input because the configuration owns it.
 	// The data source has no configuration and rebuilds its state from the v2
-	// read every call, so its four shim attributes stay read-backs there.
+	// read every call, so its four shim attributes are all read-backs.
 	detail := templateDataSourceModel{
 		Readme:       types.StringValue("# stale"),
 		Earned:       types.Float64Value(1.5),
@@ -2106,145 +1894,5 @@ func TestClearLegacyTemplateFieldsKeepsTheConfiguredInputs(t *testing.T) {
 	clearLegacyTemplateDetailFields(&detail)
 	if !detail.Readme.IsNull() || !detail.Earned.IsNull() || !detail.IsRunpod.IsNull() || !detail.RuntimeInMin.IsNull() {
 		t.Fatalf("a data source read-back is null after a failed read: %+v", detail)
-	}
-}
-
-func TestFlattenLegacyTemplateKeepsThePlannedCountersAPatchOmits(t *testing.T) {
-	ctx := context.Background()
-
-	// The partial PATCH echo the fromPatch rule exists for, now over the three
-	// counters: 204, or a body carrying only the fields it was sent, must not
-	// report a template's earnings as zero. They are Computed and planned
-	// unknown, so no plan diff would ever flag the fabricated value.
-	model := templateResourceModel{
-		Readme:       types.StringValue("# trainer"),
-		Earned:       types.Float64Value(12.5),
-		IsRunpod:     types.BoolValue(true),
-		RuntimeInMin: types.Int64Value(900),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, true, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.Earned.ValueFloat64() != 12.5 || !model.IsRunpod.ValueBool() || model.RuntimeInMin.ValueInt64() != 900 {
-		t.Fatalf("a partial patch response must keep the planned counters: %+v", model)
-	}
-
-	// A reported zero is an answer, not an omission.
-	zero := 0.0
-	no := false
-	none := 0.0
-	model = templateResourceModel{
-		Earned:       types.Float64Value(12.5),
-		IsRunpod:     types.BoolValue(true),
-		RuntimeInMin: types.Int64Value(900),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{
-		Earned: &zero, IsRunpod: &no, RuntimeInMin: &none,
-	}, true, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.Earned.ValueFloat64() != 0 || model.IsRunpod.ValueBool() || model.RuntimeInMin.ValueInt64() != 0 {
-		t.Fatalf("a reported zero must land: %+v", model)
-	}
-
-	// A GET still reports the template as it is, so an absent counter is null.
-	model = templateResourceModel{
-		Earned:       types.Float64Value(12.5),
-		IsRunpod:     types.BoolValue(true),
-		RuntimeInMin: types.Int64Value(900),
-	}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{}, false, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if !model.Earned.IsNull() || !model.IsRunpod.IsNull() || !model.RuntimeInMin.IsNull() {
-		t.Fatalf("a get that omits the counters nulls them: %+v", model)
-	}
-
-	// The minutes are truncated the way 1.0.8 truncated the JSON number.
-	fractional := 90.7
-	model = templateResourceModel{}
-	if diags := flattenLegacyTemplate(ctx, &legacy.TemplateV1{RuntimeInMin: &fractional}, false, &model); diags.HasError() {
-		t.Fatal(diags)
-	}
-	if model.RuntimeInMin.ValueInt64() != 90 {
-		t.Fatalf("runtime_in_min = %v, want 90", model.RuntimeInMin)
-	}
-}
-
-func TestFlattenLegacyAbsentScalarsAreNullNotEmpty(t *testing.T) {
-	ctx := context.Background()
-
-	// v1.0.8 wrote machine_id only for a present, non-empty machineId and
-	// volume_encrypted only for a present volumeEncrypted. A CPU or cluster pod
-	// carries neither, and a 1.x configuration's `machine_id != null` check has
-	// to keep answering what it did.
-	empty := ""
-	var model podResourceModel
-	flattenLegacyPod(&legacy.PodV1{MachineID: &empty}, &model)
-	if !model.MachineId.IsNull() {
-		t.Fatalf("machine_id = %v, want null rather than an empty string", model.MachineId)
-	}
-	if !model.VolumeEncrypted.IsNull() {
-		t.Fatalf("volume_encrypted = %v, want null rather than false", model.VolumeEncrypted)
-	}
-
-	// A reported false is an answer.
-	no := false
-	flattenLegacyPod(&legacy.PodV1{VolumeEncrypted: &no}, &model)
-	if model.VolumeEncrypted.IsNull() || model.VolumeEncrypted.ValueBool() {
-		t.Fatalf("volume_encrypted = %v, want a reported false", model.VolumeEncrypted)
-	}
-
-	// The same rule over the worker strings, plus the truncation the two
-	// millisecond counters go through.
-	uptime := 1234.5
-	var endpointModel serverlessEndpointResourceModel
-	if diags := flattenLegacyEndpoint(ctx, &legacy.EndpointV1{
-		Workers: []legacy.EndpointWorkerV1{{UptimeMs: &uptime}},
-	}, &endpointModel); diags.HasError() {
-		t.Fatal(diags)
-	}
-	var workers []endpointLegacyWorkerModel
-	if d := endpointModel.Workers.ElementsAs(ctx, &workers, false); d.HasError() {
-		t.Fatal(d)
-	}
-	if len(workers) != 1 {
-		t.Fatalf("len(workers) = %d, want 1", len(workers))
-	}
-	if !workers[0].Id.IsNull() || !workers[0].PodId.IsNull() || !workers[0].Status.IsNull() {
-		t.Fatalf("absent worker fields must be null: %+v", workers[0])
-	}
-	if workers[0].UptimeMs.ValueInt64() != 1234 {
-		t.Fatalf("uptime_ms = %v, want the truncated 1234", workers[0].UptimeMs)
-	}
-	if !workers[0].LastBusyMs.IsNull() {
-		t.Fatalf("last_busy_ms = %v, want null", workers[0].LastBusyMs)
-	}
-}
-
-func TestAppendLegacyWriteFailureSeparatesALandedWriteFromAMissingObject(t *testing.T) {
-	// A 2xx body that would not decode came back from a write the host already
-	// took: failing the apply there reports a change that landed as an error.
-	var decodeDiags diag.Diagnostics
-	appendLegacyWriteFailure(&decodeDiags, "endpoint", &legacy.DecodeError{
-		Err: errors.New("cannot unmarshal number 1234.5 into Go struct field"),
-	})
-	if decodeDiags.HasError() {
-		t.Fatalf("a write that landed must not fail the apply: %v", decodeDiags)
-	}
-	if decodeDiags.WarningsCount() != 1 {
-		t.Fatalf("want one warning, got %v", decodeDiags)
-	}
-
-	// A 404 is still an error, and says what the user can do about it rather
-	// than relaying a bare "templates/tpl_abc was not found".
-	var notFoundDiags diag.Diagnostics
-	appendLegacyWriteFailure(&notFoundDiags, "template", &legacy.NotFoundError{Path: "/templates/tpl_abc"})
-	if !notFoundDiags.HasError() {
-		t.Fatalf("a configured input the legacy host cannot apply is an error: %v", notFoundDiags)
-	}
-	detail := notFoundDiags.Errors()[0].Detail()
-	if !strings.Contains(detail, "does not know this template") || !strings.Contains(detail, "Drop the deprecated attribute") {
-		t.Fatalf("the 404 must name its cause and the way out: %q", detail)
 	}
 }

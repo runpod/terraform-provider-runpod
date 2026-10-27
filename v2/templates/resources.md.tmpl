@@ -4,7 +4,7 @@ page_title: "{{.Name}} {{.Type}} - {{.RenderedProviderName}}"
 subcategory: "{{ if eq .Name "runpod_machine" }}Deprecated
 {{- else if eq .Name "runpod_pod" "runpod_pod_action" "runpod_cluster" }}Compute
 {{- else if eq .Name "runpod_serverless_endpoint" }}Serverless
-{{- else if eq .Name "runpod_network_volume" "runpod_template" "runpod_registry" "runpod_registry_delegation" }}Storage and images
+{{- else if eq .Name "runpod_network_volume" "runpod_global_volume" "runpod_template" "runpod_registry" "runpod_registry_delegation" }}Storage and images
 {{- else if eq .Name "runpod_account_ssh_keys" }}Account
 {{- end }}"
 description: |-

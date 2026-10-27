@@ -11,7 +11,9 @@ mounted through `network_volumes` and pinned to the volume's data center
 through `data_center_ids`.
 
 The two deprecated outputs (`machine_id`, `volume_encrypted`) come from the
-REST v1 compatibility shim and read null when that host does not answer.
+GraphQL compatibility shim and read null when that API does not answer or
+does not report the pod. `volume_encrypted` reads `false`, not null, for an
+unencrypted volume.
 
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
@@ -20,7 +22,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "cpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cpu-pod?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/cpu-pod?ref=v2.0.0-rc.4"
 
   name        = "preprocessing"
   cpu_type_id = "cpu5c"
@@ -34,19 +36,19 @@ module "cpu_pod" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/pod) | resource |
+| [runpod_pod.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/pod) | resource |
 
 ## Inputs
 

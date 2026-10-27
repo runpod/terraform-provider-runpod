@@ -122,7 +122,7 @@ jobs:
           version: 3.x
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Validates the test root and all fourteen modules, checks terraform fmt,
+      # Validates the test root and all fifteen modules, checks terraform fmt,
       # the type-coverage gate (scripts/module_coverage.py, which uses the
       # python3 that ships on ubuntu-latest), the generated module READMEs and
       # the guide templates.

@@ -45,26 +45,32 @@ func TestStringOrEnvPrefersConfigurationThenEachVariableInOrder(t *testing.T) {
 	}
 }
 
-func TestNewLegacyClientHonoursTheRestV1EnvironmentChain(t *testing.T) {
-	// RUNPOD_BASE_URL is the 1.x name for the REST v1 host: a 1.x
-	// configuration pinned to staging with it must not fall through to
-	// production. `task test` loads .env, so clear the higher-priority
-	// variable rather than assuming the environment is empty.
+func TestNewLegacyClientHonoursTheGraphQLEnvironmentChain(t *testing.T) {
+	// `task test` loads .env, so set every variable rather than assuming the
+	// environment is empty.
 	t.Setenv("RUNPOD_API_KEY", "test-key")
-	t.Setenv("RUNPOD_REST_V1_URL", "")
-	t.Setenv("RUNPOD_BASE_URL", "https://staging.example.com/v1")
-	if got := legacyClient(t, runpodProviderModel{}).RestV1URL(); got != "https://staging.example.com/v1" {
-		t.Errorf("rest v1 url = %q, want the RUNPOD_BASE_URL host", got)
+	t.Setenv("RUNPOD_GRAPHQL_URL", "https://staging.example.com/graphql")
+	if got := legacyClient(t, runpodProviderModel{}).GraphQLURL(); got != "https://staging.example.com/graphql" {
+		t.Errorf("graphql url = %q, want the RUNPOD_GRAPHQL_URL host", got)
 	}
 
+	configured := legacyClient(t, runpodProviderModel{GraphQLURL: types.StringValue("https://pinned.example.com/graphql")})
+	if got := configured.GraphQLURL(); got != "https://pinned.example.com/graphql" {
+		t.Errorf("graphql url = %q, want the provider attribute to win over the variable", got)
+	}
+}
+
+func TestNewLegacyClientIgnoresTheRestV1Settings(t *testing.T) {
+	// The provider makes no REST v1 call: the deprecated attribute and the two
+	// 1.x variables still validate, and none of them reaches the GraphQL host.
+	t.Setenv("RUNPOD_API_KEY", "test-key")
+	t.Setenv("RUNPOD_GRAPHQL_URL", "")
 	t.Setenv("RUNPOD_REST_V1_URL", "https://rest-v1.example.com/v1")
-	if got := legacyClient(t, runpodProviderModel{}).RestV1URL(); got != "https://rest-v1.example.com/v1" {
-		t.Errorf("rest v1 url = %q, want RUNPOD_REST_V1_URL to win over RUNPOD_BASE_URL", got)
-	}
+	t.Setenv("RUNPOD_BASE_URL", "https://staging.example.com/v1")
 
-	configured := legacyClient(t, runpodProviderModel{RestV1URL: types.StringValue("https://pinned.example.com/v1")})
-	if got := configured.RestV1URL(); got != "https://pinned.example.com/v1" {
-		t.Errorf("rest v1 url = %q, want the provider attribute to win over both variables", got)
+	client := legacyClient(t, runpodProviderModel{RestV1URL: types.StringValue("https://pinned.example.com/v1")})
+	if client.GraphQLURL() != legacy.DefaultGraphQLURL {
+		t.Errorf("graphql url = %q, want %q", client.GraphQLURL(), legacy.DefaultGraphQLURL)
 	}
 }
 
@@ -81,14 +87,9 @@ func legacyClient(t *testing.T, config runpodProviderModel) *legacy.Client {
 
 func TestNewLegacyClientFallsBackToProductionEndpoints(t *testing.T) {
 	t.Setenv("RUNPOD_API_KEY", "test-key")
-	t.Setenv("RUNPOD_REST_V1_URL", "")
-	t.Setenv("RUNPOD_BASE_URL", "")
 	t.Setenv("RUNPOD_GRAPHQL_URL", "")
 
 	client := legacyClient(t, runpodProviderModel{})
-	if client.RestV1URL() != legacy.DefaultRestV1URL {
-		t.Errorf("rest v1 url = %q, want %q", client.RestV1URL(), legacy.DefaultRestV1URL)
-	}
 	if client.GraphQLURL() != legacy.DefaultGraphQLURL {
 		t.Errorf("graphql url = %q, want %q", client.GraphQLURL(), legacy.DefaultGraphQLURL)
 	}

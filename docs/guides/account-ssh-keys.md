@@ -33,7 +33,7 @@ terraform import module.account_ssh_keys.runpod_account_ssh_keys.this account
 
 ```hcl
 module "account_ssh_keys" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/account-ssh-keys?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/account-ssh-keys?ref=v2.0.0-rc.4"
 
   keys              = [trimspace(file("~/.ssh/id_ed25519.pub"))]
   remove_on_destroy = false
@@ -54,4 +54,4 @@ resource "runpod_account_ssh_keys" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/account-ssh-keys/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/account-ssh-keys/README.md).

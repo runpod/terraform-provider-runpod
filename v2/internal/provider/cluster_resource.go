@@ -507,7 +507,7 @@ func expandCreateCluster(ctx context.Context, plan clusterResourceModel) (cluste
 // expandClusterMounts returns nil when mounts is absent: the API leaves a
 // cluster mountless on an omitted mounts object, and an empty one would be a
 // different request.
-func expandClusterMounts(ctx context.Context, object types.Object) (*sdktypes.Mounts, diag.Diagnostics) {
+func expandClusterMounts(ctx context.Context, object types.Object) (*sdktypes.ClusterMounts, diag.Diagnostics) {
 	var diags diag.Diagnostics
 	if object.IsNull() || object.IsUnknown() {
 		return nil, diags
@@ -519,7 +519,7 @@ func expandClusterMounts(ctx context.Context, object types.Object) (*sdktypes.Mo
 		return nil, diags
 	}
 
-	mounts := &sdktypes.Mounts{}
+	mounts := &sdktypes.ClusterMounts{}
 	if !model.Persistent.IsNull() && !model.Persistent.IsUnknown() {
 		var persistent persistentMountModel
 		diags.Append(model.Persistent.As(ctx, &persistent, basetypes.ObjectAsOptions{})...)

@@ -37,7 +37,7 @@ module's listing instead.
 
 ```hcl
 module "catalog_discovery" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/catalog-discovery?ref=v2.0.0-rc.4"
 
   gpu_type_id    = "NVIDIA GeForce RTX 4090"
   data_center_id = "EU-RO-1"
@@ -89,4 +89,4 @@ data "runpod_catalog_templates" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/catalog-discovery/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/catalog-discovery/README.md).

@@ -9,8 +9,10 @@
 # Environment:
 #   RUNPOD_API_KEY           required for a live run; never printed
 #   RUNPOD_API_BASE_URL      REST v2 host; production when unset
-#   RUNPOD_REST_V1_URL (then RUNPOD_BASE_URL), RUNPOD_GRAPHQL_URL
-#                            hosts of the deprecated shims; production when unset
+#   RUNPOD_GRAPHQL_URL       host of the deprecated GraphQL shims; production when unset
+#   RUNPOD_REST_V1_URL, RUNPOD_BASE_URL
+#                            not read by the provider, which makes no REST v1 call;
+#                            the pre-flight warns when either is set
 #   TF_CLI_CONFIG_FILE       the dev.tfrc `task build` writes; task test-e2e sets it
 #   TF_VAR_registry_username, TF_VAR_registry_password
 #                            turn on the registry test; TF_VAR_ecr_resource_arn
@@ -33,14 +35,13 @@ tests_dir="$repo/tests"
 provider_version="${E2E_PROVIDER_VERSION:-2.0.0}"
 
 # Production defaults of the SDK: runpod.DefaultBaseURL, and
-# legacy.DefaultRestV1URL and legacy.DefaultGraphQLURL for the shims.
+# legacy.DefaultGraphQLURL for the shims.
 production_v2="https://api.runpod.io"
-production_rest_v1="https://rest.runpod.io/v1"
 production_graphql="https://api.runpod.io/graphql"
 
 # Cheapest first; cost_of below says what each file bills.
 tests_in_order=(
-  catalog_discovery billing_report legacy template serverless_endpoint
+  catalog_discovery billing_report legacy template global_volume serverless_endpoint
   serverless_endpoint_cpu registry account_ssh_keys legacy_machine
   network_volume cpu_pod pod_lifecycle logs gpu_pod cluster
 )
@@ -49,6 +50,7 @@ cost_of() {
   case "$1" in
     catalog_discovery | billing_report | legacy) echo "free: reads only" ;;
     template) echo "free: a template is metadata" ;;
+    global_volume) echo "an empty global volume, billed for what it stores" ;;
     serverless_endpoint | serverless_endpoint_cpu) echo "free while idle: zero workers" ;;
     registry) echo "free: a registry login" ;;
     account_ssh_keys) echo "free, but replaces the account's SSH keys" ;;
@@ -236,21 +238,18 @@ if [ -n "${RUNPOD_API_BASE_URL:-}" ]; then
 else
   info "REST v2 calls go to $production_v2, production (RUNPOD_API_BASE_URL is unset)"
 fi
-if [ -n "${RUNPOD_REST_V1_URL:-}" ]; then
-  info "deprecated REST v1 shims go to $RUNPOD_REST_V1_URL (RUNPOD_REST_V1_URL)"
-elif [ -n "${RUNPOD_BASE_URL:-}" ]; then
-  info "deprecated REST v1 shims go to $RUNPOD_BASE_URL (RUNPOD_BASE_URL, the 1.x name)"
-else
-  info "deprecated REST v1 shims go to $production_rest_v1, production (RUNPOD_REST_V1_URL is unset)"
-fi
 if [ -n "${RUNPOD_GRAPHQL_URL:-}" ]; then
   info "deprecated GraphQL shims go to $RUNPOD_GRAPHQL_URL (RUNPOD_GRAPHQL_URL)"
 else
   info "deprecated GraphQL shims go to $production_graphql, production (RUNPOD_GRAPHQL_URL is unset)"
 fi
-if [ -n "${RUNPOD_API_BASE_URL:-}" ] &&
-  { [ -z "${RUNPOD_REST_V1_URL:-}${RUNPOD_BASE_URL:-}" ] || [ -z "${RUNPOD_GRAPHQL_URL:-}" ]; }; then
-  warn "RUNPOD_API_BASE_URL moves only the v2 calls: the shims above still reach production"
+for name in RUNPOD_REST_V1_URL RUNPOD_BASE_URL; do
+  if [ -n "${!name:-}" ]; then
+    warn "$name is set, but the provider makes no REST v1 call and does not read it"
+  fi
+done
+if [ -n "${RUNPOD_API_BASE_URL:-}" ] && [ -z "${RUNPOD_GRAPHQL_URL:-}" ]; then
+  warn "RUNPOD_API_BASE_URL moves only the v2 calls: the GraphQL shims still reach production"
 fi
 
 for name in E2E_DRY_RUN E2E_CLUSTER E2E_HOST_ACCOUNT; do

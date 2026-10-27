@@ -17,7 +17,7 @@ run "create" {
     timeout     = 300000
     flashboot   = "FLASHBOOT"
     # Deprecated: compute_type restates the GPU choice and is derived from the
-    # v2 read. gpu_type_priority is not set: REST v1 no longer accepts it.
+    # v2 read. gpu_type_priority is not set: no API applies it.
     compute_type = "GPU"
   }
 
@@ -84,18 +84,22 @@ run "create" {
   }
   assert {
     condition     = output.version != null
-    error_message = "the REST v1 shim did not report the endpoint's configuration version"
+    error_message = "the v2 workers listing did not report the endpoint's configuration version"
   }
   assert {
     condition     = length(output.users) == 1
-    error_message = "the REST v1 shim must report the owning account as a one-element list"
+    error_message = "the GraphQL shim must report the owning account as a one-element list"
+  }
+  assert {
+    condition     = output.template_version == null
+    error_message = "template_version has no source and must read null"
   }
   # Scaled to zero workers, so the list is usually null: the provider reports
   # an endpoint with no workers as null, not as an empty list. A worker the API
   # has allocated anyway must still carry an id.
   assert {
     condition     = alltrue([for w in(output.workers == null ? [] : output.workers) : w.id != ""])
-    error_message = "the REST v1 shim reported a worker with an empty id"
+    error_message = "the v2 workers listing reported a worker with an empty id"
   }
 }
 
@@ -132,6 +136,6 @@ run "update" {
   }
   assert {
     condition     = output.version != null
-    error_message = "the REST v1 shim did not report the endpoint's configuration version after the update"
+    error_message = "the v2 workers listing did not report the endpoint's configuration version after the update"
   }
 }

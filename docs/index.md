@@ -20,7 +20,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "2.0.0-rc.3"
+      version = "2.0.0-rc.4"
     }
   }
 }
@@ -42,7 +42,7 @@ output "template_id" {
 ```
 
 `~> 2.0` installs 2.0.0 and every later 2.x release. Terraform never matches a release candidate with `~>`:
-to install one, such as `2.0.0-rc.3`, pin it exactly with `version = "2.0.0-rc.3"`.
+to install one, such as `2.0.0-rc.4`, pin it exactly with `version = "2.0.0-rc.4"`.
 
 ## Authentication
 
@@ -76,5 +76,5 @@ before you change the version pin.
 
 - `api_key` (String, Sensitive) Runpod API key. Falls back to the RUNPOD_API_KEY environment variable.
 - `base_url` (String) API base URL. Leave unset for the production API; set it only to target a non-production Runpod environment. Falls back to the RUNPOD_API_BASE_URL environment variable, then the production API.
-- `graphql_url` (String) GraphQL endpoint for the deprecated GraphQL shims: the runpod_machine resource, the runpod_machine / runpod_machines data sources and the runpod_user data source. Falls back to the RUNPOD_GRAPHQL_URL environment variable, then https://api.runpod.io/graphql. Ignored by everything on the v2 REST API.
-- `rest_v1_url` (String) REST v1 base URL for the deprecated REST v1 shims: the runpod_billing_pod / runpod_billing_network_volume / runpod_billing_endpoint data sources, and the deprecated attributes on runpod_pod, runpod_template (readme and docker_entrypoint among them), the runpod_template data source and runpod_serverless_endpoint. Falls back to the RUNPOD_REST_V1_URL environment variable, then RUNPOD_BASE_URL (the 1.x name for this host), then https://rest.runpod.io/v1. Ignored by everything on the v2 REST API.
+- `graphql_url` (String) GraphQL endpoint for the deprecated GraphQL shims: the runpod_machine resource, the runpod_machine / runpod_machines data sources, the runpod_user data source, and the deprecated attributes on runpod_pod, runpod_template, the runpod_template data source and runpod_serverless_endpoint that REST v2 does not report. Falls back to the RUNPOD_GRAPHQL_URL environment variable, then https://api.runpod.io/graphql. Ignored by everything on the v2 REST API.
+- `rest_v1_url` (String, Deprecated) Deprecated and ignored. The provider makes no REST v1 calls: what the 1.x provider read from REST v1 now comes from REST v2 or, where REST v2 has no field, from the GraphQL endpoint (graphql_url). The RUNPOD_REST_V1_URL and RUNPOD_BASE_URL environment variables are not read either. Kept only so a configuration that sets it still validates; remove it.

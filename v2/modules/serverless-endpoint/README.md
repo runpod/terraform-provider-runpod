@@ -26,10 +26,12 @@ repository; `build_id` is optional and skips the by-id read when null.
 Worker ids change as the endpoint scales; `worker_ids` is the input the
 [logs](../logs) module takes for a worker's log stream.
 
-The deprecated inputs and outputs (`gpu_type_priority`, `template_version`,
-`users`, `version`, `workers`) go through the REST v1 compatibility shim and
-exist for 1.x configurations; `compute_type`, also deprecated, is derived from
-what REST v2 reports.
+The deprecated inputs and outputs exist for 1.x configurations:
+`gpu_type_priority` is kept in state but never sent, because no API has a
+setting for it, and the plan warns when it is set; `template_version` is
+always null; `users` comes from the GraphQL compatibility shim; `version` and
+`workers` come from the REST v2 workers listing; `compute_type` is derived
+from what REST v2 reports.
 
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
@@ -38,7 +40,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.4"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -52,24 +54,24 @@ module "serverless_endpoint" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/serverless_endpoint) | resource |
-| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_build) | data source |
-| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_builds) | data source |
-| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_releases) | data source |
-| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/endpoint_workers) | data source |
-| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/data-sources/serverless_endpoints) | data source |
+| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/serverless_endpoint) | resource |
+| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_build) | data source |
+| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_builds) | data source |
+| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_releases) | data source |
+| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_workers) | data source |
+| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/serverless_endpoints) | data source |
 
 ## Inputs
 
@@ -86,7 +88,7 @@ module "serverless_endpoint" {
 | flashboot | FlashBoot cold-start acceleration: OFF, FLASHBOOT, or PRIORITY\_FLASHBOOT. Null uses the API default. | `string` | `null` | no |
 | gpu\_count | GPUs per worker. | `number` | `1` | no |
 | gpu\_pools | Serverless GPU pool IDs (the pool field in the GPU catalog, see the catalog-discovery module). | `list(string)` | <pre>[<br/>  "ADA_24"<br/>]</pre> | no |
-| gpu\_type\_priority | Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null. | `string` | `null` | no |
+| gpu\_type\_priority | Deprecated and not applied: neither REST v2 nor GraphQL has a setting for the order of the GPU types inside the pools, so a value is kept in state, never sent, and warned about at plan time. Leave null. | `string` | `null` | no |
 | idle\_timeout | Seconds an idle worker stays up before scaling down, 1 to 3600. Null uses the API default. | `number` | `null` | no |
 | image | Docker image reference for workers. Null when template\_id supplies one. | `string` | `"runpod/mock-worker:dev"` | no |
 | min\_cuda\_version | Lowest acceptable CUDA version for worker placement, e.g. "12.1". Null sets no floor. | `string` | `null` | no |
@@ -121,7 +123,7 @@ module "serverless_endpoint" {
 | request\_urls | Invocation URLs for the endpoint: the job operations for a QUEUE endpoint, or base and health for a LOAD\_BALANCER one. |
 | rollout | How far the current configuration version has reached the endpoint's workers. |
 | stale\_worker\_ids | Workers still running an older configuration version. |
-| template\_version | Deprecated. Version of the template the endpoint was built from; null when it was built from an image. |
+| template\_version | Deprecated. Always null: neither REST v2 nor GraphQL reports the version of the template the endpoint was built from. |
 | timeout | Effective per-request timeout in milliseconds. |
 | users | Deprecated. Account that owns the endpoint, as a one-element list. |
 | version | Deprecated. The endpoint's configuration version. |

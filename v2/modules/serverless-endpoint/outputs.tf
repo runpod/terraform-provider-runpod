@@ -89,15 +89,16 @@ output "endpoint_ids" {
 }
 
 # Deprecated, preserving the 1.x compute_type, template_version, users, version
-# and workers attributes. compute_type is derived from the v2 response; the
-# other four are read back from the REST v1 shim.
+# and workers attributes. compute_type is derived from the v2 response,
+# template_version has no source in any API, users is read back from the
+# GraphQL shim, and version and workers from the REST v2 workers listing.
 output "compute_type" {
   description = "Deprecated. Worker compute family; GPU for this module."
   value       = runpod_serverless_endpoint.this.compute_type
 }
 
 output "template_version" {
-  description = "Deprecated. Version of the template the endpoint was built from; null when it was built from an image."
+  description = "Deprecated. Always null: neither REST v2 nor GraphQL reports the version of the template the endpoint was built from."
   value       = runpod_serverless_endpoint.this.template_version
 }
 

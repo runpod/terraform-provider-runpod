@@ -99,9 +99,9 @@ func TestFlattenTemplateDetailWithoutMountOrRegistry(t *testing.T) {
 }
 
 func TestTemplateDataSourceStateStartsTheShimAttributesNull(t *testing.T) {
-	// docker_entrypoint is filled from the v2 template and the four REST v1
+	// docker_entrypoint is filled from the v2 template and the four GraphQL
 	// read-backs after it; until then they are null, which is what a
-	// configuration sees of the four when the legacy host is gone.
+	// configuration sees of the four when the GraphQL read does not answer.
 	state := templateDataSourceState(templateDetailModel{
 		Id:    types.StringValue("tpl_abc"),
 		Name:  types.StringValue("trainer"),
@@ -126,17 +126,19 @@ func TestTemplateDataSourceStateStartsTheShimAttributesNull(t *testing.T) {
 func TestTemplateDataSourceReadsTheEntrypointFromV2(t *testing.T) {
 	ctx := context.Background()
 
-	// The REST v1 route answers a different entrypoint on purpose: the value
-	// in state has to be the v2 template's, while readme still comes from v1.
+	// One server for both hosts: docker_entrypoint comes from the v2 template,
+	// readme from the GraphQL one, and nothing may reach a REST v1 route.
+	var paths []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.Method+" "+r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/v2/templates/tpl_abc":
-			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"tpl_abc","name":"trainer","image":"runpod/pytorch:1.0.2","category":"NVIDIA","disk":50,` +
 				`"args":"{\"entrypoint\":[\"/bin/bash\",\"-c\"],\"cmd\":[\"python -u main.py\"]}",` +
 				`"entrypoint":["/bin/bash","-c"],"cmd":["python -u main.py"],"env":{},"ports":[],"allowedCudaVersions":[]}`))
-		case r.Method == http.MethodGet && r.URL.Path == "/templates/tpl_abc":
-			_, _ = w.Write([]byte(`{"dockerEntrypoint":["/bin/sh"],"readme":"# trainer"}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/graphql":
+			_, _ = w.Write([]byte(`{"data":{"podTemplate":{"readme":"# trainer","earned":0,"isRunpod":false,"runtimeInMin":0}}}`))
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -146,11 +148,14 @@ func TestTemplateDataSourceReadsTheEntrypointFromV2(t *testing.T) {
 
 	d := &templateDataSource{
 		client: shimTestClient(t, srv.URL),
-		legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL}),
+		legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", GraphQLURL: srv.URL + "/graphql"}),
 	}
 	var state templateDataSourceModel
 	readDataSource(ctx, t, d, map[string]tftypes.Value{"id": tftypes.NewValue(tftypes.String, "tpl_abc")}, &state)
 
+	if !slices.Equal(paths, []string{"GET /v2/templates/tpl_abc", "POST /graphql"}) {
+		t.Errorf("requests = %v, want the v2 GET then one GraphQL query", paths)
+	}
 	var entrypoint []string
 	if diags := state.DockerEntrypoint.ElementsAs(ctx, &entrypoint, false); diags.HasError() {
 		t.Fatal(diags)
@@ -159,19 +164,16 @@ func TestTemplateDataSourceReadsTheEntrypointFromV2(t *testing.T) {
 		t.Errorf("docker_entrypoint = %v, want the v2 template's [/bin/bash -c]", entrypoint)
 	}
 	if state.Readme.ValueString() != "# trainer" {
-		t.Errorf("readme = %v, want the REST v1 value", state.Readme)
+		t.Errorf("readme = %v, want the GraphQL value", state.Readme)
 	}
 }
 
-func TestTemplateDataSourceReadsTheRestV1Fields(t *testing.T) {
-	var gotPath string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotPath = r.URL.Path
-		_, _ = w.Write([]byte(`{"dockerEntrypoint":["/bin/bash","-c"],"readme":"# trainer","earned":1.5,"isRunpod":true,"runtimeInMin":120}`))
-	}))
-	defer srv.Close()
+func TestTemplateDataSourceReadsTheShimFieldsFromGraphQL(t *testing.T) {
+	client, recorder := recordingGraphQLStub(t, func(string, map[string]any) string {
+		return `{"data":{"podTemplate":{"readme":"# trainer","earned":1.5,"isRunpod":true,"runtimeInMin":120}}}`
+	})
 
-	d := &templateDataSource{legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL})}
+	d := &templateDataSource{legacy: client}
 	state := templateDataSourceState(templateDetailModel{Id: types.StringValue("tpl_abc")})
 
 	diags := d.readLegacyTemplateFields(context.Background(), &state)
@@ -179,13 +181,13 @@ func TestTemplateDataSourceReadsTheRestV1Fields(t *testing.T) {
 		t.Fatal(diags)
 	}
 
-	if gotPath != "/templates/tpl_abc" {
-		t.Errorf("path = %q, want /templates/tpl_abc", gotPath)
+	calls := recorder.Calls()
+	if len(calls) != 1 || calls[0].Query != legacyTemplateFieldsQuery || calls[0].Variables["id"] != "tpl_abc" {
+		t.Fatalf("calls = %+v, want one template query for tpl_abc", calls)
 	}
-	// docker_entrypoint comes from the v2 template, so the REST v1 value the
-	// response carries must not reach it.
+	assertOnlyGraphQL(t, recorder)
 	if !state.DockerEntrypoint.IsNull() {
-		t.Errorf("docker_entrypoint = %v, want it left alone by the REST v1 read", state.DockerEntrypoint)
+		t.Errorf("docker_entrypoint = %v, want it left alone by the GraphQL read", state.DockerEntrypoint)
 	}
 	if state.Readme.ValueString() != "# trainer" || state.Earned.ValueFloat64() != 1.5 ||
 		!state.IsRunpod.ValueBool() || state.RuntimeInMin.ValueInt64() != 120 {
@@ -193,17 +195,32 @@ func TestTemplateDataSourceReadsTheRestV1Fields(t *testing.T) {
 	}
 }
 
-func TestTemplateDataSourceWarnsWhenTheRestV1HostFails(t *testing.T) {
+func TestTemplateDataSourceLeavesAnInvisibleTemplateNullSilently(t *testing.T) {
+	client, _ := recordingGraphQLStub(t, func(string, map[string]any) string {
+		return `{"data":{"podTemplate":null}}`
+	})
+
+	d := &templateDataSource{legacy: client}
+	state := templateDataSourceState(templateDetailModel{Id: types.StringValue("tpl_abc")})
+	diags := d.readLegacyTemplateFields(context.Background(), &state)
+	if diags.HasError() || diags.WarningsCount() != 0 {
+		t.Fatalf("a template the GraphQL API does not report is not a failure: %v", diags)
+	}
+	if !state.Readme.IsNull() || !state.Earned.IsNull() || !state.IsRunpod.IsNull() || !state.RuntimeInMin.IsNull() {
+		t.Errorf("shim attributes = %+v, want null", state)
+	}
+}
+
+func TestTemplateDataSourceWarnsWhenGraphQLFails(t *testing.T) {
 	// Nothing on this data source is configurable, so no configuration depends
-	// on the legacy host: the read warns and the four shim attributes stay null,
-	// while the docker_entrypoint the v2 read filled is kept.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-	}))
-	defer srv.Close()
+	// on the GraphQL API: the read warns and the four shim attributes stay
+	// null, while the docker_entrypoint the v2 read filled is kept.
+	client, _ := recordingGraphQLStub(t, func(string, map[string]any) string {
+		return `{"errors":[{"message":"internal error"}]}`
+	})
 
 	ctx := context.Background()
-	d := &templateDataSource{legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL})}
+	d := &templateDataSource{legacy: client}
 	state := templateDataSourceState(templateDetailModel{Id: types.StringValue("tpl_abc")})
 	state.Readme = types.StringValue("stale")
 	entrypoint, diags := types.ListValueFrom(ctx, types.StringType, []string{"/bin/bash"})

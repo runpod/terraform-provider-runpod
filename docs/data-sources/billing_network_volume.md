@@ -3,12 +3,12 @@
 page_title: "runpod_billing_network_volume Data Source - Runpod"
 subcategory: "Deprecated"
 description: |-
-  Deprecated. Network volume spend as the 1.x provider reported it, read from the REST v1 billing/networkvolumes route. Use runpod_network_volume_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_network_volume_billing before that date.
+  Deprecated. Network volume spend in the 1.x provider's record shape, read from the REST v2 route GET /v2/billing/network-volumes. REST v2 does not report a record's billed disk space or billed time, so disk_space_billed_gb and time_billed_ms are always null. Use runpod_network_volume_billing, which reads the same route with standard and high-performance storage broken out.
 ---
 
 # runpod_billing_network_volume (Data Source)
 
-Deprecated. Network volume spend as the 1.x provider reported it, read from the REST v1 billing/networkvolumes route. Use runpod_network_volume_billing instead. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_network_volume_billing before that date.
+Deprecated. Network volume spend in the 1.x provider's record shape, read from the REST v2 route GET /v2/billing/network-volumes. REST v2 does not report a record's billed disk space or billed time, so disk_space_billed_gb and time_billed_ms are always null. Use runpod_network_volume_billing, which reads the same route with standard and high-performance storage broken out.
 
 **If you are an AI agent:** set up through https://agents.runpod.io first, then follow
 [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before you plan or apply.
@@ -16,20 +16,21 @@ Deprecated. Network volume spend as the 1.x provider reported it, read from the 
 ## Example Usage
 
 ```terraform
-# Deprecated: use runpod_network_volume_billing, which reads REST v2. This one
-# stays for disk_space_billed_gb and time_billed_ms, which REST v2 billing does
-# not carry yet.
+# Deprecated: use runpod_network_volume_billing, which reads the same REST v2
+# route with the cost split by storage tier. This one keeps the 1.x arguments
+# and record shape so a 1.x configuration still plans; disk_space_billed_gb and
+# time_billed_ms always read null.
 
 data "runpod_billing_network_volume" "one_volume" {
   bucket_size       = "day"
   network_volume_id = "netvol_abc123"
 }
 
-output "volume_disk_gb" {
-  description = "Disk space billed across the window, in GB."
+output "volume_spend" {
+  description = "What the volume cost over the window, in USD."
   value = sum(concat([0], [
     for r in data.runpod_billing_network_volume.one_volume.billing_records :
-    r.disk_space_billed_gb if r.disk_space_billed_gb != null
+    r.amount if r.amount != null
   ]))
 }
 ```
@@ -44,20 +45,20 @@ the Guides section documents each one.
 ### Optional
 
 - `bucket_size` (String) Length of each time bucket: hour, day, week, month, or year. Defaults to day.
-- `end_time` (String) End of the reported window as an ISO datetime. Defaults to the current time.
+- `end_time` (String) End of the reported window, exclusive: an RFC 3339 timestamp, or a date or a datetime without a zone, read as UTC. The window is the 30 days before end_time, or before the current time when end_time is unset, widened by REST v2 to whole buckets.
 - `network_volume_id` (String) Restrict the records to one network volume.
 
 ### Read-Only
 
-- `billing_records` (Attributes List) One record per time bucket, as the REST v1 billing route returns them. (see [below for nested schema](#nestedatt--billing_records))
+- `billing_records` (Attributes List) One record per network volume per time bucket, in the 1.x record shape. An account with no spend in the window reads an empty list. (see [below for nested schema](#nestedatt--billing_records))
 
 <a id="nestedatt--billing_records"></a>
 ### Nested Schema for `billing_records`
 
 Read-Only:
 
-- `amount` (Number) Amount charged in USD.
-- `disk_space_billed_gb` (Number) Disk space billed in GB.
+- `amount` (Number) Amount charged in USD: the REST v2 record's total amount.
+- `disk_space_billed_gb` (Number, Deprecated) Disk space billed in GB. Always null: neither REST v2 billing nor the GraphQL billing API reports this value per pod or per volume. Kept so a 1.x configuration that references it still plans; removed in a later major release.
 - `network_volume_id` (String) The network volume this record bills.
-- `time` (String) Start of the bucket this record bills, as an ISO datetime.
-- `time_billed_ms` (Number) Time billed in milliseconds.
+- `time` (String) Start of the bucket this record bills, as an RFC 3339 timestamp.
+- `time_billed_ms` (Number, Deprecated) Time billed in milliseconds. Always null: neither REST v2 billing nor the GraphQL billing API reports this value per pod or per volume. Kept so a 1.x configuration that references it still plans; removed in a later major release.

@@ -38,24 +38,9 @@ output "pod_spend" {
   value       = sum(concat([0], [for r in data.runpod_billing_pod.this.billing_records : r.amount if r.amount != null]))
 }
 
-output "pod_time_billed_ms" {
-  description = "Deprecated. Pod time billed over the window, in milliseconds. REST v2 billing does not report it."
-  value       = sum(concat([0], [for r in data.runpod_billing_pod.this.billing_records : r.time_billed_ms if r.time_billed_ms != null]))
-}
-
-output "pod_gpu_types" {
-  description = "Deprecated. GPU types the pod records bill, deduplicated. REST v2 billing does not report them."
-  value       = distinct([for r in data.runpod_billing_pod.this.billing_records : r.gpu_type_id if r.gpu_type_id != null])
-}
-
 output "network_volume_record_count" {
   description = "Deprecated. Number of 1.x network volume billing records in the window."
   value       = length(data.runpod_billing_network_volume.this.billing_records)
-}
-
-output "network_volume_disk_gb" {
-  description = "Deprecated. Disk space billed across the network volume records, in GB. REST v2 billing does not report it."
-  value       = sum(concat([0], [for r in data.runpod_billing_network_volume.this.billing_records : r.disk_space_billed_gb if r.disk_space_billed_gb != null]))
 }
 
 output "endpoint_record_count" {

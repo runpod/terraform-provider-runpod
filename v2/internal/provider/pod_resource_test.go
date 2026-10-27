@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/attr"
@@ -17,14 +18,13 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/tfsdk"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
-	"github.com/runpod/go-sdk/v2/legacy" //nolint:staticcheck // deprecated on purpose: the shim client goes when REST v2 carries these fields
 )
 
 // docker_entrypoint and docker_start_cmd are the v2 pod's entrypoint and cmd,
 // which the API decodes from args. These drive the resource's real Read and
-// ImportState against a stub API that serves both hosts, the way
-// legacy_shim_apply_test.go does, so what they pin is where the two lists
-// come from.
+// ImportState against podShimServer, which serves REST v2 and GraphQL from one
+// stub, so what they pin is where the two lists and the two GraphQL
+// read-backs come from.
 
 // podCommandJSON is a v2 pod whose args carries an explicit entrypoint and
 // cmd, reported back in both representations the way the API documents.
@@ -53,26 +53,13 @@ func assertPodCommandLists(ctx context.Context, t *testing.T, model podResourceM
 func TestPodReadFillsTheCommandListsFromV2(t *testing.T) {
 	ctx := context.Background()
 
-	// The REST v1 pod answers different command lists on purpose: state has
-	// to carry the v2 pod's, while machine_id still comes from v1.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/pods/pod_abc":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(podCommandJSON))
-		case r.Method == http.MethodGet && r.URL.Path == "/pods/pod_abc":
-			_, _ = w.Write([]byte(`{"machineId":"machine-1","dockerEntrypoint":["/bin/sh"],"dockerStartCmd":["sleep","infinity"]}`))
-		default:
-			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	defer srv.Close()
+	// The command lists come from the v2 pod; the GraphQL query carries only
+	// the two deprecated read-backs. An unencrypted volume reads false, not
+	// null: the GraphQL schema declares volumeEncrypted non-null.
+	srv, legacyClient, requests := podShimServer(t,
+		`{"data":{"pod":{"machineId":"machine-1","volumeEncrypted":false}}}`, servePodCommandJSON)
 
-	r := &podResource{
-		client: shimTestClient(t, srv.URL),
-		legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL}),
-	}
+	r := &podResource{client: shimTestClient(t, srv.URL), legacy: legacyClient}
 	s, raw := shimResourceSchema(ctx, t, r)
 	state := shimObject(ctx, t, s, raw, map[string]attr.Value{
 		"id":          types.StringValue("pod_abc"),
@@ -83,7 +70,7 @@ func TestPodReadFillsTheCommandListsFromV2(t *testing.T) {
 
 	resp := &resource.ReadResponse{State: tfsdk.State{Schema: s, Raw: state}}
 	r.Read(ctx, resource.ReadRequest{State: tfsdk.State{Schema: s, Raw: state}}, resp)
-	if resp.Diagnostics.HasError() {
+	if resp.Diagnostics.HasError() || resp.Diagnostics.WarningsCount() != 0 {
 		t.Fatal(resp.Diagnostics)
 	}
 
@@ -93,34 +80,76 @@ func TestPodReadFillsTheCommandListsFromV2(t *testing.T) {
 	}
 	assertPodCommandLists(ctx, t, saved)
 	if saved.MachineId.ValueString() != "machine-1" {
-		t.Errorf("machine_id = %v, want the REST v1 value", saved.MachineId)
+		t.Errorf("machine_id = %v, want the GraphQL value", saved.MachineId)
 	}
+	if saved.VolumeEncrypted.IsNull() || saved.VolumeEncrypted.ValueBool() {
+		t.Errorf("volume_encrypted = %v, want the reported false", saved.VolumeEncrypted)
+	}
+	requests.assertPodQueries(t, 1)
+}
+
+// servePodCommandJSON is the v2 half of podShimServer for the read tests:
+// GET /v2/pods/pod_abc answers podCommandJSON.
+func servePodCommandJSON(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodGet || r.URL.Path != "/v2/pods/pod_abc" {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write([]byte(podCommandJSON))
+	return true
+}
+
+func TestPodReadWarnsAndNullsTheShimFieldsWhenGraphQLFails(t *testing.T) {
+	ctx := context.Background()
+
+	// A failed GraphQL read must not fail a refresh over two attributes
+	// nothing configures: the v2 read lands, the read-backs the state held
+	// go null, and one warning carries the GraphQL error.
+	srv, legacyClient, requests := podShimServer(t,
+		`{"errors":[{"message":"pod lookup unavailable"}]}`, servePodCommandJSON)
+
+	r := &podResource{client: shimTestClient(t, srv.URL), legacy: legacyClient}
+	s, raw := shimResourceSchema(ctx, t, r)
+	state := shimObject(ctx, t, s, raw, map[string]attr.Value{
+		"id":               types.StringValue("pod_abc"),
+		"name":             types.StringValue("trainer"),
+		"image":            types.StringValue("runpod/pytorch:1.0.2"),
+		"gpu_type_id":      types.StringValue("NVIDIA A100 80GB PCIe"),
+		"machine_id":       types.StringValue("machine-old"),
+		"volume_encrypted": types.BoolValue(true),
+	})
+
+	resp := &resource.ReadResponse{State: tfsdk.State{Schema: s, Raw: state}}
+	r.Read(ctx, resource.ReadRequest{State: tfsdk.State{Schema: s, Raw: state}}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatalf("a failed GraphQL read must not fail the refresh: %v", resp.Diagnostics)
+	}
+	if resp.Diagnostics.WarningsCount() != 1 ||
+		!strings.Contains(resp.Diagnostics.Warnings()[0].Detail(), "pod lookup unavailable") {
+		t.Fatalf("want one warning carrying the GraphQL error, got %v", resp.Diagnostics)
+	}
+
+	var saved podResourceModel
+	if diags := resp.State.Get(ctx, &saved); diags.HasError() {
+		t.Fatal(diags)
+	}
+	assertPodCommandLists(ctx, t, saved)
+	if !saved.MachineId.IsNull() || !saved.VolumeEncrypted.IsNull() {
+		t.Errorf("shim attributes = %v / %v, want null after a failed read", saved.MachineId, saved.VolumeEncrypted)
+	}
+	requests.assertPodQueries(t, 1)
 }
 
 func TestPodImportFillsTheCommandLists(t *testing.T) {
 	ctx := context.Background()
 
-	// An import is ImportState followed by Read. The REST v1 route answers
-	// 404, as it does for a pod it does not know: the command lists come from
-	// the v2 read regardless, and only the shim attributes read null.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v2/pods/pod_abc":
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(podCommandJSON))
-		case r.Method == http.MethodGet && r.URL.Path == "/pods/pod_abc":
-			w.WriteHeader(http.StatusNotFound)
-		default:
-			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}))
-	defer srv.Close()
+	// An import is ImportState followed by Read. The GraphQL API answers a
+	// null pod, as it does for one it does not report: the command lists come
+	// from the v2 read regardless, and only the shim attributes read null,
+	// without a warning nobody could act on.
+	srv, legacyClient, requests := podShimServer(t, `{"data":{"pod":null}}`, servePodCommandJSON)
 
-	r := &podResource{
-		client: shimTestClient(t, srv.URL),
-		legacy: newTestLegacyClient(t, legacy.Config{APIKey: "test-key", RestV1URL: srv.URL}),
-	}
+	r := &podResource{client: shimTestClient(t, srv.URL), legacy: legacyClient}
 	s, raw := shimResourceSchema(ctx, t, r)
 
 	importResp := &resource.ImportStateResponse{State: tfsdk.State{Schema: s, Raw: raw}}
@@ -135,7 +164,7 @@ func TestPodImportFillsTheCommandLists(t *testing.T) {
 		t.Fatal(readResp.Diagnostics)
 	}
 	if readResp.Diagnostics.WarningsCount() != 0 {
-		t.Fatalf("a 404 from the REST v1 route is silent: %v", readResp.Diagnostics)
+		t.Fatalf("a pod the GraphQL API does not report is silent: %v", readResp.Diagnostics)
 	}
 
 	var saved podResourceModel
@@ -147,8 +176,10 @@ func TestPodImportFillsTheCommandLists(t *testing.T) {
 	}
 	assertPodCommandLists(ctx, t, saved)
 	if !saved.MachineId.IsNull() || !saved.VolumeEncrypted.IsNull() {
-		t.Errorf("shim attributes = %v / %v, want null after the REST v1 404", saved.MachineId, saved.VolumeEncrypted)
+		t.Errorf("shim attributes = %v / %v, want null for a pod the GraphQL API does not report",
+			saved.MachineId, saved.VolumeEncrypted)
 	}
+	requests.assertPodQueries(t, 1)
 }
 
 func TestPodCommandPlanModifierKeepsStateUnlessArgsChanges(t *testing.T) {
@@ -615,5 +646,151 @@ func TestPodImportFillsTheEnv(t *testing.T) {
 	}
 	if saved.Env.IsNull() || len(env) != len(provisionedPodEnv()) || env["HF_HOME"] != "/workspace/hf" {
 		t.Errorf("imported env = %v, want the pod's env", saved.Env)
+	}
+}
+
+// podMountServer answers POST /v2/pods and GET / PATCH /v2/pods/pod_abc with
+// a pod carrying mountsJSON, and hands every POST and PATCH body to sent.
+func podMountServer(t *testing.T, mountsJSON string, sent *[]map[string]any) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/v1/") {
+			t.Errorf("request reached a REST v1 path: %s %s", r.Method, r.URL.Path)
+		}
+		podJSON := `{"id":"pod_abc","name":"trainer","image":"runpod/pytorch:1.0.2","status":"RUNNING",` +
+			`"createdAt":"2026-09-17T09:00:00Z","disk":50,"env":{},"ports":[],"dataCenterIds":[],"cost":0.35,` +
+			`"mounts":` + mountsJSON + `}`
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/pods",
+			r.Method == http.MethodPatch && r.URL.Path == "/v2/pods/pod_abc":
+			body := map[string]any{}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decoding the request body: %v", err)
+			}
+			*sent = append(*sent, body)
+			if r.Method == http.MethodPost {
+				w.WriteHeader(http.StatusCreated)
+			}
+			_, _ = w.Write([]byte(podJSON))
+		case r.Method == http.MethodGet && r.URL.Path == "/v2/pods/pod_abc":
+			_, _ = w.Write([]byte(podJSON))
+		default:
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func podGlobalVolumes(ctx context.Context, t *testing.T, volumeID string, mountPath types.String) types.List {
+	t.Helper()
+	value, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue(volumeID),
+		Path:     mountPath,
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	return value
+}
+
+func TestPodCreateSendsTheGlobalVolumeMount(t *testing.T) {
+	// A global volume goes out under mounts.global; with no path configured
+	// none is sent, and the path the API chose is read back.
+	ctx := context.Background()
+	var sent []map[string]any
+	srv := podMountServer(t, `{"global":[{"volumeId":"gsb_abc","path":"/global"}]}`, &sent)
+	r := &podResource{client: shimTestClient(t, srv.URL)}
+	s, raw := shimResourceSchema(ctx, t, r)
+	plan := shimObject(ctx, t, s, raw, map[string]attr.Value{
+		"name":           types.StringValue("trainer"),
+		"image":          types.StringValue("runpod/pytorch:1.0.2"),
+		"gpu_type_id":    types.StringValue("NVIDIA A100 80GB PCIe"),
+		"global_volumes": podGlobalVolumes(ctx, t, "gsb_abc", types.StringNull()),
+	})
+
+	resp := &resource.CreateResponse{State: tfsdk.State{Schema: s, Raw: raw}}
+	initPrivateState(t, &resp.Private)
+	r.Create(ctx, resource.CreateRequest{Plan: tfsdk.Plan{Schema: s, Raw: plan}, Config: tfsdk.Config{Schema: s, Raw: plan}}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+
+	if len(sent) != 1 {
+		t.Fatalf("requests with a body = %d, want the one POST", len(sent))
+	}
+	encoded, _ := json.Marshal(sent[0]["mounts"])
+	if string(encoded) != `{"global":[{"volumeId":"gsb_abc"}]}` {
+		t.Errorf("mounts = %s, want only the global volume and no path", encoded)
+	}
+
+	var saved podResourceModel
+	if diags := resp.State.Get(ctx, &saved); diags.HasError() {
+		t.Fatal(diags)
+	}
+	var globals []networkMountModel
+	if diags := saved.GlobalVolumes.ElementsAs(ctx, &globals, false); diags.HasError() {
+		t.Fatal(diags)
+	}
+	if len(globals) != 1 || globals[0].VolumeId.ValueString() != "gsb_abc" || globals[0].Path.ValueString() != "/global" {
+		t.Errorf("global_volumes = %+v, want gsb_abc at /global", globals)
+	}
+	if !saved.NetworkVolumes.IsNull() {
+		t.Errorf("network_volumes = %v, want null", saved.NetworkVolumes)
+	}
+}
+
+func TestPodUpdateSendsTheGlobalVolumePath(t *testing.T) {
+	// Only the path of a global mount can change: the PATCH carries the
+	// volume and its new path under mounts.global, next to the unchanged
+	// network mount.
+	ctx := context.Background()
+	var sent []map[string]any
+	srv := podMountServer(t,
+		`{"network":[{"volumeId":"vol_xyz","path":"/runpod-volume"}],"global":[{"volumeId":"gsb_abc","path":"/data"}]}`, &sent)
+	r := &podResource{client: shimTestClient(t, srv.URL)}
+	s, raw := shimResourceSchema(ctx, t, r)
+	network, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("vol_xyz"),
+		Path:     types.StringValue("/runpod-volume"),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	base := map[string]attr.Value{
+		"id":              types.StringValue("pod_abc"),
+		"name":            types.StringValue("trainer"),
+		"image":           types.StringValue("runpod/pytorch:1.0.2"),
+		"gpu_type_id":     types.StringValue("NVIDIA A100 80GB PCIe"),
+		"network_volumes": network,
+	}
+	withGlobal := func(mountPath string) tftypes.Value {
+		values := maps.Clone(base)
+		values["global_volumes"] = podGlobalVolumes(ctx, t, "gsb_abc", types.StringValue(mountPath))
+		return shimObject(ctx, t, s, raw, values)
+	}
+	state, plan := withGlobal("/global"), withGlobal("/data")
+
+	resp := &resource.UpdateResponse{State: tfsdk.State{Schema: s, Raw: state}}
+	initPrivateState(t, &resp.Private)
+	r.Update(ctx, resource.UpdateRequest{
+		Plan:    tfsdk.Plan{Schema: s, Raw: plan},
+		State:   tfsdk.State{Schema: s, Raw: state},
+		Config:  tfsdk.Config{Schema: s, Raw: plan},
+		Private: resp.Private,
+	}, resp)
+	if resp.Diagnostics.HasError() {
+		t.Fatal(resp.Diagnostics)
+	}
+
+	if len(sent) != 1 {
+		t.Fatalf("requests with a body = %d, want the one PATCH", len(sent))
+	}
+	encoded, _ := json.Marshal(sent[0]["mounts"])
+	want := `{"global":[{"path":"/data","volumeId":"gsb_abc"}],"network":[{"path":"/runpod-volume","volumeId":"vol_xyz"}]}`
+	if string(encoded) != want {
+		t.Errorf("mounts = %s, want %s", encoded, want)
 	}
 }

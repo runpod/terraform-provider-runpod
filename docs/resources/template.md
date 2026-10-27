@@ -43,8 +43,8 @@ resource "runpod_template" "pytorch" {
   ports = ["8888/http", "22/tcp"]
 }
 
-# What the shim reports back about a template's usage, preserving the 1.x
-# earned, is_runpod and runtime_in_min attributes.
+# What the deprecated GraphQL shim reports back about a template's usage,
+# preserving the 1.x earned, is_runpod and runtime_in_min attributes.
 output "pytorch_runtime_in_min" {
   value = runpod_template.pytorch.runtime_in_min
 }
@@ -97,12 +97,12 @@ the Guides section documents each one.
 - `args` (String) Arguments passed to the container entrypoint.
 - `category` (String) Console grouping for the template: CPU, NVIDIA, or AMD. Server default is NVIDIA. It does not affect scheduling or billing.
 - `disk` (Number) Container disk in GB.
-- `docker_entrypoint` (List of String, Deprecated) Deprecated. Container entrypoint for containers created from this template, e.g. ["/bin/bash"], preserving the 1.x docker_entrypoint attribute. Applied through the REST v1 shim on create and update, and read back from it, so the template's own value fills it in when the configuration leaves it out. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `docker_entrypoint` (List of String) Container entrypoint for containers created from this template, in exec form, e.g. ["/bin/bash"], preserving the 1.x docker_entrypoint attribute. Sent as the v2 template's entrypoint on create and update and read back from it, so the template's own value fills it in when the configuration leaves it out; set it to [] to clear it. The API stores the entrypoint inside args, so the two cannot both be set: to set an entrypoint and a command together, write args in its JSON form, e.g. {"entrypoint":["/bin/bash","-c"],"cmd":["python -u main.py"]}.
 - `env` (Map of String) Environment variables.
 - `persistent_volume` (Attributes) Host-local persistent storage for containers created from this template, replacing the 1.x volume_in_gb and volume_mount_path attributes. Templates carry a single persistent mount and no network volume; CPU pods created from the template ignore it. The API leaves an existing mount in place when the block is dropped from the configuration. (see [below for nested schema](#nestedatt--persistent_volume))
 - `ports` (List of String) Exposed ports, e.g. ["8888/http", "22/tcp"].
 - `public` (Boolean) Whether the template is publicly visible.
-- `readme` (String, Deprecated) Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Applied through the REST v1 shim on create and update, and read back from it; set it to "" to clear the text. The shim sends this field on its own, where the 1.x provider sent the whole resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects it, the apply fails with the route's error after the REST v2 change has been applied. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `readme` (String, Deprecated) Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Written through the GraphQL API's saveTemplate on create and update, and read back from it. The API trims surrounding whitespace and ignores an empty value, so the text cannot be cleared: an empty or whitespace-only readme is rejected at plan time. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `registry` (String) Registry credential ID (runpod_registry) for pulling private images, called container_registry_auth_id in 1.x. Removing it from the configuration leaves the credential attached: the provider cannot clear it yet.
 - `serverless` (Boolean) Whether the template configures Serverless workers (true) or pods (false). Server default is false.
 - `start_jupyter` (Boolean) Start JupyterLab in containers created from this template, by injecting a generated JUPYTER_PASSWORD variable. Needs an image that honors the convention (the Runpod official images do) and "8888/http" in ports. Server default is true, matching console-created templates.
@@ -110,10 +110,10 @@ the Guides section documents each one.
 
 ### Read-Only
 
-- `earned` (Number, Deprecated) Deprecated. Total earnings in USD credited to this template through the Runpod creator programme, preserving the 1.x earned attribute. Zero for a private template. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `earned` (Number, Deprecated) Deprecated. Total earnings in USD credited to this template through the Runpod creator programme, preserving the 1.x earned attribute. Reads 0 for a template the account does not own. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 - `id` (String) Template identifier assigned by the API.
-- `is_runpod` (Boolean, Deprecated) Deprecated. Whether Runpod itself publishes the template, as opposed to the account that reads it, preserving the 1.x is_runpod attribute. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
-- `runtime_in_min` (Number, Deprecated) Deprecated. Total minutes containers created from this template have run, preserving the 1.x runtime_in_min attribute. Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it.
+- `is_runpod` (Boolean, Deprecated) Deprecated. Whether Runpod itself publishes the template, as opposed to the account that reads it, preserving the 1.x is_runpod attribute. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
+- `runtime_in_min` (Number, Deprecated) Deprecated. Total minutes containers created from this template have run, preserving the 1.x runtime_in_min attribute. Reads 0 for a template the account does not own. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
 
 <a id="nestedatt--persistent_volume"></a>
 ### Nested Schema for `persistent_volume`

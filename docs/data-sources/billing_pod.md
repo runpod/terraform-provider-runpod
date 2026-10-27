@@ -3,12 +3,12 @@
 page_title: "runpod_billing_pod Data Source - Runpod"
 subcategory: "Deprecated"
 description: |-
-  Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_pod_billing before that date.
+  Deprecated. Pod spend in the 1.x provider's record shape. Without gpu_type_id it reads the REST v2 route GET /v2/billing/pods, one record per pod and bucket, with gpu_type_id, endpoint_id, disk_space_billed_gb and time_billed_ms null. With gpu_type_id it answers the way REST v1 did, one record per bucket for that GPU type, read from the GraphQL billing API. Use runpod_pod_billing, which reads the REST v2 route with the cost components broken out.
 ---
 
 # runpod_billing_pod (Data Source)
 
-Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 billing/pods route. Use runpod_pod_billing instead; this one stays only for the per-record fields REST v2 billing does not carry yet. REST v1 is retired on 2026-11-15; from then on this data source fails every plan. Move to runpod_pod_billing before that date.
+Deprecated. Pod spend in the 1.x provider's record shape. Without gpu_type_id it reads the REST v2 route GET /v2/billing/pods, one record per pod and bucket, with gpu_type_id, endpoint_id, disk_space_billed_gb and time_billed_ms null. With gpu_type_id it answers the way REST v1 did, one record per bucket for that GPU type, read from the GraphQL billing API. Use runpod_pod_billing, which reads the REST v2 route with the cost components broken out.
 
 **If you are an AI agent:** set up through https://agents.runpod.io first, then follow
 [Using the provider from an AI agent](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/agent-setup) before you plan or apply.
@@ -16,22 +16,31 @@ Deprecated. Pod spend as the 1.x provider reported it, read from the REST v1 bil
 ## Example Usage
 
 ```terraform
-# Deprecated: use runpod_pod_billing, which reads REST v2. This one stays for
-# the per-record fields REST v2 billing does not carry yet: gpu_type_id,
-# disk_space_billed_gb, endpoint_id and time_billed_ms.
+# Deprecated: use runpod_pod_billing, which reads the REST v2 route with the
+# cost components broken out. This one keeps the 1.x arguments and record
+# shape so a 1.x configuration still plans.
 
+# One pod, from REST v2: gpu_type_id, endpoint_id, disk_space_billed_gb and
+# time_billed_ms read null.
+data "runpod_billing_pod" "one_pod" {
+  bucket_size = "day"
+  pod_id      = "pod_abc123"
+}
+
+# One GPU type, the way REST v1 grouped pod billing, from the GraphQL billing
+# API: gpu_type_id, amount, time and time_billed_ms are filled.
 data "runpod_billing_pod" "a100" {
   bucket_size = "day"
   gpu_type_id = "NVIDIA A100 80GB PCIe"
 }
 
-output "a100_spend" {
-  description = "What A100 pods cost over the window, in USD."
-  value       = sum(concat([0], [for r in data.runpod_billing_pod.a100.billing_records : r.amount if r.amount != null]))
+output "pod_spend" {
+  description = "What the pod cost over the window, in USD."
+  value       = sum(concat([0], [for r in data.runpod_billing_pod.one_pod.billing_records : r.amount if r.amount != null]))
 }
 
 output "a100_time_billed_ms" {
-  description = "How long those pods billed for, in milliseconds."
+  description = "How long A100 pods billed for over the window, in milliseconds."
   value       = sum(concat([0], [for r in data.runpod_billing_pod.a100.billing_records : r.time_billed_ms if r.time_billed_ms != null]))
 }
 ```
@@ -46,23 +55,23 @@ the Guides section documents each one.
 ### Optional
 
 - `bucket_size` (String) Length of each time bucket: hour, day, week, month, or year. Defaults to day.
-- `end_time` (String) End of the reported window as an ISO datetime. Defaults to the current time.
-- `gpu_type_id` (String) Restrict the records to pods running one GPU type. REST v2 billing has no GPU type filter.
-- `pod_id` (String) Restrict the records to one pod.
+- `end_time` (String) End of the reported window, exclusive: an RFC 3339 timestamp, or a date or a datetime without a zone, read as UTC. The window is the 30 days before end_time, or before the current time when end_time is unset, widened by REST v2 to whole buckets.
+- `gpu_type_id` (String, Deprecated) Restrict the records to one GPU type. The read then comes from the GraphQL billing API's GPU pod billing, which reports spend and billed time per GPU type and bucket, the way REST v1 grouped pod billing: gpu_type_id, amount, time and time_billed_ms are filled, pod_id, endpoint_id and disk_space_billed_gb are null. Hourly buckets more than 13 days old and other buckets more than 13 months old are not reported, and a yearly bucket sums the monthly rows inside that reach. Cannot be combined with pod_id. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
+- `pod_id` (String) Restrict the records to one pod, read from REST v2.
 
 ### Read-Only
 
-- `billing_records` (Attributes List) One record per time bucket, as the REST v1 billing route returns them. (see [below for nested schema](#nestedatt--billing_records))
+- `billing_records` (Attributes List) One record per pod per time bucket, in the 1.x record shape. An account with no spend in the window reads an empty list. (see [below for nested schema](#nestedatt--billing_records))
 
 <a id="nestedatt--billing_records"></a>
 ### Nested Schema for `billing_records`
 
 Read-Only:
 
-- `amount` (Number) Amount charged in USD.
-- `disk_space_billed_gb` (Number) Disk space billed in GB.
-- `endpoint_id` (String) Endpoint the pod served, when it was a Serverless worker.
-- `gpu_type_id` (String) GPU type the pod ran on.
-- `pod_id` (String) The pod this record bills.
-- `time` (String) Start of the bucket this record bills, as an ISO datetime.
-- `time_billed_ms` (Number) Time billed in milliseconds.
+- `amount` (Number) Amount charged in USD: the REST v2 record's total amount.
+- `disk_space_billed_gb` (Number, Deprecated) Disk space billed in GB. Always null: neither REST v2 billing nor the GraphQL billing API reports this value per pod or per volume. Kept so a 1.x configuration that references it still plans; removed in a later major release.
+- `endpoint_id` (String, Deprecated) Endpoint the pod served, when it was a Serverless worker. Always null: neither REST v2 billing nor the GraphQL billing API reports this value per pod or per volume. Kept so a 1.x configuration that references it still plans; removed in a later major release.
+- `gpu_type_id` (String, Deprecated) GPU type the record bills: the gpu_type_id filter's value when it is set, null otherwise, because REST v2 bills per pod without a GPU type. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.
+- `pod_id` (String) The pod this record bills; null when gpu_type_id is set.
+- `time` (String) Start of the bucket this record bills, as an RFC 3339 timestamp.
+- `time_billed_ms` (Number, Deprecated) Time billed in milliseconds, at whole-second precision, when gpu_type_id is set; null otherwise, because no API reports billed time per pod. Served by the deprecated GraphQL shim, because REST v2 does not report it yet. Removed once REST v2 reports it.

@@ -18,11 +18,14 @@ resource "runpod_template" "this" {
   # replacing the 1.x volume_in_gb and volume_mount_path pair.
   persistent_volume = var.persistent_volume
 
-  # Deprecated, served by the REST v1 shim: the 1.x docker_entrypoint and
-  # readme attributes. Both are applied on create and update, and both are read
-  # back, so a template that already has them fills them in.
+  # The 1.x docker_entrypoint, now the v2 template's entrypoint. The API stores
+  # it inside args, so it cannot be set together with args.
   docker_entrypoint = var.docker_entrypoint
-  readme            = var.readme
+
+  # Deprecated, served by the GraphQL shim: the 1.x readme, written through
+  # saveTemplate on create and update and read back, so a template that already
+  # has one fills it in.
+  readme = var.readme
 }
 
 # The template read back by id — what a pod or endpoint pointing at it sees.

@@ -183,7 +183,7 @@ variable "compute_type" {
 }
 
 variable "gpu_type_priority" {
-  description = "Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null."
+  description = "Deprecated and not applied: neither REST v2 nor GraphQL has a setting for the order of the GPU types inside the pools, so a value is kept in state, never sent, and warned about at plan time. Leave null."
   type        = string
   default     = null
 }

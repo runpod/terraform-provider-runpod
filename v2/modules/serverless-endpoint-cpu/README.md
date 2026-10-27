@@ -11,10 +11,11 @@ module: `image` or `template_id`, queue or load-balancer routing, autoscaling
 bounds, a `registry` credential for a private image, and `network_volumes`
 for storage shared by every worker.
 
-The deprecated inputs and outputs (`cpu_flavor_priority`, `users`, `version`,
-`workers`) go through the REST v1 compatibility shim and exist for 1.x
-configurations; `compute_type`, also deprecated, is derived from what REST v2
-reports.
+The deprecated inputs and outputs exist for 1.x configurations:
+`cpu_flavor_priority` is kept in state but never sent, because no API has a
+setting for it, and the plan warns when it is set; `users` comes from the
+GraphQL compatibility shim; `version` and `workers` come from the REST v2
+workers listing; `compute_type` is derived from what REST v2 reports.
 
 Build and run it with the shared flow in [../README.md](../README.md), then
 `terraform destroy`.
@@ -23,7 +24,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "serverless_endpoint_cpu" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.4"
 
   name = "api"
   cpu = [{
@@ -40,19 +41,19 @@ module "serverless_endpoint_cpu" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.3 |
+| runpod | 2.0.0-rc.4 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.3/docs/resources/serverless_endpoint) | resource |
+| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/serverless_endpoint) | resource |
 
 ## Inputs
 
@@ -60,7 +61,7 @@ module "serverless_endpoint_cpu" {
 | ---- | ----------- | ---- | ------- | :------: |
 | compute\_type | Deprecated. Worker compute family, preserving the 1.x compute\_type attribute. Null derives it from cpu; a value other than CPU is rejected here. | `string` | `null` | no |
 | cpu | CPU configurations workers may be placed on: a flavor from the CPU catalog (see the catalog-discovery module) and a vCPU count valid for it. | <pre>list(object({<br/>    cpu_type_id = string<br/>    vcpu_count  = number<br/>  }))</pre> | <pre>[<br/>  {<br/>    "cpu_type_id": "cpu5c",<br/>    "vcpu_count": 4<br/>  }<br/>]</pre> | no |
-| cpu\_flavor\_priority | Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null. | `string` | `null` | no |
+| cpu\_flavor\_priority | Deprecated and not applied: neither REST v2 nor GraphQL has a setting for the order of the configured CPU flavors, so a value is kept in state, never sent, and warned about at plan time. Leave null. | `string` | `null` | no |
 | data\_center\_ids | Data centers workers may be placed in. Null lets the scheduler choose; a network volume requires the workers to land in the volume's data center. | `list(string)` | `null` | no |
 | disk | Worker container disk in GB. Null uses the API default. | `number` | `null` | no |
 | endpoint\_type | Request routing: QUEUE or LOAD\_BALANCER. | `string` | `"QUEUE"` | no |

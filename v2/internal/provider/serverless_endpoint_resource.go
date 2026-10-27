@@ -57,6 +57,14 @@ var endpointLegacyWorkerAttrTypes = map[string]attr.Type{
 
 var endpointLegacyWorkerObjectType = types.ObjectType{AttrTypes: endpointLegacyWorkerAttrTypes}
 
+// endpointWorkersDeprecation is the DeprecationMessage of the two 1.x
+// read-backs REST v2 serves through its workers listing.
+const endpointWorkersDeprecation = "Use the runpod_endpoint_workers data source, which reads the same REST v2 workers listing"
+
+// endpointComputeTypeDeprecation is the DeprecationMessage of compute_type,
+// which restates the compute block.
+const endpointComputeTypeDeprecation = "Derived from gpu_pools or cpu; remove it from the configuration"
+
 // computeFamilyReplaceDescription covers both compute blocks: the API
 // refuses to move an endpoint between the GPU and CPU families, so the one
 // change the plan modifier catches is a block appearing or disappearing.
@@ -93,6 +101,7 @@ type serverlessEndpointResourceModel struct {
 	Registry            types.String  `tfsdk:"registry"`
 	DataCenterIds       types.List    `tfsdk:"data_center_ids"`
 	NetworkVolumes      types.List    `tfsdk:"network_volumes"`
+	GlobalVolumes       types.List    `tfsdk:"global_volumes"`
 	Ports               types.List    `tfsdk:"ports"`
 	RequestUrls         types.Object  `tfsdk:"request_urls"`
 	CreatedAt           types.String  `tfsdk:"created_at"`
@@ -303,6 +312,17 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 				Computed:    true,
 				Description: "Network volume IDs attached to workers.",
 			},
+			"global_volumes": schema.ListAttribute{
+				ElementType: types.StringType,
+				Optional:    true,
+				Computed:    true,
+				Description: "Global volume IDs (runpod_global_volume) mounted on every worker at /runpod-volume. At most one, " +
+					"on GPU endpoints only, and not together with network volumes: to switch, set the kind being left to [] " +
+					"in the same apply. [] detaches the global volume; the change applies to workers created afterwards.",
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
+				},
+			},
 			"ports": schema.ListAttribute{
 				ElementType: types.StringType,
 				Optional:    true,
@@ -358,36 +378,39 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 			"compute_type": schema.StringAttribute{
 				Optional:           true,
 				Computed:           true,
-				Description:        "Deprecated. Worker compute family, GPU or CPU, preserving the 1.x compute_type attribute. It restates the choice gpu_pools and cpu already make, so it is derived from the endpoint the v2 API reports and a value contradicting that choice is rejected; nothing is written to the deprecated host for it. Removed once 1.x configurations have moved to gpu_pools and cpu.",
-				DeprecationMessage: legacyShimDeprecation,
+				Description:        "Deprecated. Worker compute family, GPU or CPU, preserving the 1.x compute_type attribute. It restates the choice gpu_pools and cpu already make, so it is derived from the endpoint the v2 API reports and a value contradicting that choice is rejected; nothing is sent for it beyond the compute block. Removed once 1.x configurations have moved to gpu_pools and cpu.",
+				DeprecationMessage: endpointComputeTypeDeprecation,
 				Validators: []validator.String{
 					stringvalidator.OneOf("GPU", "CPU"),
 				},
 			},
 			"gpu_type_priority": schema.StringAttribute{
 				Optional: true,
-				Description: "Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. \"availability\", preserving the 1.x gpu_type_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. GPU endpoints only. " +
-					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
+				Description: "Deprecated. How the scheduler orders the GPU types inside the selected pools, e.g. \"availability\", preserving the 1.x gpu_type_priority attribute. GPU endpoints only. " +
+					legacyIgnoredInputDescriptionSuffix,
+				DeprecationMessage: legacyIgnoredInputDeprecation,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("cpu")),
 				},
 			},
 			"cpu_flavor_priority": schema.StringAttribute{
 				Optional: true,
-				Description: "Deprecated. How the scheduler orders the configured CPU flavors, e.g. \"availability\", preserving the 1.x cpu_flavor_priority attribute. REST v1 currently rejects this field and is retired on 2026-11-15; setting it fails the apply after the REST v2 change was applied. Remove it from the configuration; the v2 endpoint has no equivalent. CPU endpoints only. " +
-					legacyShimPartialPatchCaveat + " " + legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
+				Description: "Deprecated. How the scheduler orders the configured CPU flavors, e.g. \"availability\", preserving the 1.x cpu_flavor_priority attribute. CPU endpoints only. " +
+					legacyIgnoredInputDescriptionSuffix,
+				DeprecationMessage: legacyIgnoredInputDeprecation,
 				Validators: []validator.String{
 					stringvalidator.ConflictsWith(path.MatchRoot("gpu_pools")),
 				},
 			},
 			"template_version": schema.Int64Attribute{
 				Computed: true,
-				Description: "Deprecated. Version of the template the endpoint was built from, preserving the 1.x template_version attribute. Null when the endpoint was built from an image rather than a template. " +
-					legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
-				PlanModifiers:      []planmodifier.Int64{legacyShimUnknownInt64()},
+				Description: "Deprecated. Version of the template the endpoint was built from, preserving the 1.x template_version attribute. " +
+					legacyNullDescriptionSuffix,
+				DeprecationMessage: legacyNullDeprecation,
+				// A state written while the attribute still had a source can
+				// hold a number; an update must not promise it when the apply
+				// nulls it.
+				PlanModifiers: []planmodifier.Int64{legacyShimUnknownInt64()},
 			},
 			"users": schema.ListAttribute{
 				ElementType: types.StringType,
@@ -400,15 +423,15 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 			"version": schema.Int64Attribute{
 				Computed: true,
 				Description: "Deprecated. The endpoint's configuration version, which the platform increments on every change, preserving the 1.x version attribute. " +
-					legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
+					"Read from the REST v2 workers listing; the runpod_endpoint_workers data source reports the same value as endpoint_version.",
+				DeprecationMessage: endpointWorkersDeprecation,
 				PlanModifiers:      []planmodifier.Int64{legacyShimUnknownInt64()},
 			},
 			"workers": schema.ListNestedAttribute{
 				Computed: true,
-				Description: "Deprecated. Workers allocated to the endpoint at the moment it was read, preserving the 1.x workers attribute. Allocation changes with load, so this is a snapshot; runpod_endpoint_workers is the supported view of the same thing. " +
-					legacyShimDescriptionSuffix,
-				DeprecationMessage: legacyShimDeprecation,
+				Description: "Deprecated. Workers active on the endpoint at the moment it was read, preserving the 1.x workers attribute. Allocation changes with load, so this is a snapshot. " +
+					"Read from the REST v2 workers listing; the runpod_endpoint_workers data source is the supported view of the same workers, with more detail.",
+				DeprecationMessage: endpointWorkersDeprecation,
 				PlanModifiers:      []planmodifier.List{legacyShimUnknownList(endpointLegacyWorkerObjectType)},
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -418,7 +441,7 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 						},
 						"pod_id": schema.StringAttribute{
 							Computed:    true,
-							Description: "Pod backing the worker.",
+							Description: "Pod backing the worker. REST v2 lists an endpoint's pods as its workers, so this is the worker's id.",
 						},
 						"status": schema.StringAttribute{
 							Computed:    true,
@@ -426,15 +449,15 @@ func (r *serverlessEndpointResource) Schema(_ context.Context, _ resource.Schema
 						},
 						"uptime_ms": schema.Int64Attribute{
 							Computed:    true,
-							Description: "Milliseconds since the worker started.",
+							Description: "Milliseconds since the worker started, at whole-second precision: REST v2 reports uptime in seconds. Null until the worker is placed and running.",
 						},
 						"start_time": schema.StringAttribute{
 							Computed:    true,
-							Description: "When the worker started; null while it is still initializing.",
+							Description: "When the worker last started, in RFC 3339 format; null if it has not started.",
 						},
 						"last_busy_ms": schema.Int64Attribute{
 							Computed:    true,
-							Description: "Milliseconds since the worker last handled a request.",
+							Description: "Milliseconds since the worker last handled a request. Always null: REST v2 does not report it.",
 						},
 					},
 				},
@@ -448,7 +471,8 @@ func (r *serverlessEndpointResource) Configure(_ context.Context, req resource.C
 	r.legacy = configuredLegacyClient(req.ProviderData, &resp.Diagnostics)
 }
 
-// ValidateConfig rejects a compute_type that contradicts the compute block the
+// ValidateConfig warns about a configured priority, which nothing can apply,
+// and rejects a compute_type that contradicts the compute block the
 // configuration carries. The two state the same fact, and the API takes the
 // block, so a disagreement is a configuration error rather than a silent
 // preference.
@@ -458,6 +482,7 @@ func (r *serverlessEndpointResource) ValidateConfig(ctx context.Context, req res
 	if resp.Diagnostics.HasError() {
 		return
 	}
+	warnUnappliedLegacyEndpointInputs(&resp.Diagnostics, config)
 	if config.ComputeType.IsNull() || config.ComputeType.IsUnknown() {
 		return
 	}
@@ -479,37 +504,53 @@ func (r *serverlessEndpointResource) ValidateConfig(ctx context.Context, req res
 	}
 }
 
-// applyLegacyEndpointFields settles every REST v1 shim attribute in one step.
-// A configuration that sets one of the two legacy priorities first PATCHes
-// them; the read-backs then always come from GetEndpointV1. The v1 spec gives
-// the PATCH no includeWorkers parameter, and the GET leaves workers out
-// without it, so a PATCH response is not trusted to carry them. The
-// configuration depends on the write, so its failure is an error, while a
-// read nobody asked for warns and leaves the read-backs null. The two
-// configured priorities are never nulled: nothing reads them back, so they
-// keep the value the configuration set.
-func (r *serverlessEndpointResource) applyLegacyEndpointFields(ctx context.Context, model *serverlessEndpointResourceModel, patch legacy.EndpointPatchV1) diag.Diagnostics {
+// readLegacyEndpointFields fills the deprecated read-backs after the v2 call
+// has settled the rest of the model. None of them is an input, so a read that
+// fails warns and nulls what it feeds rather than failing the operation, and
+// an endpoint the GraphQL API does not know leaves users null silently. The
+// two priorities are not touched: nothing reads them back, so they keep the
+// value the configuration set.
+func (r *serverlessEndpointResource) readLegacyEndpointFields(ctx context.Context, model *serverlessEndpointResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
-	if r.legacy == nil {
-		clearLegacyEndpointFields(model)
+	model.TemplateVersion = types.Int64Null()
+	diags.Append(r.readLegacyEndpointWorkers(ctx, model)...)
+	diags.Append(r.readLegacyEndpointOwner(ctx, model)...)
+	return diags
+}
+
+// readLegacyEndpointWorkers fills workers and version from
+// GET /v2/serverless/{id}/workers.
+func (r *serverlessEndpointResource) readLegacyEndpointWorkers(ctx context.Context, model *serverlessEndpointResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	apiResp, err := r.client.Serverless.ListEndpointWorkersWithResponse(ctx, model.Id.ValueString())
+	if err != nil {
+		clearLegacyEndpointWorkers(model)
+		appendLegacyWorkersReadFailure(&diags, err)
 		return diags
 	}
-
-	if !patch.IsEmpty() {
-		if _, err := r.legacy.PatchEndpointV1(ctx, model.Id.ValueString(), patch); err != nil {
-			clearLegacyEndpointFields(model)
-			appendLegacyWriteFailure(&diags, "endpoint", err)
-			return diags
-		}
+	if apiResp.JSON200 == nil {
+		clearLegacyEndpointWorkers(model)
+		appendLegacyWorkersReadFailure(&diags, fmt.Errorf("API returned status %d: %s", apiResp.HTTPResponse.StatusCode, boundedBody(apiResp.Body)))
+		return diags
 	}
+	diags.Append(flattenLegacyEndpointWorkers(ctx, apiResp.JSON200, model)...)
+	return diags
+}
 
-	endpoint, err := r.legacy.GetEndpointV1(ctx, model.Id.ValueString())
+// readLegacyEndpointOwner fills users from the GraphQL shim.
+func (r *serverlessEndpointResource) readLegacyEndpointOwner(ctx context.Context, model *serverlessEndpointResourceModel) diag.Diagnostics {
+	var diags diag.Diagnostics
+	if r.legacy == nil {
+		model.Users = types.ListNull(types.StringType)
+		return diags
+	}
+	owner, err := fetchLegacyEndpointOwner(ctx, r.legacy, model.Id.ValueString())
 	if err != nil {
-		clearLegacyEndpointFields(model)
+		model.Users = types.ListNull(types.StringType)
 		appendLegacyReadFailure(&diags, "endpoint", err)
 		return diags
 	}
-	diags.Append(flattenLegacyEndpoint(ctx, endpoint, model)...)
+	diags.Append(flattenLegacyEndpointOwner(ctx, owner, model)...)
 	return diags
 }
 
@@ -530,9 +571,8 @@ func (r *serverlessEndpointResource) ConfigValidators(_ context.Context) []resou
 }
 
 func (r *serverlessEndpointResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
-	var plan, config serverlessEndpointResourceModel
+	var plan serverlessEndpointResourceModel
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
-	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -542,9 +582,6 @@ func (r *serverlessEndpointResource) Create(ctx context.Context, req resource.Cr
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// Built from the configuration, because only a priority the user set belongs
-	// in the legacy patch; see expandLegacyEndpointPatch.
-	patch := expandLegacyEndpointPatch(config)
 
 	apiResp, err := r.client.Serverless.CreateEndpointWithResponse(ctx, body)
 	if err != nil {
@@ -563,10 +600,10 @@ func (r *serverlessEndpointResource) Create(ctx context.Context, req resource.Cr
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// The endpoint exists from here on, so its state is written before a
-	// legacy failure is reported: returning first would leave it running in
-	// the account with nothing in state.
-	legacyDiags := r.applyLegacyEndpointFields(ctx, &plan, patch)
+	// The endpoint exists from here on, so its state is written whatever the
+	// deprecated reads report: returning first would leave it running in the
+	// account with nothing in state.
+	legacyDiags := r.readLegacyEndpointFields(ctx, &plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	resp.Diagnostics.Append(legacyDiags...)
 }
@@ -610,9 +647,7 @@ func (r *serverlessEndpointResource) Read(ctx context.Context, req resource.Read
 	if resp.Diagnostics.HasError() {
 		return
 	}
-	// A refresh only reads: the two priorities are never read back, and
-	// compute_type comes from the v2 response, so nothing here re-sends them.
-	resp.Diagnostics.Append(r.applyLegacyEndpointFields(ctx, &state, legacy.EndpointPatchV1{})...)
+	resp.Diagnostics.Append(r.readLegacyEndpointFields(ctx, &state)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -627,11 +662,6 @@ func (r *serverlessEndpointResource) Update(ctx context.Context, req resource.Up
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	// From the configuration, so an update of an endpoint that sets neither
-	// shim priority never reaches the legacy host; see
-	// expandLegacyEndpointPatch.
-	patch := expandLegacyEndpointPatch(config)
 
 	body := serverless.UpdateEndpointJSONRequestBody{
 		Name: plan.Name.ValueStringPointer(),
@@ -736,6 +766,9 @@ func (r *serverlessEndpointResource) Update(ctx context.Context, req resource.Up
 		resp.Diagnostics.Append(plan.NetworkVolumes.ElementsAs(ctx, &volumes, false)...)
 		body.NetworkVolumes = &volumes
 	}
+	mounts, mountDiags := expandEndpointGlobalMounts(ctx, plan.GlobalVolumes)
+	resp.Diagnostics.Append(mountDiags...)
+	body.Mounts = mounts
 	if !plan.Ports.IsNull() && !plan.Ports.IsUnknown() {
 		var ports []string
 		resp.Diagnostics.Append(plan.Ports.ElementsAs(ctx, &ports, false)...)
@@ -763,9 +796,9 @@ func (r *serverlessEndpointResource) Update(ctx context.Context, req resource.Up
 		return
 	}
 	// As on Create: the v2 update has already landed, so the state is written
-	// before a legacy failure is reported. Returning first would leave state
+	// whatever the deprecated reads report. Returning first would leave state
 	// describing the endpoint as it was before this apply.
-	legacyDiags := r.applyLegacyEndpointFields(ctx, &plan, patch)
+	legacyDiags := r.readLegacyEndpointFields(ctx, &plan)
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 	resp.Diagnostics.Append(legacyDiags...)
 }

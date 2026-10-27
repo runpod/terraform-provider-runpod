@@ -67,6 +67,7 @@ type podResourceModel struct {
 	Disk                types.Int64   `tfsdk:"disk"`
 	PersistentVolume    types.Object  `tfsdk:"persistent_volume"`
 	NetworkVolumes      types.List    `tfsdk:"network_volumes"`
+	GlobalVolumes       types.List    `tfsdk:"global_volumes"`
 	StartSsh            types.Bool    `tfsdk:"start_ssh"`
 	StartJupyter        types.Bool    `tfsdk:"start_jupyter"`
 	Args                types.String  `tfsdk:"args"`
@@ -285,6 +286,41 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 					listvalidator.SizeAtMost(1),
 				},
 			},
+			"global_volumes": schema.ListNestedAttribute{
+				Optional: true,
+				Computed: true,
+				Description: "Global volumes (runpod_global_volume) mounted into the pod. A global volume has no data center, so " +
+					"the pod can run anywhere. At most one, combinable with network_volumes and mutually exclusive with " +
+					"persistent_volume. The REST v2 specification allows it on GPU and CPU pods; some Runpod documentation " +
+					"says CPU pods are not supported, and the API's own validation decides. Like network_volumes, the mount " +
+					"is fixed at create: adding it replaces the pod, the volume cannot change, and only the path can.",
+				NestedObject: schema.NestedAttributeObject{
+					Attributes: map[string]schema.Attribute{
+						"volume_id": schema.StringAttribute{
+							Required:    true,
+							Description: "ID of an existing runpod_global_volume. Changing it replaces the pod.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.RequiresReplace(),
+							},
+						},
+						"path": schema.StringAttribute{
+							Optional:    true,
+							Computed:    true,
+							Description: "Mount path inside the container, e.g. \"/data\". The API chooses one when it is left out.",
+							PlanModifiers: []planmodifier.String{
+								stringplanmodifier.UseStateForUnknown(),
+							},
+						},
+					},
+				},
+				PlanModifiers: []planmodifier.List{
+					listplanmodifier.UseStateForUnknown(),
+					requiresReplaceOnListAdded(mountPresenceReplaceDescription),
+				},
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
+				},
+			},
 			"start_ssh": schema.BoolAttribute{
 				Optional:    true,
 				Description: "Create-time flag telling the provisioner to set up SSH access by injecting a PUBLIC_KEY variable carrying the account's registered SSH keys. Needs keys registered on the account, and an image that honors the convention (the Runpod official images do); the ssh.direct form also needs \"22/tcp\" in ports. The API never returns it and cannot change it, so changing it replaces the pod.",
@@ -444,8 +480,10 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				},
 			},
 			"machine_id": schema.StringAttribute{
-				Computed:           true,
-				Description:        "Deprecated. Host machine the pod is placed on, read from the REST v1 pod. " + legacyShimDescriptionSuffix,
+				Computed: true,
+				Description: "Deprecated. Host machine the pod is placed on, read from the GraphQL API's pod. " +
+					"Null when that API does not report the pod, reports an empty machine id, or cannot be reached. " +
+					legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				PlanModifiers:      []planmodifier.String{legacyShimUnknownString()},
 			},
@@ -462,8 +500,10 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				PlanModifiers: []planmodifier.List{usePodCommandStateUnlessArgsChanges()},
 			},
 			"volume_encrypted": schema.BoolAttribute{
-				Computed:           true,
-				Description:        "Deprecated. Whether the pod's volume is encrypted, read from the REST v1 pod. " + legacyShimDescriptionSuffix,
+				Computed: true,
+				Description: "Deprecated. Whether the pod's volume is encrypted, read from the GraphQL API's pod: " +
+					"false for an unencrypted volume, null only when that API does not report the pod or cannot be reached. " +
+					legacyShimDescriptionSuffix,
 				DeprecationMessage: legacyShimDeprecation,
 				PlanModifiers:      []planmodifier.Bool{legacyShimUnknownBool()},
 			},
@@ -478,7 +518,8 @@ func (r *podResource) Configure(_ context.Context, req resource.ConfigureRequest
 
 // ConfigValidators carry the cross-attribute rules the API enforces: a pod is
 // either a GPU pod or a CPU pod, its container settings come from an image or
-// a template (or both), and it carries at most one kind of storage mount.
+// a template (or both), and a persistent volume excludes network and global
+// volumes, which can be combined with each other.
 func (r *podResource) ConfigValidators(_ context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		resourcevalidator.ExactlyOneOf(
@@ -492,6 +533,10 @@ func (r *podResource) ConfigValidators(_ context.Context) []resource.ConfigValid
 		resourcevalidator.Conflicting(
 			path.MatchRoot("persistent_volume"),
 			path.MatchRoot("network_volumes"),
+		),
+		resourcevalidator.Conflicting(
+			path.MatchRoot("persistent_volume"),
+			path.MatchRoot("global_volumes"),
 		),
 	}
 }
@@ -542,11 +587,11 @@ func (r *podResource) Create(ctx context.Context, req resource.CreateRequest, re
 	resp.Diagnostics.Append(legacyDiags...)
 }
 
-// readLegacyPodFields fills the deprecated REST v1 read-backs after the v2
+// readLegacyPodFields fills the deprecated GraphQL read-backs after the v2
 // call has settled the rest of the model. This resource has no shim input, so
-// nothing the configuration asks for depends on the legacy host: a failure warns and leaves the
-// two attributes null, because that host is expected to disappear before the
-// attributes do.
+// nothing the configuration asks for depends on the GraphQL API: a failure
+// warns and leaves the two attributes null, and a pod that API does not know
+// leaves them null silently.
 func (r *podResource) readLegacyPodFields(ctx context.Context, model *podResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if r.legacy == nil {
@@ -554,10 +599,14 @@ func (r *podResource) readLegacyPodFields(ctx context.Context, model *podResourc
 		return diags
 	}
 
-	pod, err := r.legacy.GetPodV1(ctx, model.Id.ValueString())
+	pod, err := fetchLegacyPodFields(ctx, r.legacy, model.Id.ValueString())
 	if err != nil {
 		clearLegacyPodFields(model)
 		appendLegacyReadFailure(&diags, "pod", err)
+		return diags
+	}
+	if pod == nil {
+		clearLegacyPodFields(model)
 		return diags
 	}
 	flattenLegacyPod(pod, model)

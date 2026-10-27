@@ -28,13 +28,7 @@ variable "bucket_size" {
 }
 
 variable "end_time" {
-  description = "End of the reported 1.x billing window as an ISO datetime; null ends it at the current time. There is no start time: the route decides how far back the buckets go."
-  type        = string
-  default     = null
-}
-
-variable "gpu_type_id" {
-  description = "Restrict 1.x pod billing to pods running one GPU type, the one filter REST v2 billing cannot do. Null reports every GPU type."
+  description = "End of the reported 1.x billing window: an RFC 3339 timestamp, or a date or a datetime without a zone, read as UTC; null ends it at the current time. The window is the 30 days before it."
   type        = string
   default     = null
 }

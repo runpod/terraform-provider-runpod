@@ -14,6 +14,7 @@ registered resource or data source is used by none of them.
 | [serverless-endpoint-cpu](serverless-endpoint-cpu/) | CPU Serverless endpoint | Only under load |
 | [template](template/) | Reusable pod / endpoint template, read back and listed | Free |
 | [network-volume](network-volume/) | Persistent network storage, listed | For allocated storage |
+| [global-volume](global-volume/) | Storage with no data center, read back by id | For what it stores |
 | [registry](registry/) | Registry credentials, optional ECR pull delegation, listings | Free |
 | [cluster](cluster/) | Multi-node GPU cluster, read back with its member pods | Per hour for every member pod |
 | [account-ssh-keys](account-ssh-keys/) | The account's SSH public keys | Free |
@@ -21,7 +22,7 @@ registered resource or data source is used by none of them.
 | [catalog-discovery](catalog-discovery/) | GPU, CPU, data center and public template catalogs | Free |
 | [billing-report](billing-report/) | Time-bucketed spend per resource kind | Free |
 | [logs](logs/) | Bounded reads of a pod's or a worker's log stream | Free |
-| [legacy](legacy/) | Deprecated GraphQL / REST v1 shims: machines, account, 1.x billing | Free unless a machine is registered |
+| [legacy](legacy/) | Deprecated shims: machines and account over GraphQL, 1.x billing over REST v2 | Free unless a machine is registered |
 
 Every module pins `runpod/runpod` to `~> 2.0` in its `versions.tf`.
 Documentation snippets for the registry pages live under
@@ -56,7 +57,7 @@ pin comes from `RELEASE` in the Taskfile and `task docs` rewrites it.
 
 ```hcl
 module "training_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"

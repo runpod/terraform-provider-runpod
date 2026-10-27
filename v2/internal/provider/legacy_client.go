@@ -9,12 +9,12 @@ import (
 	"github.com/runpod/go-sdk/v2/legacy" //nolint:staticcheck // deprecated on purpose: the shim client goes when REST v2 carries these fields
 )
 
-// Plumbing for the deprecated compatibility shims: runpod_machine and
-// runpod_user on GraphQL, and the three runpod_billing_*
-// data sources and the deprecated attributes on runpod_pod, runpod_template
-// and runpod_serverless_endpoint on REST v1. They are the only things in this
-// provider that do not go through the generated v2 SDK, because their routes
-// do not exist in v2 yet. Everything in this file goes away with them.
+// Plumbing for the deprecated GraphQL shims: runpod_machine, runpod_user, and
+// the deprecated attributes on runpod_pod, runpod_template and
+// runpod_serverless_endpoint that REST v2 does not report. They are the only
+// things in this provider that do not go through the generated v2 SDK,
+// because their fields do not exist in v2 yet. The provider makes no REST v1
+// call. Everything in this file goes away with the shims.
 
 const machineDeprecation = "Machines have no REST v2 route yet; this calls the GraphQL API " +
 	"and will be removed when a /v2/machines surface exists."
@@ -24,26 +24,19 @@ const userDeprecation = "There is no REST v2 account identity route yet; this da
 	"removed when a /v2 account surface exists. Only id and email have a GraphQL source; the other " +
 	"attributes read null."
 
-// legacyUserAgentPrefix is the whole User-Agent 1.x sent to these hosts. The
-// shims lead with it, so filters on the retiring hosts that match it still
-// see 2.0.0, and follow it with the v2 client's User-Agent, so 2.0.0 is not
+// legacyUserAgentPrefix is the whole User-Agent 1.x sent to the GraphQL host.
+// The shims lead with it, so filters on that host that match it still see
+// 2.0.0, and follow it with the v2 client's User-Agent, so 2.0.0 is not
 // mistaken for 1.x.
 const legacyUserAgentPrefix = "Terraform/RunPodProvider"
 
-// newLegacyClient resolves the legacy endpoints from the provider
-// configuration, then the documented environment variables in order, then the
-// production defaults.
-//
-// RUNPOD_BASE_URL is the 1.x name for the REST v1 host and is still honoured
-// after RUNPOD_REST_V1_URL: a 1.x configuration pinned to a staging REST v1
-// host set that variable, and dropping it would silently send those reads to
-// production. It does not apply to the v2 client, which reads
-// RUNPOD_API_BASE_URL.
+// newLegacyClient resolves the GraphQL endpoint from the provider
+// configuration, then RUNPOD_GRAPHQL_URL, then the production default. The
+// deprecated rest_v1_url attribute is not read: nothing calls REST v1.
 func newLegacyClient(config runpodProviderModel, userAgent string) (*legacy.Client, error) {
 	return legacy.New(legacy.Config{
 		APIKey:     stringOrEnv(config.APIKey, "", "RUNPOD_API_KEY"),
 		GraphQLURL: stringOrEnv(config.GraphQLURL, legacy.DefaultGraphQLURL, "RUNPOD_GRAPHQL_URL"),
-		RestV1URL:  stringOrEnv(config.RestV1URL, legacy.DefaultRestV1URL, "RUNPOD_REST_V1_URL", "RUNPOD_BASE_URL"),
 		UserAgent:  legacyUserAgentPrefix + " " + userAgent,
 	})
 }
@@ -76,7 +69,7 @@ func configuredLegacyClient(providerData any, diags *diag.Diagnostics) *legacy.C
 	return configured.Legacy
 }
 
-// GraphQL and REST v1 have no generated types, so responses arrive as
+// GraphQL has no generated types, so responses arrive as
 // map[string]any. These read one field into a framework value: absent, null,
 // or unexpectedly typed fields become null rather than an error, the same
 // tolerance types.StringPointerValue gives the v2 mappings.

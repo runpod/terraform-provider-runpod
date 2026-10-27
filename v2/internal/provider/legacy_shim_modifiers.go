@@ -9,14 +9,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tftypes"
 )
 
-// Plan modifiers for the REST v1 shim read-backs.
+// Plan modifiers for the deprecated shim read-backs.
 //
 // Every one of them is Computed, and terraform core copies the prior state
 // value into the proposed plan for a computed attribute the configuration does
 // not set (objchange.ProposedNew), which the framework then leaves known. The
 // shim legitimately answers with something else (the platform increments an
 // endpoint's version on every change, workers are a live snapshot), and a
-// legacy host that has gone away nulls all of them, so an apply that promised
+// shim read that fails nulls all of them, so an apply that promised
 // the previous value fails with "Provider produced inconsistent result after
 // apply". Planning them unknown while the resource is being changed lets
 // whatever comes back land, including the null the warn-and-null read path
@@ -28,7 +28,7 @@ import (
 // configuration decides the value rather than the shim.
 
 const legacyShimModifierDescription = "Planned as unknown while the resource changes, because the deprecated " +
-	"REST v1 shim reports a live value and answers null when the legacy host is gone."
+	"shim reports a live value and answers null when its read fails."
 
 // legacyShimPlansUnknown is the shared rule; the per-type modifiers below
 // differ only in the unknown they write.

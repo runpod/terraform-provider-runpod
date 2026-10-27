@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-framework/types/basetypes"
-	"github.com/runpod/go-sdk/v2/legacy" //nolint:staticcheck // deprecated on purpose: the shim client goes when REST v2 carries these fields
 	"github.com/runpod/go-sdk/v2/lib/networkvolumes"
 	"github.com/runpod/go-sdk/v2/lib/pods"
 	"github.com/runpod/go-sdk/v2/lib/serverless"
@@ -20,357 +22,127 @@ import (
 // The pure API<->state mapping lives here so it is unit-testable without the
 // plugin protocol machinery.
 
-// The REST v1 shims. Each of these attributes worked in the 1.0.8 provider and
-// has no REST v2 equivalent yet, so it is served from the legacy REST v1 host
-// and marked deprecated. They go away when REST v2 grows the field.
+// The deprecated runpod_template attributes REST v2 does not report (readme,
+// earned, is_runpod and runtime_in_min) are served by the GraphQL shim in
+// legacy_graphql.go, with the shared plumbing in legacy_shim.go.
+// docker_entrypoint is REST v2's entrypoint, mapped with the rest of the
+// template further down.
 
-const legacyShimDeprecation = "REST v1 shim: REST v2 has no equivalent yet; removed when it does"
-
-const legacyShimDescriptionSuffix = "Served by the deprecated REST v1 shim, which Runpod retires on 2026-11-15: from that date a read-back reads null and a configured value fails the apply. Removed once REST v2 reports it."
-
-// legacyShimPartialPatchCaveat goes on every attribute the shim writes. 1.0.8
-// PATCHed the whole resource body on every update; the shim sends only the one
-// or two keys it owns, a shape that release never sent, so the result depends
-// on how the route merges a partial body. The attribute text says so.
-const legacyShimPartialPatchCaveat = "The shim sends this field on its own, where the 1.x provider sent the whole " +
-	"resource body, so applying it relies on the REST v1 route merging a partial request. If the route rejects " +
-	"it, the apply fails with the route's error after the REST v2 change has been applied."
-
-// appendLegacyReadFailure records a REST v1 read that did not answer. The
-// legacy host is expected to disappear before these shims are removed, so a
-// read must not break an apply: it warns and the attributes come back null.
-// A configuration that sets one of the shim inputs reaches the legacy host
-// through a write instead, and that failure is an error; see
-// appendLegacyWriteFailure.
+// configuredTemplateReadme returns the readme to write through the GraphQL
+// shim, or nil when there is nothing to write.
 //
-// A 404 is silent. The v1 route legitimately does not know a CPU pod, a
-// cluster pod, or a template created through v2, and those objects have no
-// legacy data rather than a failed read. Warning about it on every refresh,
-// forever, would be noise the user cannot act on.
-func appendLegacyReadFailure(diags *diag.Diagnostics, subject string, err error) {
-	if legacy.IsNotFound(err) {
+// It is read from the configuration, not the plan: readme is
+// Optional+Computed, so terraform core copies the prior state value into the
+// plan for a configuration that leaves it out, which would rewrite the
+// template through saveTemplate on every update of a template that never set
+// it, and a failed write is an error. In the configuration an unset attribute
+// is null on every operation, and an unresolved one is not a value to send.
+func configuredTemplateReadme(config templateResourceModel) *string {
+	if config.Readme.IsNull() || config.Readme.IsUnknown() {
+		return nil
+	}
+	return config.Readme.ValueStringPointer()
+}
+
+// validateTemplateReadme rejects a readme the GraphQL shim cannot apply.
+//
+// saveTemplate stores trim(readme) and skips the field when it is empty, so
+// "" changes nothing and the read-back keeps the old text: a plan promising
+// "" would fail the apply with an inconsistent result, and a warning instead
+// would leave the same diff on every later plan. A whitespace-only value is refused too: it would only
+// clear the text by way of that trim, and read back as something other than
+// what was planned. Null and unknown are not values to judge.
+func validateTemplateReadme(diags *diag.Diagnostics, readme types.String) {
+	if readme.IsNull() || readme.IsUnknown() || strings.TrimSpace(readme.ValueString()) != "" {
 		return
 	}
-	diags.AddWarning(
-		fmt.Sprintf("Reading the deprecated REST v1 %s failed", subject),
-		fmt.Sprintf(
-			"%s\n\nThe deprecated attributes served by the REST v1 shim are reported as null. Remove them from the configuration to stop depending on that host.",
-			err.Error(),
-		),
+	diags.AddAttributeError(
+		path.Root("readme"),
+		"Empty template readme cannot be applied",
+		"readme is written through the GraphQL API, which ignores an empty readme, so the text cannot be cleared. "+
+			"Remove readme from the configuration to leave the template's text as it is, or set the text it should carry.",
 	)
 }
 
-// appendLegacyWriteFailure records a REST v1 write that did not land. Unlike a
-// read, this is an error: the configuration asked for something only the legacy
-// host can apply. Two shapes of failure are reported differently.
+// expandTemplateEntrypoint returns the entrypoint to send to REST v2, or nil
+// to leave the stored one alone.
 //
-// A 404 says the legacy host does not know the object at all, the normal case
-// for a resource created through REST v2, so the message names that cause
-// instead of relaying a bare "templates/tpl_abc was not found", which says
-// nothing about what the user can do next.
-//
-// A body that did not decode is not a failed write at all: the host accepted
-// the change and answered something this client cannot read, so it warns and
-// the read-backs go null. Failing the apply there would report a change the
-// host already made as an error, and the next plan would re-send it.
-func appendLegacyWriteFailure(diags *diag.Diagnostics, subject string, err error) {
-	if legacy.IsDecodeFailure(err) {
-		diags.AddWarning(
-			fmt.Sprintf("Reading back the deprecated REST v1 %s settings failed", subject),
-			fmt.Sprintf(
-				"%s\n\nThe settings were applied; only the response could not be read, so the attributes the REST v1 shim reads back are reported as null until the next refresh.",
-				err.Error(),
-			),
-		)
-		return
-	}
-	if legacy.IsNotFound(err) {
-		diags.AddError(
-			fmt.Sprintf("Applying the deprecated REST v1 %s settings failed", subject),
-			fmt.Sprintf(
-				"The deprecated REST v1 host does not know this %s: %s\n\nA %s created through the REST v2 API is invisible to that host, so the attributes only it can apply cannot be applied at all. Drop the deprecated attribute from the configuration.",
-				subject, err.Error(), subject,
-			),
-		)
-		return
-	}
-	diags.AddError(
-		fmt.Sprintf("Applying the deprecated REST v1 %s settings failed", subject),
-		fmt.Sprintf("%s\n\nThese attributes are served by the REST v1 shim; the REST v2 resource itself was applied.", err.Error()),
-	)
-}
-
-// legacyTruncatedInt64 truncates a REST v1 JSON number the way 1.0.8 did: it
-// read every one of these as a float64 and truncated with int64(val), so a
-// fractional value is data to round rather than a decode error. An absent field
-// is null rather than zero. Shared by the shim read-backs and the three billing
-// data sources, whose diskSpaceBilledGb and timeBilledMs take the same route.
-func legacyTruncatedInt64(value *float64) types.Int64 {
-	if value == nil {
-		return types.Int64Null()
-	}
-	return types.Int64Value(int64(*value))
-}
-
-// legacyNonEmptyString carries a REST v1 string that 1.0.8 wrote only when the
-// response reported it non-empty (`ok && val != ""`), leaving the attribute
-// null otherwise, so a 1.x configuration's `!= null` check keeps answering
-// what it did.
-func legacyNonEmptyString(value *string) types.String {
-	if value == nil || *value == "" {
-		return types.StringNull()
-	}
-	return types.StringValue(*value)
-}
-
-// flattenLegacyPod maps the REST v1 pod onto the two deprecated read-backs.
-// The other REST v1 fields the 1.x provider read are served from REST v2
-// instead: costPerHr and memoryInGb as cost and memory_in_gb, dockerEntrypoint
-// and dockerStartCmd as docker_entrypoint and docker_start_cmd.
-func flattenLegacyPod(pod *legacy.PodV1, model *podResourceModel) {
-	// Absent is null, not "" or false: a CPU or cluster pod carries no
-	// machineId, and 1.0.8 left both attributes unset in that case.
-	model.MachineId = legacyNonEmptyString(pod.MachineID)
-	model.VolumeEncrypted = types.BoolPointerValue(pod.VolumeEncrypted)
-}
-
-// clearLegacyPodFields nulls the shim read-backs, for the path where the REST
-// v1 host did not answer. Both are Computed, so a null is a legal value and
-// the apply survives the legacy host being gone.
-func clearLegacyPodFields(model *podResourceModel) {
-	model.MachineId = types.StringNull()
-	model.VolumeEncrypted = types.BoolNull()
-}
-
-// expandLegacyEndpointPatch collects the two endpoint settings REST v2 has no
-// field for. Only what the configuration set is carried, so an endpoint using
-// neither never reaches the legacy host; EndpointPatchV1 reports that case as
-// empty.
-//
-// compute_type is not one of them, although 1.0.8 sent it: the v2 create
-// already fixes the family through the GPU or CPU block, flattenEndpoint
-// derives the attribute from what v2 reports, and ValidateConfig rejects a
-// configured value that contradicts the block. A v1 PATCH carrying it could
-// change nothing, while its failure is an error, which would break every
-// apply of the canonical 1.x migration shape (gpu_pools plus compute_type) as
-// soon as the deprecated host answers 502, or 404 for an endpoint it does not
-// know.
-//
-// The patch is read from the configuration rather than the plan, where an
-// attribute the configuration leaves out is null on every operation.
-func expandLegacyEndpointPatch(config serverlessEndpointResourceModel) legacy.EndpointPatchV1 {
-	var patch legacy.EndpointPatchV1
-	if !config.GpuTypePriority.IsNull() && !config.GpuTypePriority.IsUnknown() {
-		patch.GpuTypePriority = config.GpuTypePriority.ValueStringPointer()
-	}
-	if !config.CpuFlavorPriority.IsNull() && !config.CpuFlavorPriority.IsUnknown() {
-		patch.CpuFlavorPriority = config.CpuFlavorPriority.ValueStringPointer()
-	}
-	return patch
-}
-
-// flattenLegacyEndpoint maps the REST v1 endpoint onto the deprecated
-// read-backs. compute_type is not among them: it says the same thing as the
-// GPU/CPU block the v2 read already carries, so flattenEndpoint derives it and
-// the legacy value is never allowed to contradict it.
-func flattenLegacyEndpoint(ctx context.Context, endpoint *legacy.EndpointV1, model *serverlessEndpointResourceModel) diag.Diagnostics {
+// It is read from the configuration for the reason configuredTemplateReadme
+// gives: the plan carries the prior entrypoint when the configuration leaves
+// it out, and sending that back would rewrite a template whose stored command
+// is a bare string into the JSON form the API encodes an entrypoint into. An
+// empty list is sent as [], which is how the API clears the entrypoint.
+func expandTemplateEntrypoint(ctx context.Context, config templateResourceModel) (*[]string, diag.Diagnostics) {
 	var diags diag.Diagnostics
-
-	model.TemplateVersion = int64PointerValue(endpoint.TemplateVersion)
-	model.Version = int64PointerValue(endpoint.Version)
-
-	// v1 reported a single owner; the 1.x attribute wrapped it in a list, and
-	// that shape is what a 1.x configuration indexes into.
-	if endpoint.UserID == "" {
-		model.Users = types.ListNull(types.StringType)
-	} else {
-		users, userDiags := types.ListValueFrom(ctx, types.StringType, []string{endpoint.UserID})
-		diags.Append(userDiags...)
-		model.Users = users
+	if config.DockerEntrypoint.IsNull() || config.DockerEntrypoint.IsUnknown() {
+		return nil, diags
 	}
-
-	// An endpoint with no workers allocated reports the same null the failed
-	// read does: one state for "nothing here", not an empty list a
-	// configuration would have to distinguish from it.
-	if len(endpoint.Workers) == 0 {
-		model.Workers = types.ListNull(endpointLegacyWorkerObjectType)
-		return diags
-	}
-
-	workers := make([]endpointLegacyWorkerModel, 0, len(endpoint.Workers))
-	for _, worker := range endpoint.Workers {
-		// A field the response omits is null, the way 1.0.8 left an absent
-		// worker field unset; the two millisecond counters are truncated from
-		// the JSON number it read them as.
-		workers = append(workers, endpointLegacyWorkerModel{
-			Id:         types.StringPointerValue(worker.ID),
-			PodId:      types.StringPointerValue(worker.PodID),
-			Status:     types.StringPointerValue(worker.Status),
-			UptimeMs:   legacyTruncatedInt64(worker.UptimeMs),
-			StartTime:  legacyNonEmptyString(worker.StartTime),
-			LastBusyMs: legacyTruncatedInt64(worker.LastBusyMs),
-		})
-	}
-	workerList, workerDiags := types.ListValueFrom(ctx, endpointLegacyWorkerObjectType, workers)
-	diags.Append(workerDiags...)
-	model.Workers = workerList
-
-	return diags
+	entrypoint := []string{}
+	diags.Append(config.DockerEntrypoint.ElementsAs(ctx, &entrypoint, false)...)
+	return &entrypoint, diags
 }
 
-// clearLegacyEndpointFields nulls the shim read-backs for the path where the
-// REST v1 host did not answer. The two write-only priorities are not here:
-// nothing reads them back, so they keep the value the configuration set.
-func clearLegacyEndpointFields(model *serverlessEndpointResourceModel) {
-	model.TemplateVersion = types.Int64Null()
-	model.Users = types.ListNull(types.StringType)
-	model.Version = types.Int64Null()
-	model.Workers = types.ListNull(endpointLegacyWorkerObjectType)
+// flattenTemplateEntrypoint maps the entrypoint REST v2 decodes from the
+// template's stored command. The API stores a cleared entrypoint by leaving it
+// out of that command, so a cleared one can come back absent: a planned []
+// is kept then, or a configuration clearing the entrypoint would fail the
+// apply against a null. Any other absent entrypoint is null.
+func flattenTemplateEntrypoint(ctx context.Context, reported *[]string, planned types.List) (types.List, diag.Diagnostics) {
+	if (reported == nil || len(*reported) == 0) &&
+		!planned.IsNull() && !planned.IsUnknown() && len(planned.Elements()) == 0 {
+		return types.ListValueMust(types.StringType, []attr.Value{}), nil
+	}
+	return types.ListValueFrom(ctx, types.StringType, reported)
 }
 
-// expandLegacyTemplatePatch collects the two template inputs REST v2 has no
-// field for. An unset one stays out of the request rather than clearing what
-// the template has.
+// flattenLegacyTemplateInto carries the four GraphQL template fields onto
+// whichever model declares them: the resource and the data source hold the
+// same four in different structs, the way templateCollections already handles
+// the collection fields two template shapes share.
 //
-// Both are Optional+Computed, so the patch is read from the configuration, not
-// the plan: terraform core copies the prior state value into the plan for a
-// computed attribute the configuration leaves out, which would PATCH the
-// deprecated host on every update of a template that sets neither, and a
-// failed write is an error. In the configuration an unset attribute is null on
-// every operation.
-func expandLegacyTemplatePatch(ctx context.Context, config templateResourceModel) (legacy.TemplatePatchV1, diag.Diagnostics) {
-	var diags diag.Diagnostics
-	var patch legacy.TemplatePatchV1
-
-	if !config.DockerEntrypoint.IsNull() && !config.DockerEntrypoint.IsUnknown() {
-		var entrypoint []string
-		diags.Append(config.DockerEntrypoint.ElementsAs(ctx, &entrypoint, false)...)
-		patch.DockerEntrypoint = &entrypoint
-	}
-	if !config.Readme.IsNull() && !config.Readme.IsUnknown() {
-		patch.Readme = config.Readme.ValueStringPointer()
-	}
-	return patch, diags
-}
-
-// flattenLegacyTemplate maps the REST v1 template onto the two deprecated
-// inputs and the three deprecated read-backs of the resource model. fromPatch
-// says which v1 call answered; docker_entrypoint follows the same rule as the
-// four flattenLegacyTemplateInto carries, and is set here because the data
-// source reads its docker_entrypoint from REST v2 instead.
-func flattenLegacyTemplate(ctx context.Context, template *legacy.TemplateV1, fromPatch bool, model *templateResourceModel) diag.Diagnostics {
-	var diags diag.Diagnostics
-
-	switch {
-	case template.DockerEntrypoint != nil:
-		value, entrypointDiags := types.ListValueFrom(ctx, types.StringType, template.DockerEntrypoint)
-		diags.Append(entrypointDiags...)
-		model.DockerEntrypoint = value
-	case !fromPatch || model.DockerEntrypoint.IsUnknown():
-		model.DockerEntrypoint = types.ListNull(types.StringType)
-	}
-
-	flattenLegacyTemplateInto(template, fromPatch, &model.Readme, &model.Earned, &model.IsRunpod, &model.RuntimeInMin)
-	return diags
-}
-
-// flattenLegacyTemplateInto carries the four REST v1 template attributes the
-// resource and the data source share onto whichever model declares them: the
-// two hold the same four in different structs, the way templateCollections
-// already handles the collection fields two template shapes share.
-//
-// What an absent field means depends on which call answered. A PATCH
-// (fromPatch) echoes what it chooses to, and a 204 echoes nothing at all: a
-// partial body must leave the value alone rather than report a configured
-// readme as cleared or a template's earnings as zero, so the planned value is
-// kept. An unknown one still resolves to null, because state cannot hold
-// unknown, which is the rule the GraphQL shims apply through jsonStringOr. A
-// GET reports the template as it is, so an absent field is a cleared field
-// (`"readme": null` and an omitted readme decode to the same nil), and keeping
-// the old value there would hide a readme cleared in the console from every
-// later plan.
-//
-// The rule covers earned, is_runpod and runtime_in_min too, not just the
-// configurable readme: they are Computed and planned unknown, so nothing flags
-// a fabricated zero on the plan, and the wrong value would sit in state until
-// the next refresh.
+// The query and the saveTemplate mutation both select all four, so an absent
+// or null field is one the template does not have, and maps to null; a 0 is a
+// reported value. readme keeps the value it holds when the answer differs
+// from it only by the surrounding whitespace saveTemplate trims off: a heredoc
+// readme ends in a newline the stored text never carries, so taking the
+// answer would fail the apply with an inconsistent result and then plan the
+// same write on every later run.
 func flattenLegacyTemplateInto(
-	template *legacy.TemplateV1,
-	fromPatch bool,
+	template *legacyTemplateFields,
 	readme *types.String,
 	earned *types.Float64,
 	isRunpod *types.Bool,
 	runtimeInMin *types.Int64,
 ) {
 	switch {
-	case template.Readme != nil:
+	case template.Readme == nil:
+		*readme = types.StringNull()
+	case readme.IsNull() || readme.IsUnknown() || strings.TrimSpace(readme.ValueString()) != *template.Readme:
 		*readme = types.StringValue(*template.Readme)
-	case !fromPatch || readme.IsUnknown():
-		*readme = types.StringNull()
 	}
-
-	switch {
-	case template.Earned != nil:
-		*earned = types.Float64Value(*template.Earned)
-	case !fromPatch || earned.IsUnknown():
-		*earned = types.Float64Null()
-	}
-
-	switch {
-	case template.IsRunpod != nil:
-		*isRunpod = types.BoolValue(*template.IsRunpod)
-	case !fromPatch || isRunpod.IsUnknown():
-		*isRunpod = types.BoolNull()
-	}
-
-	switch {
-	case template.RuntimeInMin != nil:
-		*runtimeInMin = legacyTruncatedInt64(template.RuntimeInMin)
-	case !fromPatch || runtimeInMin.IsUnknown():
-		*runtimeInMin = types.Int64Null()
-	}
+	*earned = types.Float64PointerValue(template.Earned)
+	*isRunpod = types.BoolPointerValue(template.IsRunpod)
+	*runtimeInMin = types.Int64PointerValue(template.RuntimeInMin)
 }
 
-// clearLegacyTemplateFields nulls the shim read-backs for the path where the
-// REST v1 host did not answer, and keeps the two configured inputs; the data
-// source's clearLegacyTemplateDetailFields nulls all four of its shim
-// attributes, because nothing there is configured.
-func clearLegacyTemplateFields(model *templateResourceModel) {
-	clearLegacyTemplateFieldsInto(&model.DockerEntrypoint, &model.Readme,
-		&model.Earned, &model.IsRunpod, &model.RuntimeInMin)
-}
-
-// clearLegacyTemplateFieldsInto nulls the three read-backs and leaves
-// docker_entrypoint and readme at the value the configuration planned,
-// resolving an unknown one to null because state cannot hold unknown.
+// clearLegacyTemplateFields nulls the three GraphQL read-backs for the path
+// where the shim did not answer, and keeps readme at the value the
+// configuration planned, resolving an unknown one to null because state
+// cannot hold unknown.
 //
-// The two configurable attributes are deliberately not nulled, the way
-// clearLegacyEndpointFields leaves the two endpoint priorities alone: nothing
-// reads them back off a failed call, and nulling a configured value puts state
-// permanently at odds with the configuration. A template created through REST
-// v2 is a 404 on the v1 route, which appendLegacyReadFailure passes over in
-// silence, so every later plan would show a diff nothing explains and every
-// later apply would re-run the same failing write, forever, until the
-// attribute is deleted from the configuration.
-func clearLegacyTemplateFieldsInto(
-	entrypoint *types.List,
-	readme *types.String,
-	earned *types.Float64,
-	isRunpod *types.Bool,
-	runtimeInMin *types.Int64,
-) {
-	// A null is rewritten rather than left alone so the list always carries its
-	// element type: a model's zero value is a null list with none, which state
-	// cannot hold.
-	if entrypoint.IsUnknown() || entrypoint.IsNull() {
-		*entrypoint = types.ListNull(types.StringType)
+// readme is deliberately not nulled: nothing reads it back off a failed call,
+// and nulling a configured value would put state at odds with the
+// configuration on every later plan, so every later apply would re-run the
+// same failing write until the attribute is removed. The data source's
+// clearLegacyTemplateDetailFields nulls all four, because nothing there is
+// configured.
+func clearLegacyTemplateFields(model *templateResourceModel) {
+	if model.Readme.IsUnknown() {
+		model.Readme = types.StringNull()
 	}
-	if readme.IsUnknown() {
-		*readme = types.StringNull()
-	}
-	*earned = types.Float64Null()
-	*isRunpod = types.BoolNull()
-	*runtimeInMin = types.Int64Null()
+	model.Earned = types.Float64Null()
+	model.IsRunpod = types.BoolNull()
+	model.RuntimeInMin = types.Int64Null()
 }
 
 func flattenGpuType(g sdktypes.GpuType) gpuTypeModel {
@@ -545,10 +317,11 @@ func expandCreatePod(ctx context.Context, plan podResourceModel) (pods.CreatePod
 }
 
 // expandPodMounts builds the mounts object for a create or an update. An
-// unconfigured mount block leaves mounts off the body entirely, which a PATCH
-// reads as "leave the existing mount alone"; the API has no way to remove
-// one. At most one kind is ever set; the resource's Conflicting validator
-// rejects a config that names both.
+// unconfigured mount block leaves its kind off the body, which a PATCH reads
+// as "leave the existing mount alone"; the API has no way to remove one. A
+// persistent volume goes alone; network and global volumes may go together.
+// The resource's Conflicting validators reject a persistent volume with
+// either.
 func expandPodMounts(ctx context.Context, plan podResourceModel) (*sdktypes.Mounts, diag.Diagnostics) {
 	var diags diag.Diagnostics
 
@@ -561,6 +334,7 @@ func expandPodMounts(ctx context.Context, plan podResourceModel) (*sdktypes.Moun
 		}}, diags
 	}
 
+	var mounts *sdktypes.Mounts
 	if !plan.NetworkVolumes.IsNull() && !plan.NetworkVolumes.IsUnknown() {
 		var volumes []networkMountModel
 		diags.Append(plan.NetworkVolumes.ElementsAs(ctx, &volumes, false)...)
@@ -571,10 +345,29 @@ func expandPodMounts(ctx context.Context, plan podResourceModel) (*sdktypes.Moun
 				Path:     volume.Path.ValueString(),
 			})
 		}
-		return &sdktypes.Mounts{Network: &network}, diags
+		mounts = &sdktypes.Mounts{Network: &network}
 	}
 
-	return nil, diags
+	if !plan.GlobalVolumes.IsNull() && !plan.GlobalVolumes.IsUnknown() {
+		var volumes []networkMountModel
+		diags.Append(plan.GlobalVolumes.ElementsAs(ctx, &volumes, false)...)
+		global := make([]sdktypes.GlobalMount, 0, len(volumes))
+		for _, volume := range volumes {
+			mount := sdktypes.GlobalMount{VolumeId: volume.VolumeId.ValueString()}
+			// An unset path lets the API choose one on create and keeps the
+			// current one on a PATCH.
+			if !volume.Path.IsNull() && !volume.Path.IsUnknown() {
+				mount.Path = volume.Path.ValueStringPointer()
+			}
+			global = append(global, mount)
+		}
+		if mounts == nil {
+			mounts = &sdktypes.Mounts{}
+		}
+		mounts.Global = &global
+	}
+
+	return mounts, diags
 }
 
 func flattenPod(ctx context.Context, pod *sdktypes.Pod, model *podResourceModel) diag.Diagnostics {
@@ -703,6 +496,21 @@ func flattenPod(ctx context.Context, pod *sdktypes.Pod, model *podResourceModel)
 		model.NetworkVolumes = network
 	} else {
 		model.NetworkVolumes = types.ListNull(networkMountObjectType)
+	}
+
+	if pod.Mounts.Global != nil && len(*pod.Mounts.Global) > 0 {
+		volumes := make([]networkMountModel, 0, len(*pod.Mounts.Global))
+		for _, mount := range *pod.Mounts.Global {
+			volumes = append(volumes, networkMountModel{
+				VolumeId: types.StringValue(mount.VolumeId),
+				Path:     types.StringPointerValue(mount.Path),
+			})
+		}
+		global, globalDiags := types.ListValueFrom(ctx, networkMountObjectType, volumes)
+		diags.Append(globalDiags...)
+		model.GlobalVolumes = global
+	} else {
+		model.GlobalVolumes = types.ListNull(networkMountObjectType)
 	}
 
 	// The API adds keys the configuration never held (PUBLIC_KEY for
@@ -1065,7 +873,29 @@ func flattenTemplate(ctx context.Context, template *sdktypes.Template, model *te
 	diags.Append(portDiags...)
 	model.Ports = ports
 
+	entrypoint, entrypointDiags := flattenTemplateEntrypoint(ctx, template.Entrypoint, model.DockerEntrypoint)
+	diags.Append(entrypointDiags...)
+	model.DockerEntrypoint = entrypoint
+
 	return diags
+}
+
+// expandEndpointGlobalMounts builds the endpoint mounts for a create or an
+// update from global_volumes. A null or unknown list leaves mounts off the
+// body, so an update keeps the endpoint's global volumes; a known list,
+// including [], replaces them, which is how a global volume is detached.
+func expandEndpointGlobalMounts(ctx context.Context, globalVolumes types.List) (*sdktypes.EndpointMountsInput, diag.Diagnostics) {
+	var diags diag.Diagnostics
+	if globalVolumes.IsNull() || globalVolumes.IsUnknown() {
+		return nil, diags
+	}
+	var ids []string
+	diags.Append(globalVolumes.ElementsAs(ctx, &ids, false)...)
+	global := make([]sdktypes.EndpointMount, 0, len(ids))
+	for _, id := range ids {
+		global = append(global, sdktypes.EndpointMount{VolumeId: id})
+	}
+	return &sdktypes.EndpointMountsInput{Global: &global}, diags
 }
 
 func expandCreateEndpoint(ctx context.Context, plan serverlessEndpointResourceModel) (serverless.CreateEndpointJSONRequestBody, diag.Diagnostics) {
@@ -1178,6 +1008,9 @@ func expandCreateEndpoint(ctx context.Context, plan serverlessEndpointResourceMo
 		diags.Append(plan.NetworkVolumes.ElementsAs(ctx, &volumes, false)...)
 		body.NetworkVolumes = &volumes
 	}
+	mounts, mountDiags := expandEndpointGlobalMounts(ctx, plan.GlobalVolumes)
+	diags.Append(mountDiags...)
+	body.Mounts = mounts
 	if !plan.Ports.IsNull() && !plan.Ports.IsUnknown() {
 		var ports []string
 		diags.Append(plan.Ports.ElementsAs(ctx, &ports, false)...)
@@ -1394,6 +1227,14 @@ func flattenEndpoint(ctx context.Context, endpoint *sdktypes.Endpoint, model *se
 	networkVolumes, nvDiags := types.ListValueFrom(ctx, types.StringType, endpoint.NetworkVolumes)
 	diags.Append(nvDiags...)
 	model.NetworkVolumes = networkVolumes
+
+	globalVolumes := make([]string, 0, len(endpoint.Mounts.Global))
+	for _, mount := range endpoint.Mounts.Global {
+		globalVolumes = append(globalVolumes, mount.VolumeId)
+	}
+	globals, gvDiags := types.ListValueFrom(ctx, types.StringType, globalVolumes)
+	diags.Append(gvDiags...)
+	model.GlobalVolumes = globals
 
 	if endpoint.Ports != nil {
 		ports, portDiags := types.ListValueFrom(ctx, types.StringType, *endpoint.Ports)

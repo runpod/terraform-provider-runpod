@@ -41,16 +41,18 @@ Worker ids change as the endpoint scales; `worker_ids` is the input the
 [logs](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/logs)
 module takes for a worker's log stream.
 
-The deprecated inputs and outputs (`gpu_type_priority`, `template_version`,
-`users`, `version`, `workers`) go through the REST v1 compatibility shim and
-exist for 1.x configurations; `compute_type`, also deprecated, is derived from
-what REST v2 reports.
+The deprecated inputs and outputs exist for 1.x configurations:
+`gpu_type_priority` is kept in state but never sent, because no API has a
+setting for it, and the plan warns when it is set; `template_version` is
+always null; `users` comes from the GraphQL compatibility shim; `version` and
+`workers` come from the REST v2 workers listing; `compute_type` is derived
+from what REST v2 reports.
 
 ## Usage
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.4"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -99,8 +101,8 @@ resource "runpod_serverless_endpoint" "this" {
 
   # Deprecated, preserving the 1.x compute_type and gpu_type_priority
   # attributes. compute_type restates the GPU choice above and is derived from
-  # what the v2 API reports; gpu_type_priority is rejected by REST v1 and
-  # stays null.
+  # what the v2 API reports; gpu_type_priority has no setting in any API, so a
+  # value is kept in state, never sent, and warned about at plan time.
   compute_type      = var.compute_type
   gpu_type_priority = var.gpu_type_priority
 }
@@ -135,4 +137,4 @@ data "runpod_serverless_endpoints" "all" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/serverless-endpoint/README.md).

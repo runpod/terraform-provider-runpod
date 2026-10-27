@@ -12,7 +12,7 @@ vars:
   # only line to change at a cut (2.0.0-rc.3, then 2.0.0); task docs then
   # rewrites every module ref, module README link, provider pin and module
   # version pin from it, and the local build below carries the same number.
-  RELEASE: 2.0.0-rc.3
+  RELEASE: 2.0.0-rc.4
   # A release candidate installs only through an exact pin; a final release
   # gets the ~> MAJOR.MINOR constraint. The modules' versions.tf take this
   # pin, so a candidate installs them from the registry.

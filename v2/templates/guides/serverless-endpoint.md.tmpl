@@ -41,16 +41,18 @@ Worker ids change as the endpoint scales; `worker_ids` is the input the
 [logs](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/logs)
 module takes for a worker's log stream.
 
-The deprecated inputs and outputs (`gpu_type_priority`, `template_version`,
-`users`, `version`, `workers`) go through the REST v1 compatibility shim and
-exist for 1.x configurations; `compute_type`, also deprecated, is derived from
-what REST v2 reports.
+The deprecated inputs and outputs exist for 1.x configurations:
+`gpu_type_priority` is kept in state but never sent, because no API has a
+setting for it, and the plan warns when it is set; `template_version` is
+always null; `users` comes from the GraphQL compatibility shim; `version` and
+`workers` come from the REST v2 workers listing; `compute_type` is derived
+from what REST v2 reports.
 
 ## Usage
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.4"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -72,4 +74,4 @@ module "serverless_endpoint" {
 {{ tffile "modules/serverless-endpoint/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/serverless-endpoint/README.md).

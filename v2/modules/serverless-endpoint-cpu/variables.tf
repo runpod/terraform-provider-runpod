@@ -148,7 +148,7 @@ variable "compute_type" {
 }
 
 variable "cpu_flavor_priority" {
-  description = "Deprecated; REST v1 currently rejects it and is retired on 2026-11-15. Leave null."
+  description = "Deprecated and not applied: neither REST v2 nor GraphQL has a setting for the order of the configured CPU flavors, so a value is kept in state, never sent, and warned about at plan time. Leave null."
   type        = string
   default     = null
 }

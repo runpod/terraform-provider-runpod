@@ -39,8 +39,9 @@ output "request_urls" {
 }
 
 # Deprecated, preserving the 1.x compute_type, users, version and workers
-# attributes. compute_type is derived from the v2 response; the other three
-# are read back from the REST v1 shim.
+# attributes. compute_type is derived from the v2 response, users is read back
+# from the GraphQL shim, and version and workers from the REST v2 workers
+# listing.
 output "compute_type" {
   description = "Deprecated. Worker compute family; CPU for this module."
   value       = runpod_serverless_endpoint.this.compute_type

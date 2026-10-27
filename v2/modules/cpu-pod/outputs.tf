@@ -63,9 +63,9 @@ output "runtime_uptime_seconds" {
   value       = try(runpod_pod.this.runtime.uptime_seconds, null)
 }
 
-# Deprecated read-backs served by the REST v1 shim, preserving the 1.x
-# machine_id and volume_encrypted attributes. Null when the shim host does not
-# answer.
+# Deprecated read-backs served by the GraphQL shim, preserving the 1.x
+# machine_id and volume_encrypted attributes. Null when that API does not
+# answer or does not report the pod.
 output "machine_id" {
   description = "Deprecated. Host machine the pod is placed on."
   value       = runpod_pod.this.machine_id

@@ -25,8 +25,8 @@ resource "runpod_template" "pytorch" {
   ports = ["8888/http", "22/tcp"]
 }
 
-# What the shim reports back about a template's usage, preserving the 1.x
-# earned, is_runpod and runtime_in_min attributes.
+# What the deprecated GraphQL shim reports back about a template's usage,
+# preserving the 1.x earned, is_runpod and runtime_in_min attributes.
 output "pytorch_runtime_in_min" {
   value = runpod_template.pytorch.runtime_in_min
 }

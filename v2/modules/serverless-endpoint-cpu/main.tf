@@ -23,8 +23,8 @@ resource "runpod_serverless_endpoint" "this" {
 
   # Deprecated, preserving the 1.x compute_type and cpu_flavor_priority
   # attributes. compute_type restates the CPU choice above and is derived from
-  # what the v2 API reports; cpu_flavor_priority is rejected by REST v1 and
-  # stays null.
+  # what the v2 API reports; cpu_flavor_priority has no setting in any API, so
+  # a value is kept in state, never sent, and warned about at plan time.
   compute_type        = var.compute_type
   cpu_flavor_priority = var.cpu_flavor_priority
 }

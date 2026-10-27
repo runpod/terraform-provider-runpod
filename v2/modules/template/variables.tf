@@ -101,13 +101,13 @@ variable "persistent_volume" {
 }
 
 variable "docker_entrypoint" {
-  description = "Deprecated. Container entrypoint for containers created from this template, e.g. [\"/bin/bash\"], preserving the 1.x docker_entrypoint attribute. Null leaves the template's own value in place."
+  description = "Container entrypoint for containers created from this template, in exec form, e.g. [\"/bin/bash\"], preserving the 1.x docker_entrypoint attribute. Null leaves the template's own value in place; [] clears it. Cannot be set together with args."
   type        = list(string)
   default     = null
 }
 
 variable "readme" {
-  description = "Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Null leaves the template's own text in place; \"\" clears it."
+  description = "Deprecated. Markdown description shown on the template's console page, preserving the 1.x readme attribute. Null leaves the template's own text in place. The text cannot be cleared: an empty or whitespace-only value is rejected at plan time."
   type        = string
   default     = null
 }

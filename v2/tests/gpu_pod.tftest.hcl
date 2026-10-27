@@ -66,12 +66,16 @@ run "create" {
     condition     = output.cluster_id == null
     error_message = "a standalone pod must report no cluster"
   }
-  # The deprecated REST v1 shim. machine_id is on every v1 pod. volume_encrypted
-  # can come back null for a pod created through v2 (a failed shim read is a
-  # warning and a null), so it is not asserted.
+  # The deprecated GraphQL shim. Both fields are non-null on the GraphQL pod,
+  # so a pod placed on a machine reports both; volume_encrypted is false, not
+  # null, for an unencrypted volume.
   assert {
     condition     = output.machine_id != null
-    error_message = "the REST v1 shim did not report the pod's host machine"
+    error_message = "the GraphQL shim did not report the pod's host machine"
+  }
+  assert {
+    condition     = output.volume_encrypted != null
+    error_message = "the GraphQL shim did not report whether the pod's volume is encrypted"
   }
 }
 

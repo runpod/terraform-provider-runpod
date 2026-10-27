@@ -19,16 +19,17 @@ module: `image` or `template_id`, queue or load-balancer routing, autoscaling
 bounds, a `registry` credential for a private image, and `network_volumes`
 for storage shared by every worker.
 
-The deprecated inputs and outputs (`cpu_flavor_priority`, `users`, `version`,
-`workers`) go through the REST v1 compatibility shim and exist for 1.x
-configurations; `compute_type`, also deprecated, is derived from what REST v2
-reports.
+The deprecated inputs and outputs exist for 1.x configurations:
+`cpu_flavor_priority` is kept in state but never sent, because no API has a
+setting for it, and the plan warns when it is set; `users` comes from the
+GraphQL compatibility shim; `version` and `workers` come from the REST v2
+workers listing; `compute_type` is derived from what REST v2 reports.
 
 ## Usage
 
 ```hcl
 module "serverless_endpoint_cpu" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.3"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint-cpu?ref=v2.0.0-rc.4"
 
   name = "api"
   cpu = [{
@@ -48,4 +49,4 @@ module "serverless_endpoint_cpu" {
 {{ tffile "modules/serverless-endpoint-cpu/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.3/v2/modules/serverless-endpoint-cpu/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/serverless-endpoint-cpu/README.md).

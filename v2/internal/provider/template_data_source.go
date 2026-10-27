@@ -22,10 +22,11 @@ import (
 //
 // The 1.x data source also served docker_entrypoint, read here from the v2
 // template's entrypoint, and four attributes that have no REST v2 field
-// (readme, earned, is_runpod and runtime_in_min), which are read from the REST
-// v1 template after the v2 read and marked deprecated. None of the five is part
-// of the shared attribute set: runpod_catalog_templates keeps the set it has,
-// and lists public catalog entries from REST v2 alone with no REST v1 read.
+// (readme, earned, is_runpod and runtime_in_min), which are read from the
+// GraphQL template after the v2 read and marked deprecated. None of the five
+// is part of the shared attribute set: runpod_catalog_templates keeps the set
+// it has, and lists public catalog entries from REST v2 alone with no GraphQL
+// read.
 
 var (
 	_ datasource.DataSource              = (*templateDataSource)(nil)
@@ -67,7 +68,7 @@ type templateDetailModel struct {
 }
 
 // templateDataSourceModel is templateDetailModel plus docker_entrypoint and
-// the four deprecated REST v1 read-backs. The two models are separate because
+// the four deprecated GraphQL read-backs. The two models are separate because
 // the shared one also types the entries of runpod_catalog_templates, whose
 // schema declares none of them.
 type templateDataSourceModel struct {
@@ -151,28 +152,27 @@ func templateDetailAttributes(idRequired bool) map[string]schema.Attribute {
 }
 
 // templateLegacyAttributes are four of the read-backs the 1.x data source got
-// from GraphQL. REST v1 GET /templates/{id} carries the same four and is the
-// cheaper call, so that is where they come from here.
+// from GraphQL, which is still where they come from.
 func templateLegacyAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"readme": schema.StringAttribute{
 			Computed:           true,
-			Description:        "Deprecated. Template README in Markdown, read from the REST v1 template. " + legacyShimDescriptionSuffix,
+			Description:        "Deprecated. Template README in Markdown, read from the GraphQL template. " + legacyShimDescriptionSuffix,
 			DeprecationMessage: legacyShimDeprecation,
 		},
 		"earned": schema.Float64Attribute{
 			Computed:           true,
-			Description:        "Deprecated. Earnings the template has generated in USD, read from the REST v1 template. " + legacyShimDescriptionSuffix,
+			Description:        "Deprecated. Earnings the template has generated in USD, read from the GraphQL template; 0 for a template the account does not own. " + legacyShimDescriptionSuffix,
 			DeprecationMessage: legacyShimDeprecation,
 		},
 		"is_runpod": schema.BoolAttribute{
 			Computed:           true,
-			Description:        "Deprecated. Whether Runpod publishes the template, read from the REST v1 template. " + legacyShimDescriptionSuffix,
+			Description:        "Deprecated. Whether Runpod publishes the template, read from the GraphQL template. " + legacyShimDescriptionSuffix,
 			DeprecationMessage: legacyShimDeprecation,
 		},
 		"runtime_in_min": schema.Int64Attribute{
 			Computed:           true,
-			Description:        "Deprecated. Minutes containers created from the template have run, read from the REST v1 template. " + legacyShimDescriptionSuffix,
+			Description:        "Deprecated. Minutes containers created from the template have run, read from the GraphQL template; 0 for a template the account does not own. " + legacyShimDescriptionSuffix,
 			DeprecationMessage: legacyShimDeprecation,
 		},
 	}
@@ -234,10 +234,10 @@ func (d *templateDataSource) Read(ctx context.Context, req datasource.ReadReques
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
 
-// readLegacyTemplateFields fills the four deprecated read-backs from the REST
-// v1 template. Nothing here is configurable, so a failure only warns and the
-// four attributes come back null, because that host is expected to disappear
-// before the attributes do.
+// readLegacyTemplateFields fills the four deprecated read-backs from the
+// GraphQL template. Nothing here is configurable, so a failure only warns and
+// the four attributes come back null; a template the GraphQL API does not
+// report to the caller leaves them null silently.
 func (d *templateDataSource) readLegacyTemplateFields(ctx context.Context, state *templateDataSourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 	if d.legacy == nil {
@@ -245,15 +245,20 @@ func (d *templateDataSource) readLegacyTemplateFields(ctx context.Context, state
 		return diags
 	}
 
-	template, err := d.legacy.GetTemplateV1(ctx, state.Id.ValueString())
+	template, err := fetchLegacyTemplateFields(ctx, d.legacy, state.Id.ValueString())
 	if err != nil {
 		clearLegacyTemplateDetailFields(state)
 		appendLegacyReadFailure(&diags, "template", err)
 		return diags
 	}
+	if template == nil {
+		clearLegacyTemplateDetailFields(state)
+		return diags
+	}
 
-	// A GET, so a field the response does not carry is null rather than kept.
-	flattenLegacyTemplateInto(template, false, &state.Readme, &state.Earned, &state.IsRunpod, &state.RuntimeInMin)
+	// state.Readme starts null (templateDataSourceState), so the answer always
+	// lands as it is.
+	flattenLegacyTemplateInto(template, &state.Readme, &state.Earned, &state.IsRunpod, &state.RuntimeInMin)
 	return diags
 }
 
@@ -271,7 +276,7 @@ func clearLegacyTemplateDetailFields(state *templateDataSourceModel) {
 
 // templateDataSourceState widens the shared template model into the one the
 // data source writes; docker_entrypoint and the four shim attributes start
-// null, filled by Read from the v2 template and the REST v1 read respectively.
+// null, filled by Read from the v2 template and the GraphQL read respectively.
 func templateDataSourceState(detail templateDetailModel) templateDataSourceModel {
 	state := templateDataSourceModel{
 		Id:                  detail.Id,

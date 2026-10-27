@@ -12,7 +12,7 @@ vars:
   # only line to change at a cut (2.0.0-rc.3, then 2.0.0); task docs then
   # rewrites every module ref, module README link, provider pin and module
   # version pin from it, and the local build below carries the same number.
-  RELEASE: 2.0.0-rc.4
+  RELEASE: 2.0.0
   # A release candidate installs only through an exact pin; a final release
   # gets the ~> MAJOR.MINOR constraint. The modules' versions.tf take this
   # pin, so a candidate installs them from the registry.
@@ -133,6 +133,22 @@ tasks:
       E2E_PROVIDER_VERSION: '{{.VERSION}}'
     cmds:
       - bash scripts/test_e2e.sh
+
+  test-release:
+    desc: |
+      The live run against a published release: runpod/runpod from the Terraform Registry and the
+      use-case modules from the release tag on GitHub, never the local build. Runs the same files,
+      opt-ins and sweep as test-e2e over a copy in artifacts/release-test/<version>; logs land in
+      artifacts/e2e/release-<version>-<time>. RELEASE_TEST_VERSION picks the release, RELEASE by
+      default, e.g. task test-release RELEASE_TEST_VERSION=2.0.0-rc.4 E2E_CLUSTER=1.
+      Creates and bills real resources. See scripts/test_release.sh.
+    interactive: true
+    env:
+      TF_CLI_CONFIG_FILE: ""
+      E2E_PROVIDER_VERSION: "{{.RELEASE_TEST_VERSION | default .RELEASE}}"
+      E2E_CLUSTER: "{{.E2E_CLUSTER}}"
+    cmds:
+      - bash scripts/test_release.sh
 
   validate-tf:
     desc: Validate the test root and every use-case module, check module coverage and the generated READMEs (offline)

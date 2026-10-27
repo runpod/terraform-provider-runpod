@@ -40,7 +40,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "serverless_endpoint" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/serverless-endpoint?ref=v2.0.0"
 
   name        = "inference"
   gpu_pools   = ["ADA_24"]
@@ -54,24 +54,24 @@ module "serverless_endpoint" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/serverless_endpoint) | resource |
-| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_build) | data source |
-| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_builds) | data source |
-| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_releases) | data source |
-| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/endpoint_workers) | data source |
-| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/serverless_endpoints) | data source |
+| [runpod_serverless_endpoint.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/serverless_endpoint) | resource |
+| [runpod_endpoint_build.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_build) | data source |
+| [runpod_endpoint_builds.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_builds) | data source |
+| [runpod_endpoint_releases.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_releases) | data source |
+| [runpod_endpoint_workers.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/endpoint_workers) | data source |
+| [runpod_serverless_endpoints.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/serverless_endpoints) | data source |
 
 ## Inputs
 

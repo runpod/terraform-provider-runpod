@@ -8,7 +8,8 @@ description: |-
 
 ## What changed and why
 
-The 2.0.0 provider is generated from the Runpod REST v2 API and speaks only that API. The 1.x provider was
+The 2.0.0 provider is generated from the Runpod REST v2 API and makes no REST v1 call; the only other API it calls
+is GraphQL, for the deprecated shims listed under "Deprecated shims". The 1.x provider was
 assembled from three different backends at once: GraphQL for machines and some pod paths, REST v1 for the
 user and billing reads, and REST v2 for the rest. That is why 1.x attribute names came in three naming
 styles and why several 1.x attributes were accepted by Terraform but silently ignored by the service.
@@ -57,7 +58,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "2.0.0-rc.4"
+      version = "~> 2.0"
     }
   }
 }
@@ -99,14 +100,13 @@ validates, but it is deprecated and ignored, and `RUNPOD_REST_V1_URL` is not rea
      required_providers {
        runpod = {
          source  = "runpod/runpod"
-         version = "2.0.0-rc.4"
+         version = "~> 2.0"
        }
      }
    }
    ```
 
-   Run `terraform init -upgrade`. A release candidate, such as `2.0.0-rc.4`, installs only through an exact
-   pin, `version = "2.0.0-rc.4"`; `~> 2.0` does not select it.
+   Run `terraform init -upgrade`.
 
 2. Before editing anything, record the identifiers you will need to re-import. `terraform state list`
    plus `terraform show -json` against the old state, or the `id` outputs you already have.

@@ -40,7 +40,7 @@ unencrypted volume.
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
 
   name        = "training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -57,4 +57,4 @@ module "gpu_pod" {
 {{ tffile "modules/gpu-pod/main.tf" }}
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/gpu-pod/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/gpu-pod/README.md).

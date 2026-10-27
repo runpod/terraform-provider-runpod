@@ -290,9 +290,8 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				Optional: true,
 				Computed: true,
 				Description: "Global volumes (runpod_global_volume) mounted into the pod. A global volume has no data center, so " +
-					"the pod can run anywhere. At most one, combinable with network_volumes and mutually exclusive with " +
-					"persistent_volume. The REST v2 specification allows it on GPU and CPU pods; some Runpod documentation " +
-					"says CPU pods are not supported, and the API's own validation decides. Like network_volumes, the mount " +
+					"the pod can run in any data center. At most one, combinable with network_volumes and mutually exclusive " +
+					"with persistent_volume. Like network_volumes, the mount " +
 					"is fixed at create: adding it replaces the pod, the volume cannot change, and only the path can.",
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
@@ -319,6 +318,7 @@ func (r *podResource) Schema(_ context.Context, _ resource.SchemaRequest, resp *
 				},
 				Validators: []validator.List{
 					listvalidator.SizeAtMost(1),
+					listvalidator.SizeAtLeast(1),
 				},
 			},
 			"start_ssh": schema.BoolAttribute{

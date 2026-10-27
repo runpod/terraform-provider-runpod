@@ -46,7 +46,7 @@ Point the GraphQL shims elsewhere with the provider's `graphql_url` /
 
 ```hcl
 module "legacy" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/legacy?ref=v2.0.0"
 
   bucket_size = "day"
 }
@@ -122,4 +122,4 @@ data "runpod_billing_endpoint" "this" {
 ```
 
 Inputs and outputs are documented in the
-[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0-rc.4/v2/modules/legacy/README.md).
+[module README](https://github.com/runpod/terraform-provider-runpod/blob/v2.0.0/v2/modules/legacy/README.md).

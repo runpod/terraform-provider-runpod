@@ -48,6 +48,5 @@ Users can configure the provider via:
 2. Provider block in Terraform config
 
 ## API Documentation
-- REST API: https://rest.runpod.io/v1/docs
 - GraphQL API: https://api.runpod.io/graphql
 - Docs: https://docs.runpod.io

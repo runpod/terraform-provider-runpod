@@ -26,7 +26,7 @@ Build and run it with the shared flow in [../README.md](../README.md), then
 
 ```hcl
 module "template" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/template?ref=v2.0.0"
 
   name  = "pytorch-base"
   image = "runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04"
@@ -40,21 +40,21 @@ module "template" {
 | Name | Version |
 | ---- | ------- |
 | terraform | >= 1.6 |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| runpod | 2.0.0-rc.4 |
+| runpod | ~> 2.0 |
 
 ## Resources
 
 | Name | Type |
 | ---- | ---- |
-| [runpod_template.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/resources/template) | resource |
-| [runpod_template.this](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/template) | data source |
-| [runpod_templates.all](https://registry.terraform.io/providers/runpod/runpod/2.0.0-rc.4/docs/data-sources/templates) | data source |
+| [runpod_template.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/resources/template) | resource |
+| [runpod_template.this](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/template) | data source |
+| [runpod_templates.all](https://registry.terraform.io/providers/runpod/runpod/latest/docs/data-sources/templates) | data source |
 
 ## Inputs
 

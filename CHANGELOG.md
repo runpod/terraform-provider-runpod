@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0 (unreleased; release candidates 2.0.0-rc.1 on 2026-10-13, 2.0.0-rc.2 on 2026-10-14, 2.0.0-rc.3 on 2026-10-19, 2.0.0-rc.4 on 2026-10-27)
+## 2.0.0 (2026-10-28; release candidates 2.0.0-rc.1 on 2026-10-13, 2.0.0-rc.2 on 2026-10-14, 2.0.0-rc.3 on 2026-10-19, 2.0.0-rc.4 on 2026-10-27)
 
 A rebuild of the provider on the Runpod REST v2 API and the generated Go SDK.
 The 1.x provider stays on the registry at its published versions; nothing about
@@ -18,6 +18,21 @@ acceptance test, and a coverage gate that fails the build when a registered
 resource or data source is used by none of them. A module is used straight
 from this repository at the release tag, for example
 `github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0`.
+
+### Changes since 2.0.0-rc.4
+
+An rc.4 configuration needs only its version pin moved to `~> 2.0`. Two inputs
+that used to fail late now fail at plan:
+
+- `runpod_pod` rejects `global_volumes = []`. Leave the attribute out for a pod
+  without a global volume; an empty list used to fail the apply with an
+  inconsistent result.
+- `runpod_billing_pod`, `runpod_billing_endpoint` and `runpod_billing_network_volume`
+  accept only `hour`, `day`, `week`, `month` or `year` as `bucket_size`; with
+  `gpu_type_id` set, any other value used to return no records.
+
+`task test-release` runs the acceptance tests against a published release: the
+provider from the Terraform Registry and the modules from the release tag.
 
 ### Changes in 2.0.0-rc.4
 
@@ -38,8 +53,7 @@ Added:
   `{ volume_id, path }`, sent as the v2 pod's `mounts.global`. It combines with
   `network_volumes` and not with `persistent_volume`, and like a network mount
   it is fixed at create: adding it replaces the pod, and only `path` changes in
-  place. The REST v2 specification allows it on CPU pods too; the API's own
-  validation decides.
+  place. The REST v2 specification allows it on GPU and CPU pods.
 - `global_volumes` on `runpod_serverless_endpoint`: at most one global volume
   id, sent as the v2 endpoint's `mounts.global` and mounted on every worker at
   `/runpod-volume`. GPU endpoints only, never together with network volumes;

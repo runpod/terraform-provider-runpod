@@ -16,9 +16,8 @@ Follow these steps in order. The sections below explain each one.
 1. If the Runpod skills and the Runpod MCP server are installed, use the MCP
    server for one-off operations and Terraform for infrastructure that
    persists. Neither is required for the steps below.
-2. Require the provider as `source = "runpod/runpod"` with the pin shown under
-   Versions: `~> 2.0` once 2.0.0 is released, an exact pin such as
-   `2.0.0-rc.4` while only release candidates exist.
+2. Require the provider as `source = "runpod/runpod"` with `version = "~> 2.0"`,
+   the pin shown under Versions.
 3. Read the API key from `RUNPOD_API_KEY` in the environment. Never write a key
    into a `.tf` file, a `.tfvars` file or a command line, and never print it.
    If there is no key, stop and ask the user for one.
@@ -28,7 +27,7 @@ Follow these steps in order. The sections below explain each one.
    destroys. If it replaces or destroys something the task did not ask to
    change, stop and ask.
 6. Ask the user before you apply anything that bills: pods, clusters, network
-   volumes, Serverless endpoints with workers. Then run `terraform apply tfplan`.
+   and global volumes, Serverless endpoints with workers. Then run `terraform apply tfplan`.
 7. Prefix the names of what you create with `agent-`. When the task is done,
    destroy it and confirm with the list data sources that nothing is left.
 8. Report provider bugs and documentation errors as
@@ -93,7 +92,7 @@ terraform {
   required_providers {
     runpod = {
       source  = "runpod/runpod"
-      version = "2.0.0-rc.4"
+      version = "~> 2.0"
     }
   }
 }
@@ -101,8 +100,7 @@ terraform {
 provider "runpod" {}
 ```
 
-`~> 2.0` takes every 2.x release. A release candidate, such as `2.0.0-rc.4`,
-installs only through an exact pin, `version = "2.0.0-rc.4"`. The use-case
+`~> 2.0` takes 2.0.0 and every later 2.x release. The use-case
 modules carry the same pin as the block above, so they install next to it.
 
 ## Start from a module
@@ -114,7 +112,7 @@ scratch:
 
 ```hcl
 module "gpu_pod" {
-  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0-rc.4"
+  source = "github.com/runpod/terraform-provider-runpod//v2/modules/gpu-pod?ref=v2.0.0"
 
   name        = "agent-training"
   gpu_type_id = "NVIDIA GeForce RTX 4090"
@@ -167,8 +165,8 @@ list them in `lifecycle { ignore_changes = [...] }` before that apply.
 - Give test resources a recognisable prefix, such as `agent-`, so they are easy to
   find and to tell apart from anything else on the account.
 - Destroy what you create when the task is done: pods and clusters bill while
-  they run, a stopped pod still bills for its disk, and network volumes bill
-  for their allocated storage.
+  they run, a stopped pod still bills for its disk, and network and global
+  volumes bill for their allocated storage.
 - Confirm with the list data sources, which list the account's objects:
 
 ```hcl

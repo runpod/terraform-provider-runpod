@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.x end of life
+
+The 1.x provider (1.0.x) is built on the Runpod REST v1 API, which Runpod
+switches off on 2026-11-16. From that date 1.x cannot create, read, update or
+delete pods, templates, Serverless endpoints, network volumes or container
+registry credentials. 1.x gets no further releases; its published versions
+stay on the registry. This supersedes the line in the 2.0.0 notes below that
+nothing about 1.x changes.
+
+Upgrade to 2.0.0, which makes no REST v1 call, with the
+[migration guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x).
+
 ## 2.0.0 (2026-10-28; release candidates 2.0.0-rc.1 on 2026-10-13, 2.0.0-rc.2 on 2026-10-14, 2.0.0-rc.3 on 2026-10-19, 2.0.0-rc.4 on 2026-10-27)
 
 A rebuild of the provider on the Runpod REST v2 API and the generated Go SDK.
@@ -39,7 +51,7 @@ provider from the Terraform Registry and the modules from the release tag.
 The provider makes no REST v1 call. What 2.0.0-rc.3 read or wrote through
 REST v1 now goes to REST v2 or, where REST v2 has no field, to the GraphQL API
 the machine and user shims already use, so the REST v1 retirement on
-2026-11-15 does not affect 2.0.0. No resource, data source or attribute is
+2026-11-16 does not affect 2.0.0. No resource, data source or attribute is
 removed or renamed.
 
 Added:
@@ -198,7 +210,7 @@ changes are description strings.
   only release candidates exist, the import section covers clusters and the
   SSH keys id, and the leftover check lists templates, clusters and registry
   credentials too.
-- REST v1 is retired on 2026-11-15: the migration guide, the legacy guide, the
+- REST v1 is retired on 2026-11-16: the migration guide, the legacy guide, the
   v2 README, the changelog and the shim descriptions say what stops working
   then; `gpu_type_priority` and `cpu_flavor_priority` are documented as
   rejected by REST v1, and the Serverless modules say to leave them null.

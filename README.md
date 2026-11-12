@@ -3,6 +3,11 @@
 Manage Runpod GPU and CPU pods, Serverless endpoints, templates, network volumes, Instant Clusters,
 account SSH keys and container registry credentials with Terraform, through the Runpod REST API v2.
 
+> [!IMPORTANT]
+> The 1.x provider (1.0.x) is built on the Runpod REST v1 API, which Runpod switches off on
+> 2026-11-16. From that date 1.x no longer works. Upgrade to 2.0.0, which makes no REST v1 call,
+> with the [migration guide](https://registry.terraform.io/providers/runpod/runpod/latest/docs/guides/migrating-from-1-x).
+
 <!-- runpod-agent-setup:start -->
 **Using an AI agent?** Point it to https://agents.runpod.io to install the Runpod skills and MCP server.
 <!-- runpod-agent-setup:end -->
@@ -31,7 +36,7 @@ provider "runpod" {} # reads RUNPOD_API_KEY
 - Release notes: [CHANGELOG.md](CHANGELOG.md)
 - License: MIT, see [v2/LICENSE](v2/LICENSE)
 
-The 1.x provider (1.0.x tags) is built from the Go module at the repository root; its files stay here
-only for 1.0.x patch releases.
+The 1.x provider (1.0.x tags) was built from the Go module at the repository root. It is no longer
+maintained and gets no further releases.
 Root `*.md` files other than README.md and CHANGELOG.md describe the 1.x provider, refer to a 1.x
 `examples/` directory that is no longer in the tree, and do not work with 2.x.

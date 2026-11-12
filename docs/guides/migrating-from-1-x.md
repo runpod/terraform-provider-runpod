@@ -10,8 +10,9 @@ description: |-
 
 The 2.0.0 provider is generated from the Runpod REST v2 API and makes no REST v1 call; the only other API it calls
 is GraphQL, for the deprecated shims listed under "Deprecated shims". The 1.x provider was
-assembled from three different backends at once: GraphQL for machines and some pod paths, REST v1 for the
-user and billing reads, and REST v2 for the rest. That is why 1.x attribute names came in three naming
+assembled from two backends at once: GraphQL for machines and several data sources, and REST v1
+(`rest.runpod.io/v1`) for pods, templates, Serverless endpoints, network volumes, registry credentials and the
+user and billing reads. That is why 1.x attribute names came in mixed naming
 styles and why several 1.x attributes were accepted by Terraform but silently ignored by the service.
 2.0.0 has one source of truth, so every attribute maps to a documented v2 field, names follow the v2
 schema (`image`, not `image_name`; `disk`, not `container_disk_in_gb`), and anything the API never
@@ -91,7 +92,11 @@ validates, but it is deprecated and ignored, and `RUNPOD_REST_V1_URL` is not rea
 
 ## Upgrade steps
 
-1. Pin the new major version and raise the Terraform floor:
+1. Before editing anything, record the identifiers you will need to re-import. `terraform state list`
+   plus `terraform show -json` against the old state, or the `id` outputs you already have.
+   Do this while the 1.x provider is still the one in the lock file.
+
+2. Pin the new major version and raise the Terraform floor:
 
    ```hcl
    terraform {
@@ -107,10 +112,6 @@ validates, but it is deprecated and ignored, and `RUNPOD_REST_V1_URL` is not rea
    ```
 
    Run `terraform init -upgrade`.
-
-2. Before editing anything, record the identifiers you will need to re-import. `terraform state list`
-   plus `terraform show -json` against the old state, or the `id` outputs you already have.
-   Do this while the 1.x provider is still the one in the lock file.
 
 3. Rewrite the configuration resource by resource using the mapping tables below. Rename the three
    resource types that changed name (`runpod_endpoint`, `runpod_container_registry_auth` and
@@ -1135,7 +1136,7 @@ has the value, the provider reads or writes it there, through the Go SDK's depre
 (`github.com/runpod/go-sdk/v2/legacy`), which ships alongside the v2 client and is removed with the last
 of these shims; `graphql_url` is the only provider argument they need. Where no API has the value any
 more, the attribute is kept so the configuration still plans, and it reads null or is not applied, as
-listed below. 2.0.0 makes no REST v1 call, so the REST v1 retirement on 2026-11-15 does not affect any of
+listed below. 2.0.0 makes no REST v1 call, so the REST v1 retirement on 2026-11-16 does not affect any of
 them.
 
 How a failure behaves: a shim attribute nothing configured is a **read**: if the GraphQL API does not

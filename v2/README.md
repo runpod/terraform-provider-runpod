@@ -105,7 +105,7 @@ sets is a write, and a failure there fails the apply. `docker_entrypoint` on
 `runpod_template` is no longer deprecated: it is the v2 template's
 `entrypoint`, and it cannot be set together with `args`.
 
-The provider makes no REST v1 call, so the REST v1 retirement on 2026-11-15
+The provider makes no REST v1 call, so the REST v1 retirement on 2026-11-16
 changes nothing for it.
 
 `runpod_pod`, `runpod_network_volume`, `runpod_global_volume`, `runpod_template`,

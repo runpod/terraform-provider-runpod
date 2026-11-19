@@ -2,12 +2,14 @@
 # new SDK release. runpod/go-sdk's release workflow sends the dispatch once it has
 # tagged; Run workflow does the same for a version typed by hand.
 #
-# Only the bump is made here. Whether it compiles is answered by test.yml on the
-# pull request itself, which is also where a breaking SDK change becomes visible.
-# The pull request is never merged automatically.
+# Only the bump is made here. Whether it compiles is answered by test.yml, which
+# is also where a breaking SDK change becomes visible. The pull request is never
+# merged automatically.
 #
-# The App token is not a convenience: a pull request opened with GITHUB_TOKEN does
-# not start test.yml, and an unchecked bump is the one thing this must not produce.
+# It is opened with GITHUB_TOKEN, so test.yml does not start on it by itself:
+# GitHub does not raise workflow events for actions taken by that token. Whoever
+# picks the pull request up starts the checks, by closing and reopening it or by
+# running test.yml against the branch.
 name: SDK bump
 
 on:
@@ -28,7 +30,8 @@ on:
         default: ""
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
   group: sdk-bump
@@ -45,17 +48,8 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
-      - name: Mint a token
-        id: token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
-        with:
-          app-id: ${{ secrets.AGENT_PIPELINE_APP_ID }}
-          private-key: ${{ secrets.AGENT_PIPELINE_APP_PRIVATE_KEY }}
-
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-        with:
-          token: ${{ steps.token.outputs.token }}
 
       - name: Resolve the version
         id: version
@@ -104,7 +98,6 @@ jobs:
         if: steps.bump.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
-          token: ${{ steps.token.outputs.token }}
           branch: automation/go-sdk-bump
           delete-branch: true
           commit-message: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"

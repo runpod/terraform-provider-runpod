@@ -710,7 +710,7 @@ func (r *podResource) Update(ctx context.Context, req resource.UpdateRequest, re
 	}
 	// Mount fields are patchable; the mount kind is not, which the schema
 	// handles by replacing the pod when a mount block is added.
-	mounts, mountDiags := expandPodMounts(ctx, plan)
+	mounts, mountDiags := expandPodMountsUpdate(ctx, plan)
 	resp.Diagnostics.Append(mountDiags...)
 	body.Mounts = mounts
 	if !plan.Args.IsNull() && !plan.Args.IsUnknown() {

@@ -370,6 +370,40 @@ func expandPodMounts(ctx context.Context, plan podResourceModel) (*sdktypes.Moun
 	return mounts, diags
 }
 
+// expandPodMountsUpdate builds the mounts object for an update. The PATCH body
+// lists the volumes to change rather than the pod's whole mount set: a listed
+// volume the pod already has moves to its path, so the configured blocks
+// resolve to the same in-place path edits as before. Nothing here sets
+// remove, so a mount dropped from the configuration is still kept.
+func expandPodMountsUpdate(ctx context.Context, plan podResourceModel) (*sdktypes.UpdatePodMounts, diag.Diagnostics) {
+	mounts, diags := expandPodMounts(ctx, plan)
+	if mounts == nil {
+		return nil, diags
+	}
+
+	patch := &sdktypes.UpdatePodMounts{}
+	if mounts.Persistent != nil {
+		size, path := mounts.Persistent.Size, mounts.Persistent.Path
+		patch.Persistent = &sdktypes.PersistentMountPatch{Size: &size, Path: &path}
+	}
+	if mounts.Network != nil {
+		network := make([]sdktypes.NetworkMountPatch, 0, len(*mounts.Network))
+		for _, mount := range *mounts.Network {
+			path := mount.Path
+			network = append(network, sdktypes.NetworkMountPatch{VolumeId: mount.VolumeId, Path: &path})
+		}
+		patch.Network = &network
+	}
+	if mounts.Global != nil {
+		global := make([]sdktypes.GlobalMountPatch, 0, len(*mounts.Global))
+		for _, mount := range *mounts.Global {
+			global = append(global, sdktypes.GlobalMountPatch{VolumeId: mount.VolumeId, Path: mount.Path})
+		}
+		patch.Global = &global
+	}
+	return patch, diags
+}
+
 func flattenPod(ctx context.Context, pod *sdktypes.Pod, model *podResourceModel) diag.Diagnostics {
 	var diags diag.Diagnostics
 

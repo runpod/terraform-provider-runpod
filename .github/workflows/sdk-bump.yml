@@ -129,6 +129,7 @@ jobs:
         if: steps.pr.outputs.pull-request-url != ''
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SDK_BUMP_SLACK_WEBHOOK_URL }}
+          REPO: ${{ github.event.repository.name }}
           URL: ${{ steps.pr.outputs.pull-request-url }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -140,8 +141,8 @@ jobs:
 
           # No escaping pass here: every part is ours or a github.com URL, and
           # escaping < and > would turn the mention and the link into text.
-          jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" '
-            {text: ($rev + " go-sdk " + $version + " is waiting for review" + "\n" + $url + "\n"
+          jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" --arg repo "$REPO" '
+            {text: ($rev + " " + $repo + ": the bump to go-sdk " + $version + " is waiting for review" + "\n" + $url + "\n"
                     + "Check the *test* workflow on it. A pull request opened by Actions does not always start it; if it has not run, open the Checks tab, pick *test*, run it from there and read the result.")}
           ' > "$RUNNER_TEMP/slack.json"
 

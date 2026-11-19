@@ -39,6 +39,8 @@ concurrency:
 
 env:
   MODULE: github.com/runpod/go-sdk/v2
+  # Comma separated, so this grows into a list without touching the step below.
+  REVIEWERS: rsavrp
 
 jobs:
   bump:
@@ -105,6 +107,7 @@ jobs:
           base: main
           branch: automation/go-sdk-bump
           delete-branch: true
+          reviewers: ${{ env.REVIEWERS }}
           commit-message: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"
           title: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"
           body: |

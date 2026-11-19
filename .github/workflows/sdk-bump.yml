@@ -13,13 +13,6 @@
 name: SDK bump
 
 on:
-  # TEMPORARY, remove before merging. repository_dispatch and the Run workflow
-  # button only ever see the copy on the default branch, so this is the only way
-  # the file can prove itself on its own pull request. Narrowed to this path, so
-  # no other pull request pays for it.
-  pull_request:
-    paths:
-      - .github/workflows/sdk-bump.yml
   repository_dispatch:
     types: [go-sdk-release]
   workflow_dispatch:

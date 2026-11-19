@@ -48,8 +48,12 @@ jobs:
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
+      # Pinned to main: on a pull_request event the default checkout is the merge
+      # commit, and the bump would branch off that and carry its diff along.
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: main
 
       - name: Resolve the version
         id: version
@@ -98,6 +102,7 @@ jobs:
         if: steps.bump.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
+          base: main
           branch: automation/go-sdk-bump
           delete-branch: true
           commit-message: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"

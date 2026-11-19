@@ -1,0 +1,119 @@
+# Opens the pull request that moves github.com/runpod/go-sdk/v2 in v2/go.mod to a
+# new SDK release. runpod/go-sdk's release workflow sends the dispatch once it has
+# tagged; Run workflow does the same for a version typed by hand.
+#
+# Only the bump is made here. Whether it compiles is answered by test.yml on the
+# pull request itself, which is also where a breaking SDK change becomes visible.
+# The pull request is never merged automatically.
+#
+# The App token is not a convenience: a pull request opened with GITHUB_TOKEN does
+# not start test.yml, and an unchecked bump is the one thing this must not produce.
+name: SDK bump
+
+on:
+  # TEMPORARY, remove before merging. repository_dispatch and the Run workflow
+  # button only ever see the copy on the default branch, so this is the only way
+  # the file can prove itself on its own pull request. Narrowed to this path, so
+  # no other pull request pays for it.
+  pull_request:
+    paths:
+      - .github/workflows/sdk-bump.yml
+  repository_dispatch:
+    types: [go-sdk-release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "go-sdk release to bump to, e.g. v2.2.0 (empty takes the newest from the module proxy)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdk-bump
+  cancel-in-progress: false
+
+env:
+  MODULE: github.com/runpod/go-sdk/v2
+
+jobs:
+  bump:
+    name: Bump
+    # Not ubuntu-latest: the organization's IP allow list refuses GitHub API calls
+    # from the shared runners, and this job is one API call from end to end.
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - name: Mint a token
+        id: token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.AGENT_PIPELINE_APP_ID }}
+          private-key: ${{ secrets.AGENT_PIPELINE_APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          token: ${{ steps.token.outputs.token }}
+
+      - name: Resolve the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          PAYLOAD_TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-$PAYLOAD_TAG}"
+          if [ -z "$version" ]; then
+            version=$(curl -fsS "https://proxy.golang.org/${MODULE}/@latest" | jq -r '.Version')
+          fi
+          # A version the proxy does not serve yet would leave go.mod pointing at
+          # nothing; failing here beats a pull request nobody can build.
+          curl -fsS "https://proxy.golang.org/${MODULE}/@v/${version}.info" > /dev/null
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Bumping ${MODULE} to ${version}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'v2/go.mod'
+          cache: true
+          cache-dependency-path: 'v2/go.sum'
+
+      - name: Bump the dependency
+        id: bump
+        working-directory: v2
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          go get "${MODULE}@${VERSION}"
+          go mod tidy
+          if git diff --quiet -- go.mod go.sum; then
+            echo "::notice::go.mod already points at ${VERSION}, nothing to open"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # One branch, so there is only ever one open bump: a newer release replaces
+      # the pull request rather than adding a second one beside it. The action
+      # commits the working tree, so only go.mod and go.sum travel.
+      - name: Open or update the pull request
+        if: steps.bump.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          token: ${{ steps.token.outputs.token }}
+          branch: automation/go-sdk-bump
+          delete-branch: true
+          commit-message: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"
+          title: "chore(deps): bump go-sdk to ${{ steps.version.outputs.version }}"
+          body: |
+            `github.com/runpod/go-sdk/v2` moves to [${{ steps.version.outputs.version }}](https://github.com/runpod/go-sdk/releases/tag/${{ steps.version.outputs.version }}).
+
+            Only `v2/go.mod` and `v2/go.sum` are touched. Whether the provider still
+            compiles against it is what the checks on this pull request answer; a red
+            lane here is a breaking change in the SDK for the provider to absorb.
+
+            Opened by the release of runpod/go-sdk. Nothing merges by itself.

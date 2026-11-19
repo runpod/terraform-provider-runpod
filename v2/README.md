@@ -225,7 +225,8 @@ At the repository root, next to the 1.x provider:
 
     docs/                    generated registry documentation
     .github/workflows/       CI: lint, unit tests with the race detector, offline
-                             validation; the release build for v2.* tags
+                             validation; the release build for v2.* tags; the
+                             go-sdk bump pull request
     .goreleaser.v2.yml       the release build of this module
     CHANGELOG.md             release notes
 

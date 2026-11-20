@@ -292,6 +292,63 @@ func TestExpandPodMountsGlobal(t *testing.T) {
 	}
 }
 
+func TestExpandPodMountsUpdate(t *testing.T) {
+	ctx := context.Background()
+
+	mounts, diags := expandPodMountsUpdate(ctx, podResourceModel{})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts != nil {
+		t.Fatalf("no mount block: %+v", mounts)
+	}
+
+	persistent, diags := types.ObjectValueFrom(ctx, persistentMountAttrTypes, persistentMountModel{
+		Size: types.Int64Value(20),
+		Path: types.StringValue("/workspace"),
+	})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	mounts, diags = expandPodMountsUpdate(ctx, podResourceModel{PersistentVolume: persistent})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts == nil || mounts.Persistent == nil || mounts.Persistent.Size == nil || *mounts.Persistent.Size != 20 ||
+		mounts.Persistent.Path == nil || *mounts.Persistent.Path != "/workspace" ||
+		mounts.Persistent.Remove != nil || mounts.Network != nil || mounts.Global != nil {
+		t.Fatalf("persistent patch: %+v", mounts)
+	}
+
+	network, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("vol_xyz"),
+		Path:     types.StringValue("/runpod-volume"),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	globalNoPath, diags := types.ListValueFrom(ctx, networkMountObjectType, []networkMountModel{{
+		VolumeId: types.StringValue("gsb_abc"),
+		Path:     types.StringNull(),
+	}})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	mounts, diags = expandPodMountsUpdate(ctx, podResourceModel{NetworkVolumes: network, GlobalVolumes: globalNoPath})
+	if diags.HasError() {
+		t.Fatal(diags)
+	}
+	if mounts == nil || mounts.Network == nil || len(*mounts.Network) != 1 ||
+		(*mounts.Network)[0].VolumeId != "vol_xyz" || *(*mounts.Network)[0].Path != "/runpod-volume" ||
+		(*mounts.Network)[0].Remove != nil {
+		t.Fatalf("network patch: %+v", mounts)
+	}
+	// An unset global path stays off the body, so the API keeps the current one.
+	if mounts.Global == nil || len(*mounts.Global) != 1 || (*mounts.Global)[0].Path != nil || (*mounts.Global)[0].Remove != nil {
+		t.Fatalf("global patch: %+v", mounts)
+	}
+}
+
 func TestFlattenPodCpuAndMounts(t *testing.T) {
 	ctx := context.Background()
 	template := "30zmvf89kd"

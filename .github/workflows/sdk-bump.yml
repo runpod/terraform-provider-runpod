@@ -6,10 +6,10 @@
 # is also where a breaking SDK change becomes visible. The pull request is never
 # merged automatically.
 #
-# It is opened with GITHUB_TOKEN, so test.yml may not start on it: GitHub holds
-# back workflow events for actions taken by that token, and a run started by the
-# schedule has no user behind it to inherit. The Slack message says so; whoever
-# picks the pull request up runs the checks from its Checks tab.
+# It is opened with GITHUB_TOKEN, so no pull_request event is raised for it and
+# test.yml does not start by itself. The last steps ask for that run against the
+# branch and say so in Slack, since its checks then live in the Actions tab
+# rather than on the pull request.
 name: SDK bump
 
 on:
@@ -166,23 +166,31 @@ jobs:
       # A pull request opened with GITHUB_TOKEN raises no pull_request event, so
       # test.yml never starts on it. Dispatching it against the branch runs the
       # same checks; they land in the Actions tab rather than on the pull request.
+      # Not fatal: the pull request is already open by now, and a reviewer who is
+      # told to start the checks by hand is better off than one told nothing.
       - name: Start the provider's checks on the branch
+        id: checks
         if: steps.pr.outputs.pull-request-url != ''
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run test.yml --ref "$BRANCH"
 
       # The reviewer first, the link second, what to do last. Two outcomes reach
       # here: a bump waiting for review, or a branch left alone because someone
-      # is working on it.
+      # is working on it. A run with nothing to bump skips the branch step, so
+      # theirs is empty there and must not be read as "someone else's".
       - name: Tell the reviewers
-        if: steps.pr.outputs.pull-request-url != '' || steps.branch.outputs.theirs != '0'
+        if: >-
+          steps.pr.outputs.pull-request-url != ''
+          || (steps.branch.outputs.theirs != '' && steps.branch.outputs.theirs != '0')
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SDK_BUMP_SLACK_WEBHOOK_URL }}
           REPO: ${{ github.event.repository.name }}
           URL: ${{ steps.pr.outputs.pull-request-url || steps.branch.outputs.url }}
           VERSION: ${{ steps.version.outputs.version }}
           THEIRS: ${{ steps.branch.outputs.theirs }}
+          CHECKS: ${{ steps.checks.outcome }}
         run: |
           set -euo pipefail
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
@@ -201,10 +209,18 @@ jobs:
                       + "Move the pin there by hand, or close it and the next run will reopen it.")}
             ' > "$RUNNER_TEMP/slack.json"
           else
-            jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" --arg repo "$REPO" '
+            # The checks step is allowed to fail, so say which of the two
+            # happened rather than promising a run that was never started.
+            if [ "${CHECKS:-}" = "success" ]; then
+              checks="I started the *test* workflow against the branch; its run is in the Actions tab, not on the pull request."
+            else
+              checks="I could not start the *test* workflow. Start it by hand: Actions → test → Run workflow on \`${BRANCH}\`."
+            fi
+            jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" \
+                  --arg repo "$REPO" --arg checks "$checks" '
               {text: ($rev + " " + $repo + ": the bump to go-sdk " + $version + " is waiting for review"
                       + "\n" + $url + "\n"
-                      + "I started the *test* workflow against the branch, since a pull request opened by Actions starts no checks of its own; its run is in the Actions tab.")}
+                      + "A pull request opened by Actions starts no checks of its own. " + $checks)}
             ' > "$RUNNER_TEMP/slack.json"
           fi
 

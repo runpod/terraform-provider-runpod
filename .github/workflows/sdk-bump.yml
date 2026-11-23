@@ -25,6 +25,9 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # Starting test.yml on the branch: a pull request opened with GITHUB_TOKEN
+  # raises no events, so its checks have to be asked for.
+  actions: write
 
 concurrency:
   group: sdk-bump
@@ -32,6 +35,7 @@ concurrency:
 
 env:
   MODULE: github.com/runpod/go-sdk/v2
+  BRANCH: automation/go-sdk-bump
   # Both comma separated, so they grow into lists without touching the steps.
   REVIEWERS: rsavrp
   # Slack member ids, not display names: only <@Uxxxxxxxx> notifies anyone.
@@ -52,6 +56,13 @@ jobs:
         with:
           ref: main
 
+      - name: Set up Go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version-file: 'v2/go.mod'
+          cache: true
+          cache-dependency-path: 'v2/go.sum'
+
       - name: Resolve the version
         id: version
         env:
@@ -63,18 +74,28 @@ jobs:
           if [ -z "$version" ]; then
             version=$(curl -fsS "https://proxy.golang.org/${MODULE}/@latest" | jq -r '.Version')
           fi
+          # The module path carries the major, so only v2 can be pinned here. A
+          # branch name typed into the form lands on a pseudo-version otherwise.
+          case "$version" in
+            v2.*) ;;
+            *) echo "::error::$version is not a v2 release of ${MODULE}"; exit 1 ;;
+          esac
           # A version the proxy does not serve yet would leave go.mod pointing at
           # nothing; failing here beats a pull request nobody can build.
           curl -fsS "https://proxy.golang.org/${MODULE}/@v/${version}.info" > /dev/null
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "Bumping ${MODULE} to ${version}" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Set up Go
-        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
-        with:
-          go-version-file: 'v2/go.mod'
-          cache: true
-          cache-dependency-path: 'v2/go.sum'
+          current=$(cd v2 && go mod edit -json | jq -r --arg m "$MODULE" \
+            '.Require[] | select(.Path == $m) | .Version')
+          # sort -V puts the newer last. Equal is fine, the bump step says so and
+          # stops; older is a downgrade nobody asked for.
+          newest=$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -1)
+          if [ "$version" != "$current" ] && [ "$newest" != "$version" ]; then
+            echo "::error::$version is older than the pinned $current"
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Bumping ${MODULE} from ${current} to ${version}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Bump the dependency
         id: bump
@@ -92,12 +113,36 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # create-pull-request force-pushes the branch when it updates it, so a fix
+      # someone pushed onto an open bump would vanish on the next release. If the
+      # branch carries a commit this workflow did not write, it is theirs now.
+      - name: Is the open bump someone else's now?
+        id: branch
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          theirs=0
+          url=""
+          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+            theirs=$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${BRANCH}" \
+              --jq '[.commits[] | select(.commit.message
+                     | startswith("chore(deps): bump go-sdk to ") | not)] | length')
+            url=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // ""')
+          fi
+          echo "theirs=$theirs" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          if [ "$theirs" -gt 0 ]; then
+            echo "::warning::${BRANCH} carries ${theirs} commit(s) this workflow did not write, leaving it alone"
+          fi
+
       # One branch, so there is only ever one open bump: a newer release replaces
       # the pull request rather than adding a second one beside it. The action
       # commits the working tree, so only go.mod and go.sum travel.
       - name: Open or update the pull request
         id: pr
-        if: steps.bump.outputs.changed == 'true'
+        if: steps.bump.outputs.changed == 'true' && steps.branch.outputs.theirs == '0'
         uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
         with:
           base: main
@@ -110,34 +155,58 @@ jobs:
             `github.com/runpod/go-sdk/v2` moves to [${{ steps.version.outputs.version }}](https://github.com/runpod/go-sdk/releases/tag/${{ steps.version.outputs.version }}).
 
             Only `v2/go.mod` and `v2/go.sum` are touched. Whether the provider still
-            compiles against it is what the checks on this pull request answer; a red
-            lane here is a breaking change in the SDK for the provider to absorb.
+            compiles against it is answered by the `test` workflow, started against
+            this branch from the Actions tab: a pull request opened by Actions raises
+            no checks of its own. A red lane there is a breaking change in the SDK for
+            the provider to absorb.
 
-            Opened by the release of runpod/go-sdk. Nothing merges by itself.
+            Opened by the release of runpod/go-sdk. Nothing merges by itself, and a
+            commit pushed here stops the next release from replacing this branch.
 
-      # The reviewer first, the pull request second, the reminder last: the
-      # checks are the whole point of the pull request and the one thing that
-      # may silently not have happened.
-      - name: Tell the reviewers
+      # A pull request opened with GITHUB_TOKEN raises no pull_request event, so
+      # test.yml never starts on it. Dispatching it against the branch runs the
+      # same checks; they land in the Actions tab rather than on the pull request.
+      - name: Start the provider's checks on the branch
         if: steps.pr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run test.yml --ref "$BRANCH"
+
+      # The reviewer first, the link second, what to do last. Two outcomes reach
+      # here: a bump waiting for review, or a branch left alone because someone
+      # is working on it.
+      - name: Tell the reviewers
+        if: steps.pr.outputs.pull-request-url != '' || steps.branch.outputs.theirs != '0'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SDK_BUMP_SLACK_WEBHOOK_URL }}
           REPO: ${{ github.event.repository.name }}
-          URL: ${{ steps.pr.outputs.pull-request-url }}
+          URL: ${{ steps.pr.outputs.pull-request-url || steps.branch.outputs.url }}
           VERSION: ${{ steps.version.outputs.version }}
+          THEIRS: ${{ steps.branch.outputs.theirs }}
         run: |
           set -euo pipefail
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "::warning::no SDK_BUMP_SLACK_WEBHOOK_URL secret, the pull request is open but nobody was told"
+            echo "::warning::no SDK_BUMP_SLACK_WEBHOOK_URL secret, nobody was told"
             exit 0
           fi
 
           # No escaping pass here: every part is ours or a github.com URL, and
           # escaping < and > would turn the mention and the link into text.
-          jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" --arg repo "$REPO" '
-            {text: ($rev + " " + $repo + ": the bump to go-sdk " + $version + " is waiting for review" + "\n" + $url + "\n"
-                    + "Check the *test* workflow on it. A pull request opened by Actions does not always start it; if it has not run, open the Checks tab, pick *test*, run it from there and read the result.")}
-          ' > "$RUNNER_TEMP/slack.json"
+          if [ "${THEIRS:-0}" -gt 0 ]; then
+            jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" \
+                  --arg repo "$REPO" --arg n "$THEIRS" '
+              {text: ($rev + " " + $repo + ": go-sdk " + $version + " is out, but the open bump carries "
+                      + $n + " commit(s) I did not write, so I left the branch alone"
+                      + (if $url == "" then "" else "\n" + $url end) + "\n"
+                      + "Move the pin there by hand, or close it and the next run will reopen it.")}
+            ' > "$RUNNER_TEMP/slack.json"
+          else
+            jq -n --arg rev "$SLACK_REVIEWERS" --arg url "$URL" --arg version "$VERSION" --arg repo "$REPO" '
+              {text: ($rev + " " + $repo + ": the bump to go-sdk " + $version + " is waiting for review"
+                      + "\n" + $url + "\n"
+                      + "I started the *test* workflow against the branch, since a pull request opened by Actions starts no checks of its own; its run is in the Actions tab.")}
+            ' > "$RUNNER_TEMP/slack.json"
+          fi
 
           code=$(printf 'url = %s\n' "$SLACK_WEBHOOK_URL" | curl --silent --show-error \
             --config - --header 'Content-Type: application/json' \

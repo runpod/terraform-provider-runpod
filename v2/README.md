@@ -225,7 +225,8 @@ At the repository root, next to the 1.x provider:
 
     docs/                    generated registry documentation
     .github/workflows/       CI: lint, unit tests with the race detector, offline
-                             validation; the release build for v2.* tags
+                             validation; the release build for v2.* tags; the
+                             go-sdk bump pull request
     .goreleaser.v2.yml       the release build of this module
     CHANGELOG.md             release notes
 
@@ -264,6 +265,17 @@ export TF_CLI_CONFIG_FILE=$PWD/artifacts/dev.tfrc
 terraform -chdir=modules/catalog-discovery init
 terraform -chdir=modules/catalog-discovery apply
 ```
+
+### The go-sdk bump pull request
+
+A release of runpod/go-sdk opens one on `automation/go-sdk-bump`, moving the pin
+in `go.mod` and nothing else. Its checks are a `test` run started against the
+branch, in the Actions tab rather than on the pull request, since a pull request
+opened by Actions raises none of its own.
+
+Adapting the provider to a breaking SDK change belongs in that same pull request:
+push onto the branch and the automation leaves it to you, saying so in Slack,
+instead of replacing your work on the next release.
 
 ## Testing
 

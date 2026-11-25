@@ -245,17 +245,6 @@ task docs         # registry docs into ../docs/ + the module README tables
 task all          # build + test + lint + validate-tf
 ```
 
-### The go-sdk bump pull request
-
-A release of runpod/go-sdk opens one on `automation/go-sdk-bump`, moving the pin
-in `go.mod` and nothing else. Its checks are a `test` run started against the
-branch, in the Actions tab rather than on the pull request, since a pull request
-opened by Actions raises none of its own.
-
-Adapting the provider to a breaking SDK change belongs in that same pull request:
-push onto the branch and the automation leaves it to you, saying so in Slack,
-instead of replacing your work on the next release.
-
 `task validate-tf` is the offline gate and runs four checks beyond
 `terraform validate` of `tests/` and of every module: `terraform fmt -check`
 over `modules/` and `tests/`; `scripts/module_coverage.py`, which fails when a
@@ -276,6 +265,17 @@ export TF_CLI_CONFIG_FILE=$PWD/artifacts/dev.tfrc
 terraform -chdir=modules/catalog-discovery init
 terraform -chdir=modules/catalog-discovery apply
 ```
+
+### The go-sdk bump pull request
+
+A release of runpod/go-sdk opens one on `automation/go-sdk-bump`, moving the pin
+in `go.mod` and nothing else. Its checks are a `test` run started against the
+branch, in the Actions tab rather than on the pull request, since a pull request
+opened by Actions raises none of its own.
+
+Adapting the provider to a breaking SDK change belongs in that same pull request:
+push onto the branch and the automation leaves it to you, saying so in Slack,
+instead of replacing your work on the next release.
 
 ## Testing
 

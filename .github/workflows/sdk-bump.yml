@@ -76,10 +76,12 @@ jobs:
           fi
           # The module path carries the major, so only v2 can be pinned here. A
           # branch name typed into the form lands on a pseudo-version otherwise.
-          case "$version" in
-            v2.*) ;;
-            *) echo "::error::$version is not a v2 release of ${MODULE}"; exit 1 ;;
-          esac
+          # Releases only: sort -V orders v2.3.0-rc.1 after v2.3.0, so a pinned
+          # pre-release would read its own final release as a downgrade.
+          if [[ ! "$version" =~ ^v2\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$version is not a v2 release of ${MODULE}"
+            exit 1
+          fi
           # A version the proxy does not serve yet would leave go.mod pointing at
           # nothing; failing here beats a pull request nobody can build.
           curl -fsS "https://proxy.golang.org/${MODULE}/@v/${version}.info" > /dev/null
@@ -116,6 +118,8 @@ jobs:
       # create-pull-request force-pushes the branch when it updates it, so a fix
       # someone pushed onto an open bump would vanish on the next release. If the
       # branch carries a commit this workflow did not write, it is theirs now.
+      # Only while the bump is open: closing one leaves its branch behind, and
+      # the next release is meant to reopen it from main.
       - name: Is the open bump someone else's now?
         id: branch
         if: steps.bump.outputs.changed == 'true'
@@ -124,12 +128,11 @@ jobs:
         run: |
           set -euo pipefail
           theirs=0
-          url=""
-          if git ls-remote --exit-code --heads origin "$BRANCH" > /dev/null 2>&1; then
+          url=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // ""')
+          if [ -n "$url" ]; then
             theirs=$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${BRANCH}" \
               --jq '[.commits[] | select(.commit.message
                      | startswith("chore(deps): bump go-sdk to ") | not)] | length')
-            url=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // ""')
           fi
           echo "theirs=$theirs" >> "$GITHUB_OUTPUT"
           echo "url=$url" >> "$GITHUB_OUTPUT"
